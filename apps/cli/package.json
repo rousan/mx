@@ -1,0 +1,17 @@
+{
+  "name": "mx",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "mx": "./dist/bin/mx.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@mx/core": "workspace:*"
+  }
+}

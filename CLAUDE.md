@@ -10,7 +10,7 @@ mx produces a **runtime**: a single `mx/` folder elsewhere on this device, conta
 
 ## Running the CLI
 
-`bin/mx` is on `$PATH` via the user's `~/.zshrc` (`export PATH="$HOME/Projects/project-mx/bin:$PATH"`), so `mx` is callable globally and from any directory. When editing the CLI, the live `mx` command reflects your changes immediately (it's the same file — no build/reinstall step). The active runtime is `~/mx`, recorded in `.mx-runtime`.
+`bin/mx` is a thin launcher on `$PATH` via the user's `~/.zshrc` (`export PATH="$HOME/Projects/project-mx/bin:$PATH"`); it execs the bundled CLI at `apps/cli/dist/bin/mx.js`. So `mx` is callable globally, but it reflects **built** output: after changing CLI/core code run `pnpm build` (or keep `pnpm dev` watching) before the change is live. Editing files under `templates/` needs no rebuild (they're read at runtime). The active runtime is `~/mx`, recorded in `.mx-runtime`.
 
 ## Finding the runtime
 
@@ -51,17 +51,27 @@ If a change can only be confirmed against the real runtime, stop and ask the use
 ## Layout
 
 ```
-project-mx/
+project-mx/                         # pnpm workspace (TypeScript)
+├── package.json                    # root scripts: build / dev / typecheck / lint / test
+├── pnpm-workspace.yaml
+├── tsconfig.base.json · eslint.config.js · .prettierrc.json · .nvmrc
 ├── CLAUDE.md                       # this file — how to work on mx
 ├── README.md                       # project overview + dev guide
 ├── .gitignore
 ├── .mx-runtime                     # machine-local runtime path (gitignored)
 ├── bin/
-│   └── mx                          # the CLI (Node, single file, zero deps)
-└── templates/
-    ├── CLAUDE.md                   # installed into a runtime — feature-session rules
-    ├── work.json                   # reference shape (CLI generates programmatically)
-    └── workspace.code-workspace
+│   └── mx                          # thin launcher (on $PATH) -> apps/cli/dist/bin/mx.js
+├── templates/                      # runtime data, read at runtime (source of truth)
+│   ├── CLAUDE.md                   # installed into a runtime — feature-session rules
+│   ├── work.json                   # reference shape (CLI generates programmatically)
+│   └── workspace.code-workspace
+├── packages/
+│   └── core/                       # @mx/core — pure, typed, unit-tested domain logic
+│       └── src/                    # errors, types, fsutil, json, git, templates,
+│                                   #   runtime, ports, repos, works, status, index
+└── apps/
+    └── cli/                        # mx — CLI over @mx/core (args, output, help, main,
+        └── src/                    #   commands/{global,repo,work}); tsup -> dist/bin/mx.js
 ```
 
 ## The runtime model
@@ -119,5 +129,8 @@ Invariants the CLI enforces:
 
 ## Conventions
 
-- CLI language is **Node, single file, zero dependencies** (`node:` builtins only). Stated at the top of `bin/mx`.
+- **TypeScript pnpm monorepo.** Domain logic lives in `@mx/core` as pure functions that return data and `throw MxError` — never `console.log` / `process.exit`. The CLI (`apps/cli`) owns arg parsing, cwd→`-n` inference, output formatting (`--porcelain` vs human), and exit codes. Keep that separation: new behavior is a core function plus a thin CLI wiring.
+- **Zero runtime dependencies.** Both packages use only `node:` builtins; tsup bundles `@mx/core` into the CLI so the shipped `dist/bin/mx.js` needs no `node_modules`. Tooling (tsup, eslint, vitest, prettier) is devDeps only.
+- **Workflow:** `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm build` (and `pnpm dev` to watch). Add a Vitest test in `packages/core/test` for new core logic.
+- **Testing override:** set `MX_RUNTIME_POINTER` (and `MX_RUNTIME`) to a `/tmp` path so a sandbox `init` never clobbers the real `.mx-runtime`; `MX_TEMPLATES_DIR` overrides the templates dir.
 - Keep `templates/CLAUDE.md` and the CLI's behavior consistent — they're the contract feature sessions rely on. If one changes, update the other in the same pass, and remember a runtime only sees changes after `mx update`.

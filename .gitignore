@@ -1,5 +1,12 @@
 # machine-local runtime pointer (each device records its own)
 .mx-runtime
 
+# build output
+dist/
+*.tsbuildinfo
+
+# dependencies
+node_modules/
+
 # macOS
 .DS_Store

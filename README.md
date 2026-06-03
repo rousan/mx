@@ -24,33 +24,45 @@ One device, one runtime. The CLI resolves its location in order:
 ## Layout
 
 ```
-project-mx/
+project-mx/                         # pnpm workspace
+├── package.json                    # root scripts: build / dev / typecheck / lint / test
+├── pnpm-workspace.yaml
+├── tsconfig.base.json · eslint.config.js · .prettierrc.json
 ├── CLAUDE.md                       # how to work on mx
 ├── README.md                       # this file
-├── .gitignore
+├── .gitignore · .nvmrc
 ├── .mx-runtime                     # machine-local runtime path (gitignored)
 ├── bin/
-│   └── mx                          # the CLI (Node, single file, zero deps)
-└── templates/
-    ├── CLAUDE.md                   # installed into a runtime — feature-session rules
-    ├── work.json                   # reference shape (CLI generates programmatically)
-    └── workspace.code-workspace
+│   └── mx                          # thin launcher (on $PATH) -> apps/cli/dist/bin/mx.js
+├── templates/                      # runtime data (source of truth, read at runtime)
+│   ├── CLAUDE.md                   # installed into a runtime — feature-session rules
+│   ├── work.json                   # reference shape (CLI generates programmatically)
+│   └── workspace.code-workspace
+├── packages/
+│   └── core/                       # @mx/core — typed, tested domain logic
+└── apps/
+    └── cli/                        # mx — CLI over @mx/core, bundled to dist/bin/mx.js
 ```
 
 ## Status
 
-The `mx` CLI exists (`bin/mx`, Node, single file, zero deps): `init`, `status`, `update`, `repo`, and `work` (incl. `worktree` and `port` subcommands). `mx open` (terminal/editor layout) is deferred.
+The `mx` CLI is a TypeScript pnpm monorepo: `@mx/core` (domain logic) + `apps/cli` (the CLI), bundled by tsup into `apps/cli/dist/bin/mx.js`. Commands: `init`, `status`, `update`, `repo`, and `work` (incl. `worktree`, `port`, `path`). `mx open` (terminal/editor layout) is deferred.
 
 ## Install (make `mx` global)
 
-`bin/mx` is on `$PATH` via `~/.zshrc`:
+```bash
+pnpm install
+pnpm build           # bundles apps/cli/dist/bin/mx.js (re-run after code changes; `pnpm dev` watches)
+```
+
+`bin/mx` is a thin launcher kept on `$PATH` via `~/.zshrc`:
 
 ```bash
 # ~/.zshrc
 export PATH="$HOME/Projects/project-mx/bin:$PATH"
 ```
 
-After that, `mx` works from any directory (re-open the shell or `source ~/.zshrc`). You can always call `./bin/mx` directly instead.
+After that, `mx` works from any directory (re-open the shell or `source ~/.zshrc`); it runs the built `dist` output. You can also call `./bin/mx` directly. Editing a file under `templates/` takes effect immediately (no rebuild); changing CLI/core code needs `pnpm build` (or a running `pnpm dev`).
 
 ## Quick start
 
@@ -85,10 +97,23 @@ Read commands take `--porcelain` for stable JSON; mutations echo the resulting o
 
 `-n <name>` can be **omitted when your cwd implies it** — inside a work folder/worktree (`works/<work>/…`) mx infers the work (and the repo, in a worktree); inside `repos/<repo>/…` it infers the repo. An explicit `-n` always wins. `mx work new` prints the new work folder's absolute path.
 
+## Development
+
+```bash
+pnpm typecheck     # tsc --noEmit across packages
+pnpm lint          # eslint (typescript-eslint + jsdoc + prettier)
+pnpm test          # vitest (unit tests for @mx/core)
+pnpm build         # tsup bundle -> apps/cli/dist/bin/mx.js
+pnpm dev           # tsup --watch (rebuild on change)
+```
+
+Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return data and throw `MxError`; the CLI in `apps/cli` handles parsing, output, and exit codes. Add core logic with a Vitest test in `packages/core/test`. When testing against a sandbox runtime, set `MX_RUNTIME_POINTER` (and `MX_RUNTIME`) to a `/tmp` path so the real `.mx-runtime` is never touched.
+
 ## Roadmap
 
-- [x] Build `bin/mx` — `init`, `status`, `update`, `repo`, `work` (worktree + port)
+- [x] `mx` CLI — `init`, `status`, `update`, `repo`, `work` (worktree + port + path)
 - [x] Runtime discovery (`--runtime` / `$MX_RUNTIME` / `.mx-runtime`)
 - [x] Per-service free-port allocation across all works (no fixed blocks)
+- [x] TypeScript pnpm monorepo (`@mx/core` + `apps/cli`), lint/test/build tooling
 - [ ] `mx open` terminal + editor layout
 - [ ] Optional: isolated per-env state (separate DB schema / container) for safe parallel runs
