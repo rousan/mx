@@ -1,0 +1,862 @@
+#!/usr/bin/env node
+// mx — the CLI / control panel for the mx runtime.
+//
+// Language: Node, single file, zero dependencies (node: builtins only).
+//
+// mx is the SINGLE OWNER of runtime state. The work manifest (work.json) and the
+// VS Code workspace file are written and read only through these commands — feature
+// sessions must never hand-edit them or run raw `git worktree`.
+//
+// Runtime discovery order: --runtime <path>  ->  $MX_RUNTIME  ->  .mx-runtime file
+// at the project-mx root (written by `mx init`).
+//
+// Output: human-readable by default; pass --porcelain to any read command for stable
+// JSON. Mutating commands echo the resulting object. Errors under --porcelain are
+// emitted as {"error": "...", "code": "..."} on stdout with a non-zero exit code.
+
+import { execFileSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const VERSION = '0.1.0';
+const PORT_BASE = 3000;
+
+const __filename = fileURLToPath(import.meta.url);
+const PROJECT_MX_ROOT = path.dirname(path.dirname(__filename)); // <root>/bin/mx -> <root>
+const TEMPLATES = path.join(PROJECT_MX_ROOT, 'templates');
+const RUNTIME_POINTER = path.join(PROJECT_MX_ROOT, '.mx-runtime');
+
+// ---------------------------------------------------------------------------
+// errors + output
+// ---------------------------------------------------------------------------
+
+class MxError extends Error {
+  constructor(message, code = 'ERROR') {
+    super(message);
+    this.code = code;
+  }
+}
+
+let PORCELAIN = false;
+
+function emit(human, data) {
+  if (PORCELAIN) {
+    process.stdout.write(JSON.stringify(data ?? null, null, 2) + '\n');
+  } else if (typeof human === 'function') {
+    human();
+  } else if (human != null) {
+    process.stdout.write(human + '\n');
+  }
+}
+
+function fail(err) {
+  const code = err instanceof MxError ? err.code : 'INTERNAL';
+  const message = err.message || String(err);
+  if (PORCELAIN) {
+    process.stdout.write(JSON.stringify({ error: message, code }, null, 2) + '\n');
+  } else {
+    process.stderr.write(`mx: ${message}\n`);
+  }
+  process.exit(1);
+}
+
+// ---------------------------------------------------------------------------
+// fs + json helpers
+// ---------------------------------------------------------------------------
+
+function readJson(file) {
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+function writeJson(file, obj) {
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n');
+  fs.renameSync(tmp, file);
+}
+
+function exists(p) {
+  return fs.existsSync(p);
+}
+
+function isGitRepo(dir) {
+  return exists(path.join(dir, '.git'));
+}
+
+function listDirs(dir) {
+  if (!exists(dir)) return [];
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && !d.name.startsWith('.'))
+    .map((d) => d.name)
+    .sort();
+}
+
+// ---------------------------------------------------------------------------
+// git helpers
+// ---------------------------------------------------------------------------
+
+function git(args, opts = {}) {
+  try {
+    const out = execFileSync('git', args, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...opts,
+    });
+    // stdout is null when the caller inherits it (e.g. clone progress).
+    return (out == null ? '' : out.toString()).trim();
+  } catch (e) {
+    const msg = (e.stderr || e.stdout || e.message || '').toString().trim();
+    throw new MxError(`git ${args.join(' ')} failed: ${msg}`, 'GIT');
+  }
+}
+
+// Returns trimmed stdout on success, or null on non-zero exit (no throw).
+function gitQuiet(args, opts = {}) {
+  try {
+    return execFileSync('git', args, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      ...opts,
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+function currentBranch(repoPath) {
+  return gitQuiet(['-C', repoPath, 'rev-parse', '--abbrev-ref', 'HEAD']) || '(detached)';
+}
+
+// Branch names available on origin (short, without the "origin/" prefix).
+function remoteBranchList(repoPath) {
+  // Use the full refname so the origin/HEAD symref (whose short form is just
+  // "origin") is filtered out cleanly.
+  const out = gitQuiet(['-C', repoPath, 'for-each-ref', '--format=%(refname)', 'refs/remotes/origin']);
+  if (!out) return [];
+  return out
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s && !s.endsWith('/HEAD'))
+    .map((s) => s.replace(/^refs\/remotes\/origin\//, ''));
+}
+
+function remoteUrl(repoPath) {
+  return (
+    gitQuiet(['-C', repoPath, 'remote', 'get-url', 'origin']) ||
+    gitQuiet(['-C', repoPath, 'config', '--get', 'remote.origin.url']) ||
+    null
+  );
+}
+
+function branchExists(repoPath, branch) {
+  return gitQuiet(['-C', repoPath, 'show-ref', '--verify', '--quiet', `refs/heads/${branch}`]) !== null;
+}
+
+// Resolve a --base ref to a commit SHA. Tries the ref as given, then falls back
+// to origin/<ref> so a bare branch name (which only exists as a remote-tracking
+// ref in a fresh clone) still works. Returns the SHA or null.
+function resolveBase(repoPath, base) {
+  return (
+    gitQuiet(['-C', repoPath, 'rev-parse', '--verify', `${base}^{commit}`]) ||
+    gitQuiet(['-C', repoPath, 'rev-parse', '--verify', `origin/${base}^{commit}`]) ||
+    null
+  );
+}
+
+function isDirty(worktreePath) {
+  const s = gitQuiet(['-C', worktreePath, 'status', '--porcelain']);
+  return s == null ? false : s.length > 0;
+}
+
+// ---------------------------------------------------------------------------
+// runtime discovery + layout
+// ---------------------------------------------------------------------------
+
+function discoverRuntime(flags) {
+  let p = flags.runtime || process.env.MX_RUNTIME || null;
+  if (!p && exists(RUNTIME_POINTER)) {
+    p = fs.readFileSync(RUNTIME_POINTER, 'utf8').trim() || null;
+  }
+  if (!p) {
+    throw new MxError(
+      'no runtime found — set --runtime <path>, $MX_RUNTIME, or run `mx init`',
+      'NO_RUNTIME',
+    );
+  }
+  return path.resolve(p);
+}
+
+// Discover and validate that the runtime is initialized (.mx-root present).
+function requireRuntime(flags) {
+  const root = discoverRuntime(flags);
+  if (!exists(path.join(root, '.mx-root'))) {
+    throw new MxError(`not an mx runtime (no .mx-root): ${root} — run \`mx init\``, 'NO_RUNTIME');
+  }
+  return root;
+}
+
+const reposDir = (root) => path.join(root, 'repos');
+const worksDir = (root) => path.join(root, 'works');
+const repoPath = (root, name) => path.join(reposDir(root), name);
+const workDir = (root, name) => path.join(worksDir(root), name);
+const workManifest = (root, name) => path.join(workDir(root, name), 'work.json');
+const workspaceFile = (root, name) => path.join(workDir(root, name), `${name}.code-workspace`);
+
+// Infer the current work / repo from the cwd, so `-n` can be omitted when you're
+// already inside a work folder, a worktree, or a pristine clone:
+//   <root>/works/<work>            -> { work }
+//   <root>/works/<work>/<repo>/... -> { work, repo }   (inside a worktree)
+//   <root>/repos/<repo>/...        -> { repo }         (inside a pristine clone)
+function inferContext(root) {
+  // realpath both sides so symlinked roots (e.g. macOS /tmp -> /private/tmp,
+  // where process.cwd() returns the resolved path) still match.
+  const real = (p) => {
+    try {
+      return fs.realpathSync(p);
+    } catch {
+      return path.resolve(p);
+    }
+  };
+  const cwd = real(process.cwd());
+  const segmentsUnder = (base) => {
+    if (!exists(base)) return null;
+    const rel = path.relative(real(base), cwd);
+    if (rel === '' || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+    return rel.split(path.sep);
+  };
+  const w = segmentsUnder(worksDir(root));
+  if (w) return { work: w[0], repo: w[1] || null };
+  const r = segmentsUnder(reposDir(root));
+  if (r) return { work: null, repo: r[0] };
+  return { work: null, repo: null };
+}
+
+function listRepos(root) {
+  return listDirs(reposDir(root)).filter((n) => isGitRepo(repoPath(root, n)));
+}
+
+function listWorks(root) {
+  return listDirs(worksDir(root)).filter((n) => exists(workManifest(root, n)));
+}
+
+function readWork(root, name) {
+  const file = workManifest(root, name);
+  if (!exists(file)) {
+    if (!exists(workDir(root, name))) throw new MxError(`no such work: ${name}`, 'NO_WORK');
+    throw new MxError(`work "${name}" has no work.json — recreate it with \`mx work new\``, 'NO_MANIFEST');
+  }
+  return readJson(file);
+}
+
+function findWorktree(work, repo) {
+  return (work.worktrees || []).find((w) => w.repo === repo) || null;
+}
+
+// All ports allocated across every work, as a Map<port, "work/repo/service">.
+// `except` optionally skips one {work, repo, service} slot (for idempotent set).
+function allocatedPorts(root, except = null) {
+  const used = new Map();
+  for (const name of listWorks(root)) {
+    let work;
+    try {
+      work = readWork(root, name);
+    } catch {
+      continue;
+    }
+    for (const wt of work.worktrees || []) {
+      for (const [service, port] of Object.entries(wt.ports || {})) {
+        if (
+          except &&
+          except.work === name &&
+          except.repo === wt.repo &&
+          except.service === service
+        ) {
+          continue;
+        }
+        used.set(Number(port), `${name}/${wt.repo}/${service}`);
+      }
+    }
+  }
+  return used;
+}
+
+function nextFreePort(used) {
+  let p = PORT_BASE;
+  while (used.has(p)) p++;
+  return p;
+}
+
+// ---------------------------------------------------------------------------
+// arg parsing
+// ---------------------------------------------------------------------------
+
+const FLAG_ALIASES = {
+  '-n': 'name',
+  '--name': 'name',
+  '--runtime': 'runtime',
+  '--description': 'description',
+  '--branch': 'branch',
+  '--base': 'base',
+};
+
+function parseArgs(argv) {
+  const positionals = [];
+  const flags = { porcelain: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--porcelain' || a === '--json') {
+      flags.porcelain = true;
+    } else if (a === '--help' || a === '-h') {
+      flags.help = true;
+    } else if (a === '--version' || a === '-v') {
+      flags.version = true;
+    } else if (a.startsWith('--') && a.includes('=')) {
+      const eq = a.indexOf('=');
+      const key = FLAG_ALIASES[a.slice(0, eq)];
+      if (!key) throw new MxError(`unknown flag: ${a.slice(0, eq)}`, 'BAD_ARGS');
+      flags[key] = a.slice(eq + 1);
+    } else if (FLAG_ALIASES[a]) {
+      flags[FLAG_ALIASES[a]] = argv[++i];
+    } else {
+      positionals.push(a);
+    }
+  }
+  return { positionals, flags };
+}
+
+function need(value, message) {
+  if (value == null || value === '') throw new MxError(message, 'BAD_ARGS');
+  return value;
+}
+
+// ---------------------------------------------------------------------------
+// global commands
+// ---------------------------------------------------------------------------
+
+function cmdInit(positionals, flags) {
+  const target = path.resolve(positionals[1] || flags.runtime || path.join(os.homedir(), 'mx'));
+  const created = [];
+
+  for (const d of [target, reposDir(target), worksDir(target)]) {
+    if (!exists(d)) {
+      fs.mkdirSync(d, { recursive: true });
+      created.push(d);
+    }
+  }
+
+  const marker = path.join(target, '.mx-root');
+  if (!exists(marker)) {
+    fs.writeFileSync(marker, '');
+    created.push(marker);
+  }
+
+  // Stamp runtime CLAUDE.md (generated output — always refreshed).
+  const claudeSrc = path.join(TEMPLATES, 'CLAUDE.md');
+  if (!exists(claudeSrc)) throw new MxError(`missing template: ${claudeSrc}`, 'NO_TEMPLATE');
+  const claudeDest = path.join(target, 'CLAUDE.md');
+  fs.copyFileSync(claudeSrc, claudeDest);
+  created.push(claudeDest);
+
+  // Runtime no longer carries a README; remove a stale one if present.
+  const staleReadme = path.join(target, 'README.md');
+  if (exists(staleReadme)) fs.rmSync(staleReadme);
+
+  // Record the pointer so future commands discover this runtime.
+  fs.writeFileSync(RUNTIME_POINTER, target + '\n');
+
+  emit(
+    () => {
+      console.log(`Runtime ready at ${target}  (pointer: ${RUNTIME_POINTER})`);
+      for (const c of created) console.log(`  + ${c}`);
+    },
+    { runtime: target, created },
+  );
+}
+
+function cmdUpdate(flags) {
+  const root = requireRuntime(flags);
+  const claudeSrc = path.join(TEMPLATES, 'CLAUDE.md');
+  if (!exists(claudeSrc)) throw new MxError(`missing template: ${claudeSrc}`, 'NO_TEMPLATE');
+  const claudeDest = path.join(root, 'CLAUDE.md');
+  fs.copyFileSync(claudeSrc, claudeDest);
+
+  // Runtime no longer carries a README; remove a stale one if present.
+  const staleReadme = path.join(root, 'README.md');
+  if (exists(staleReadme)) fs.rmSync(staleReadme);
+
+  emit(() => console.log(`Re-stamped CLAUDE.md into ${root}`), { runtime: root, updated: [claudeDest] });
+}
+
+function cmdStatus(flags) {
+  const root = requireRuntime(flags);
+  const repos = listRepos(root).map((name) => ({
+    name,
+    branch: currentBranch(repoPath(root, name)),
+    remote: remoteUrl(repoPath(root, name)),
+  }));
+  const works = listWorks(root).map((name) => {
+    const w = readWork(root, name);
+    return {
+      name,
+      description: w.description || '',
+      worktrees: (w.worktrees || []).map((wt) => ({
+        repo: wt.repo,
+        branch: wt.branch,
+        ports: wt.ports || {},
+      })),
+    };
+  });
+  const data = { runtime: root, repos, works };
+
+  emit(() => {
+    console.log(`runtime: ${root}\n`);
+    console.log(`repos (${repos.length}):`);
+    for (const r of repos) console.log(`  ${r.name}  [${r.branch}]  ${r.remote || '(no remote)'}`);
+    console.log(`\nworks (${works.length}):`);
+    for (const w of works) {
+      console.log(`  ${w.name}${w.description ? `  — ${w.description}` : ''}`);
+      for (const wt of w.worktrees) {
+        const ports = Object.entries(wt.ports).map(([s, p]) => `${s}:${p}`).join(', ');
+        console.log(`    ${wt.repo}  [${wt.branch}]${ports ? `  (${ports})` : ''}`);
+      }
+    }
+  }, data);
+}
+
+// ---------------------------------------------------------------------------
+// repo commands
+// ---------------------------------------------------------------------------
+
+function repoNameFromUrl(url) {
+  const base = url.split('/').pop() || url;
+  return base.replace(/\.git$/, '');
+}
+
+function dispatchRepo(positionals, flags) {
+  const action = positionals[1];
+  const root = requireRuntime(flags);
+  // For targeted actions, -n may be omitted when inside a repo's worktree or clone.
+  const ctxRepo = inferContext(root).repo;
+
+  switch (action) {
+    case 'add': {
+      const url = need(positionals[2], 'usage: mx repo add <git-url> [--name <n>]');
+      const name = flags.name || repoNameFromUrl(url);
+      const dest = repoPath(root, name);
+      if (exists(dest)) throw new MxError(`repo already exists: ${name}`, 'EXISTS');
+      git(['clone', url, dest], { stdio: ['ignore', 'inherit', 'inherit'] });
+      const data = { name, path: dest, remote: remoteUrl(dest), branch: currentBranch(dest) };
+      emit(() => console.log(`cloned ${name} -> ${dest}`), data);
+      return;
+    }
+    case 'ls': {
+      const repos = listRepos(root).map((name) => ({
+        name,
+        branch: currentBranch(repoPath(root, name)),
+        remote: remoteUrl(repoPath(root, name)),
+      }));
+      emit(() => {
+        for (const r of repos) console.log(`${r.name}  [${r.branch}]  ${r.remote || '(no remote)'}`);
+      }, repos);
+      return;
+    }
+    case 'fetch': {
+      const name = need(flags.name || ctxRepo, 'which repo? pass -n <name> or run inside a repo (mx repo -n <name> fetch)');
+      const rp = repoPath(root, name);
+      if (!isGitRepo(rp)) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
+      // Update every branch's remote-tracking ref, pull in new branches and
+      // tags, and prune ones deleted on origin.
+      git(['-C', rp, 'fetch', '--all', '--prune', '--tags']);
+      // Best-effort fast-forward of the checked-out branch (no working-tree churn).
+      gitQuiet(['-C', rp, 'merge', '--ff-only', '@{u}']);
+      const remoteBranches = remoteBranchList(rp);
+      emit(
+        () =>
+          console.log(
+            `fetched ${name} — ${remoteBranches.length} branch(es) on origin, now on ${currentBranch(rp)}`,
+          ),
+        { name, branch: currentBranch(rp), remoteBranches },
+      );
+      return;
+    }
+    case 'info': {
+      const name = need(flags.name || ctxRepo, 'which repo? pass -n <name> or run inside a repo (mx repo -n <name> info)');
+      const rp = repoPath(root, name);
+      if (!isGitRepo(rp)) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
+      const usedBy = listWorks(root).filter((w) =>
+        findWorktree(readWork(root, w), name),
+      );
+      const data = {
+        name,
+        path: rp,
+        branch: currentBranch(rp),
+        remote: remoteUrl(rp),
+        worktreesInWorks: usedBy,
+      };
+      emit(() => {
+        console.log(`${name}\n  path:   ${rp}\n  branch: ${data.branch}\n  remote: ${data.remote || '(none)'}`);
+        console.log(`  used by works: ${usedBy.length ? usedBy.join(', ') : '(none)'}`);
+      }, data);
+      return;
+    }
+    case 'rm': {
+      const name = need(flags.name || ctxRepo, 'which repo? pass -n <name> or run inside a repo (mx repo -n <name> rm)');
+      const rp = repoPath(root, name);
+      if (!isGitRepo(rp)) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
+      const usedBy = listWorks(root).filter((w) => findWorktree(readWork(root, w), name));
+      if (usedBy.length) {
+        throw new MxError(
+          `repo "${name}" still has worktrees in: ${usedBy.join(', ')} — remove those first`,
+          'IN_USE',
+        );
+      }
+      fs.rmSync(rp, { recursive: true, force: true });
+      emit(() => console.log(`removed repo ${name}`), { name, removed: true });
+      return;
+    }
+    default:
+      throw new MxError(`unknown repo command: ${action ?? '(none)'}`, 'BAD_ARGS');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// work commands
+// ---------------------------------------------------------------------------
+
+function addFolderToWorkspace(root, name, repo) {
+  const file = workspaceFile(root, name);
+  const ws = exists(file) ? readJson(file) : { folders: [], settings: {} };
+  ws.folders = ws.folders || [];
+  if (!ws.folders.some((f) => f.path === repo)) {
+    ws.folders.push({ name: repo, path: repo });
+  }
+  writeJson(file, ws);
+}
+
+function removeFolderFromWorkspace(root, name, repo) {
+  const file = workspaceFile(root, name);
+  if (!exists(file)) return;
+  const ws = readJson(file);
+  ws.folders = (ws.folders || []).filter((f) => f.path !== repo);
+  writeJson(file, ws);
+}
+
+function dispatchWork(positionals, flags) {
+  const action = positionals[1];
+
+  // `mx work new <name>` takes the name positionally (the work doesn't exist yet).
+  if (action === 'new') {
+    const root = requireRuntime(flags);
+    const name = need(positionals[2], 'usage: mx work new <name> [--description <text>]');
+    if (exists(workDir(root, name))) throw new MxError(`work already exists: ${name}`, 'EXISTS');
+    const dir = workDir(root, name);
+    fs.mkdirSync(dir, { recursive: true });
+    const work = { name, description: flags.description || '', worktrees: [] };
+    writeJson(workManifest(root, name), work);
+    writeJson(workspaceFile(root, name), { folders: [], settings: {} });
+    emit(() => {
+      console.log(`created work ${name}`);
+      console.log(`  ${dir}`);
+    }, { ...work, path: dir });
+    return;
+  }
+
+  if (action === 'ls') {
+    const root = requireRuntime(flags);
+    const works = listWorks(root).map((name) => {
+      const w = readWork(root, name);
+      return { name, description: w.description || '', worktrees: (w.worktrees || []).length };
+    });
+    emit(() => {
+      for (const w of works) {
+        console.log(`${w.name}  (${w.worktrees} worktree${w.worktrees === 1 ? '' : 's'})${w.description ? `  — ${w.description}` : ''}`);
+      }
+    }, works);
+    return;
+  }
+
+  // All remaining work actions target an existing work via -n <name>, or the
+  // work inferred from the cwd when you're inside a work folder / worktree.
+  const root = requireRuntime(flags);
+  const name = need(
+    flags.name || inferContext(root).work,
+    `which work? pass -n <name> or run inside a work folder (mx work -n <name> ${action ?? '<command>'})`,
+  );
+
+  switch (action) {
+    case 'info': {
+      const work = readWork(root, name);
+      emit(() => console.log(JSON.stringify(work, null, 2)), work);
+      return;
+    }
+    case 'path': {
+      // Print the work folder path so a shell can cd into it:
+      //   cd "$(mx work -n <name> path)"
+      const dir = workDir(root, name);
+      if (!exists(dir)) throw new MxError(`no such work: ${name}`, 'NO_WORK');
+      emit(() => console.log(dir), { name, path: dir });
+      return;
+    }
+    case 'describe': {
+      const text = need(positionals[2], 'usage: mx work -n <name> describe <text>');
+      const work = readWork(root, name);
+      work.description = text;
+      writeJson(workManifest(root, name), work);
+      emit(() => console.log(`updated description of ${name}`), work);
+      return;
+    }
+    case 'worktree':
+      return workWorktree(root, name, positionals, flags);
+    case 'port':
+      return workPort(root, name, positionals);
+    case 'destroy':
+      return workDestroy(root, name);
+    default:
+      throw new MxError(`unknown work command: ${action ?? '(none)'}`, 'BAD_ARGS');
+  }
+}
+
+function workWorktree(root, name, positionals, flags) {
+  const sub = positionals[2];
+  const work = readWork(root, name);
+
+  switch (sub) {
+    case 'add': {
+      const repo = need(positionals[3], 'usage: mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>]');
+      const rp = repoPath(root, repo);
+      if (!isGitRepo(rp)) throw new MxError(`no such repo: ${repo}`, 'NO_REPO');
+      if (findWorktree(work, repo)) throw new MxError(`work "${name}" already has worktree for ${repo}`, 'EXISTS');
+
+      const branch = flags.branch || name;
+      const dest = path.join(workDir(root, name), repo);
+      if (branchExists(rp, branch)) {
+        git(['-C', rp, 'worktree', 'add', dest, branch]);
+      } else {
+        const args = ['-C', rp, 'worktree', 'add', '-b', branch, dest];
+        if (flags.base) {
+          // Resolve --base to a commit SHA before using it as the start point.
+          // A bare ref (e.g. a remote-only branch name) makes git DWIM a local
+          // branch of that name and silently ignore our -b. A SHA can't DWIM,
+          // so the new branch is created exactly as named.
+          const sha = resolveBase(rp, flags.base);
+          if (!sha) throw new MxError(`base ref not found: ${flags.base} (tried also origin/${flags.base})`, 'NO_REF');
+          args.push(sha);
+        }
+        git(args);
+      }
+
+      work.worktrees = work.worktrees || [];
+      work.worktrees.push({ repo, branch, ports: {} });
+      writeJson(workManifest(root, name), work);
+      addFolderToWorkspace(root, name, repo);
+
+      const data = { work: name, repo, branch, path: dest, ports: {} };
+      emit(() => console.log(`added worktree ${repo} [${branch}] -> ${dest}`), data);
+      return;
+    }
+    case 'ls': {
+      const list = work.worktrees || [];
+      emit(() => {
+        for (const wt of list) {
+          const ports = Object.entries(wt.ports || {}).map(([s, p]) => `${s}:${p}`).join(', ');
+          console.log(`${wt.repo}  [${wt.branch}]${ports ? `  (${ports})` : ''}`);
+        }
+      }, list);
+      return;
+    }
+    case 'rm': {
+      const repo = need(positionals[3], 'usage: mx work -n <name> worktree rm <repo>');
+      const wt = findWorktree(work, repo);
+      if (!wt) throw new MxError(`work "${name}" has no worktree for ${repo}`, 'NO_WORKTREE');
+      const dest = path.join(workDir(root, name), repo);
+      if (exists(dest) && isDirty(dest)) {
+        throw new MxError(`worktree ${repo} has uncommitted changes — commit or discard them first`, 'DIRTY');
+      }
+      git(['-C', repoPath(root, repo), 'worktree', 'remove', dest]); // keeps the branch
+      work.worktrees = work.worktrees.filter((w) => w.repo !== repo);
+      writeJson(workManifest(root, name), work);
+      removeFolderFromWorkspace(root, name, repo);
+      emit(() => console.log(`removed worktree ${repo} from ${name} (branch ${wt.branch} kept)`), {
+        work: name,
+        repo,
+        branch: wt.branch,
+        removed: true,
+      });
+      return;
+    }
+    default:
+      throw new MxError(`unknown worktree command: ${sub ?? '(none)'}`, 'BAD_ARGS');
+  }
+}
+
+function workPort(root, name, positionals) {
+  const sub = positionals[2];
+  const work = readWork(root, name);
+
+  switch (sub) {
+    case 'set': {
+      const repo = need(positionals[3], 'usage: mx work -n <name> port set <repo> <service> [<port>]');
+      const service = need(positionals[4], 'usage: mx work -n <name> port set <repo> <service> [<port>]');
+      const wt = findWorktree(work, repo);
+      if (!wt) throw new MxError(`work "${name}" has no worktree for ${repo} — add it first`, 'NO_WORKTREE');
+      wt.ports = wt.ports || {};
+
+      const used = allocatedPorts(root, { work: name, repo, service });
+      let port;
+      if (positionals[5] != null) {
+        port = Number(positionals[5]);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          throw new MxError(`invalid port: ${positionals[5]}`, 'BAD_ARGS');
+        }
+        if (used.has(port)) {
+          throw new MxError(`port ${port} already allocated to ${used.get(port)}`, 'PORT_TAKEN');
+        }
+      } else {
+        port = nextFreePort(used);
+      }
+
+      wt.ports[service] = port;
+      writeJson(workManifest(root, name), work);
+      const data = { work: name, repo, service, port };
+      emit(() => console.log(`${repo}.${service} -> ${port}`), data);
+      return;
+    }
+    case 'unset': {
+      const repo = need(positionals[3], 'usage: mx work -n <name> port unset <repo> <service>');
+      const service = need(positionals[4], 'usage: mx work -n <name> port unset <repo> <service>');
+      const wt = findWorktree(work, repo);
+      if (!wt || !wt.ports || !(service in wt.ports)) {
+        throw new MxError(`no port set for ${repo}.${service} in ${name}`, 'NO_PORT');
+      }
+      const port = wt.ports[service];
+      delete wt.ports[service];
+      writeJson(workManifest(root, name), work);
+      emit(() => console.log(`unset ${repo}.${service} (was ${port})`), {
+        work: name,
+        repo,
+        service,
+        released: port,
+      });
+      return;
+    }
+    case 'ls': {
+      const map = {};
+      for (const wt of work.worktrees || []) map[wt.repo] = wt.ports || {};
+      emit(() => {
+        for (const [repo, ports] of Object.entries(map)) {
+          for (const [service, port] of Object.entries(ports)) {
+            console.log(`${repo}.${service} -> ${port}`);
+          }
+        }
+      }, map);
+      return;
+    }
+    default:
+      throw new MxError(`unknown port command: ${sub ?? '(none)'}`, 'BAD_ARGS');
+  }
+}
+
+function workDestroy(root, name) {
+  const work = readWork(root, name);
+  const dirty = [];
+  for (const wt of work.worktrees || []) {
+    const dest = path.join(workDir(root, name), wt.repo);
+    if (exists(dest) && isDirty(dest)) dirty.push(wt.repo);
+  }
+  if (dirty.length) {
+    throw new MxError(
+      `cannot destroy "${name}" — uncommitted changes in: ${dirty.join(', ')}. Commit or discard, then retry.`,
+      'DIRTY',
+    );
+  }
+  const removed = [];
+  for (const wt of work.worktrees || []) {
+    const dest = path.join(workDir(root, name), wt.repo);
+    if (exists(dest)) git(['-C', repoPath(root, wt.repo), 'worktree', 'remove', dest]); // keeps branch
+    removed.push(wt.repo);
+  }
+  fs.rmSync(workDir(root, name), { recursive: true, force: true });
+  emit(() => console.log(`destroyed work ${name} (worktrees removed: ${removed.join(', ') || 'none'}; branches kept)`), {
+    work: name,
+    removedWorktrees: removed,
+    branchesKept: true,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// help
+// ---------------------------------------------------------------------------
+
+const HELP = `mx — control panel for the mx runtime
+
+Global:
+  mx init [path]                         scaffold/adopt a runtime (default ~/mx)
+  mx status [--porcelain]                show runtime, repos, works, ports
+  mx update                              re-stamp runtime CLAUDE.md from templates
+  mx help | version
+
+Repos (pristine clones):
+  mx repo add <git-url> [--name <n>]     clone a repo into the runtime
+  mx repo ls [--porcelain]
+  mx repo -n <name> fetch                git fetch (+ ff current branch)
+  mx repo -n <name> info [--porcelain]
+  mx repo -n <name> rm                   refuses if any work uses it
+
+Works (features):
+  mx work new <name> [--description <t>]
+  mx work ls [--porcelain]
+  mx work -n <name> info [--porcelain]
+  mx work -n <name> path                 print the work folder path (cd "$(mx work -n <name> path)")
+  mx work -n <name> describe <text>
+  mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>]
+  mx work -n <name> worktree ls [--porcelain]
+  mx work -n <name> worktree rm <repo>   refuses on uncommitted changes; keeps branch
+  mx work -n <name> port set <repo> <service> [<port>]   auto-picks a free port if omitted
+  mx work -n <name> port unset <repo> <service>
+  mx work -n <name> port ls [--porcelain]
+  mx work -n <name> destroy              removes worktrees + folder; keeps branches
+
+Runtime discovery: --runtime <path>  ->  $MX_RUNTIME  ->  .mx-runtime file.
+--porcelain emits stable JSON on reads; errors are {"error","code"} with a non-zero exit.
+`;
+
+// ---------------------------------------------------------------------------
+// main
+// ---------------------------------------------------------------------------
+
+function main() {
+  const { positionals, flags } = parseArgs(process.argv.slice(2));
+  PORCELAIN = !!flags.porcelain;
+
+  if (flags.version || positionals[0] === 'version') {
+    emit(() => console.log(`mx ${VERSION}`), { version: VERSION });
+    return;
+  }
+  if (flags.help || positionals.length === 0 || positionals[0] === 'help') {
+    process.stdout.write(HELP);
+    return;
+  }
+
+  switch (positionals[0]) {
+    case 'init':
+      return cmdInit(positionals, flags);
+    case 'update':
+      return cmdUpdate(flags);
+    case 'status':
+      return cmdStatus(flags);
+    case 'repo':
+      return dispatchRepo(positionals, flags);
+    case 'work':
+      return dispatchWork(positionals, flags);
+    default:
+      throw new MxError(`unknown command: ${positionals[0]}`, 'BAD_ARGS');
+  }
+}
+
+try {
+  main();
+} catch (e) {
+  fail(e);
+}

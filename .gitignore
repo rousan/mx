@@ -1,0 +1,5 @@
+# machine-local runtime pointer (each device records its own)
+.mx-runtime
+
+# macOS
+.DS_Store
