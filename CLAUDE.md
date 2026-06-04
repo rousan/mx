@@ -1,6 +1,6 @@
 # mx — source & control panel for the mx system
 
-This repo is the **source of truth** for **mx** ("multiplexer"), a system for running several features in parallel across shared repos using git worktrees. You are working on mx *itself* here — the CLI, the core library, the templates, the docs — not on any feature. The published CLI lives on npm as `mxcli` (command `mx`); the source is hosted at `github.com/roulabs/mx`.
+This repo is the **source of truth** for **mx** ("multiplexer"), a system for running several features in parallel across shared repos using git worktrees. You are working on mx *itself* here — the CLI, the core library, the templates, the docs — not on any feature. The published CLI lives on npm as `@roulabs/mx` (command `mx`); the source is hosted at `github.com/roulabs/mx`.
 
 mx produces a **runtime**: an `mx/` folder somewhere on the device, containing `repos/`, `works/`, and a `CLAUDE.md` stamped from the templates shipped inside the CLI. The source repo and any runtime are fully **decoupled** — this repo is never tied to a particular runtime.
 
@@ -14,13 +14,13 @@ A TypeScript pnpm monorepo. **Source code and publishable npm package live in se
 
 - **`packages/core` (`@mx/core`)** — pure, typed, unit-tested domain logic. Functions take inputs, return plain data, and `throw MxError`; they never `console.log` or `process.exit`, and never assume an on-disk layout (paths like the templates dir are passed in).
 - **`apps/cli` (`@mx/cli`, private)** — CLI source over `@mx/core`: arg parsing, cwd→`-n` inference, output formatting (`--porcelain` vs human), exit codes. Bundled by tsup into a single dependency-free entry. The package itself is private and never published; it exists only as a workspace member so pnpm can wire `@mx/core` in.
-- **`npm/` (`mxcli`)** — the publishable package. `package.json` and `README.md` are committed (public metadata + user docs). `bin/mx.js`, `templates/`, and `LICENSE` are produced by `pnpm build` (gitignored). `npm publish` runs from this folder.
+- **`npm/` (`@roulabs/mx`)** — the publishable package. `package.json` and `README.md` are committed (public metadata + user docs). `bin/mx.js`, `templates/`, and `LICENSE` are produced by `pnpm build` (gitignored). `npm publish` runs from this folder.
 
 New behavior is normally a core function plus thin CLI wiring.
 
 ## Running the CLI (dev vs global)
 
-There is **no global PATH coupling to this repo**. The global `mx` exists only when you install a build: `npm i -g mxcli` (npm owns that bin).
+There is **no global PATH coupling to this repo**. The global `mx` exists only when you install a build: `npm i -g @roulabs/mx` (npm owns that bin).
 
 For development, run the local build via the workspace:
 
@@ -90,7 +90,7 @@ mx/                                  # pnpm workspace (TypeScript); repo = githu
 │   └── cli/                         # @mx/cli (private) — CLI source
 │       ├── src/                     # args, output, help, paths, main, commands/{global,repo,work}
 │       └── tsup.config.ts           # bundles src/bin/mx.ts -> ../../npm/bin/mx.js, copies assets
-└── npm/                             # mxcli — publishable package
+└── npm/                             # @roulabs/mx — publishable package
     ├── package.json                 # committed (public metadata)
     ├── README.md                    # committed (consumer docs)
     ├── bin/mx.js                    # built by `pnpm build` (gitignored)
@@ -131,7 +131,7 @@ Deferred: `mx open` (terminal/editor layout).
 
 ## Conventions
 
-- **TypeScript pnpm monorepo, zero runtime dependencies.** Both source packages (`@mx/core`, `@mx/cli`) use only `node:` builtins; tsup bundles `@mx/core` into the CLI so the published `mxcli` package installs no deps. Tooling (tsup, eslint, vitest, prettier) is devDeps only. `@mx/cli` is private; the published thing is the `npm/` folder.
+- **TypeScript pnpm monorepo, zero runtime dependencies.** Both source packages (`@mx/core`, `@mx/cli`) use only `node:` builtins; tsup bundles `@mx/core` into the CLI so the published `@roulabs/mx` package installs no deps. Tooling (tsup, eslint, vitest, prettier) is devDeps only. `@mx/cli` is private; the published thing is the `npm/` folder.
 - **Workflow:** `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm build` (and `pnpm dev` to watch). Add a Vitest test in `packages/core/test` for new core logic.
 - **Runtime is env-addressed** (`$MX_RUNTIME` / `--runtime` / `~/mx`); never persist a runtime path in this repo. Dev uses the gitignored `.mx/` runtime.
 - **Release:** local-driven via `pnpm release` (which runs `scripts/release.sh`). One-time on the publisher's machine: `npm login`. To cut a release, bump the `"version"` in `npm/package.json`, commit, then `pnpm release` — the script verifies npm auth + clean tree + fresh tag + unpublished version, runs typecheck/lint/test/build, shows a tarball preview, prompts to confirm, then `npm publish`es from `npm/` and pushes the `vX.Y.Z` tag. No GitHub Actions secret to maintain; publishing targets `registry.npmjs.org` regardless of any local corp `.npmrc` registry.
@@ -143,5 +143,5 @@ For a fresh session / new machine:
 
 - **Done and verified:** the full TS pnpm monorepo (`@mx/core` source + `@mx/cli` source + `npm/` publishable package), all commands (`init`, `status`, `update`, `repo`, `work` incl. `worktree`/`port`/`path`), env-based runtime discovery, templates copied into `npm/templates/` at build time, CI workflow for PR checks, `scripts/release.sh` for local publishing, MIT license, and a consumer README at `npm/README.md`. `pnpm typecheck/lint/test/build` are green; the packed tarball installs via `npm i -g` and runs self-contained from outside the repo. Hosted at `github.com/roulabs/mx`, branch `main`.
 - **Start working:** `pnpm install && pnpm build`, then `export MX_RUNTIME="$PWD/.mx"` and `pnpm mx init`. Iterate with `pnpm dev` (watch) + `pnpm mx ...`; run `pnpm typecheck && pnpm lint && pnpm test` before committing.
-- **Not done yet:** the first npm publish — `npm login` once on this machine, then `pnpm release` cuts `mxcli@1.0.0`. `mx open` (terminal/editor layout) is deferred. Optional next idea: isolated per-env state (separate DB schema / container) for safe parallel runs.
+- **Not done yet:** the first npm publish — `npm login` once on this machine, then `pnpm release` cuts `@roulabs/mx@1.0.0`. `mx open` (terminal/editor layout) is deferred. Optional next idea: isolated per-env state (separate DB schema / container) for safe parallel runs.
 - **Gotchas already handled in code (keep them):** never run mx against a real runtime — use `/tmp` or `.mx`; the first `pnpm install` on a corp npm mirror is slow, not stuck; `--base` is resolved to a commit SHA with an `origin/<ref>` fallback to avoid git's DWIM overriding `-b`; `inferContext` realpaths both sides so symlinked roots (e.g. macOS `/tmp`) match.

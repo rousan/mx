@@ -7,7 +7,7 @@ mx manages a **runtime**: a single `mx/` folder holding pristine repo clones (`r
 ## Install
 
 ```bash
-npm install -g mxcli      # provides the `mx` command
+npm install -g @roulabs/mx      # provides the `mx` command
 ```
 
 Requires Node >= 22 and git.

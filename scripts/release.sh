@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Local release driver for the mxcli npm package.
+# Local release driver for the @roulabs/mx npm package.
 #
 # Reads the target version from npm/package.json (you bump + commit it before
 # running this), runs the full check/build pipeline, publishes to npm using
@@ -77,8 +77,8 @@ echo
 
 # --- publish + tag -----------------------------------------------------------
 
-step "Publishing to npm"
-( cd npm && npm publish )
+step "Publishing to npm (browser will open for auth)"
+( cd npm && npm publish --auth-type=web )
 ok "Published $name@$version"
 
 step "Tagging and pushing"
