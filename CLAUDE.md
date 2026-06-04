@@ -142,7 +142,7 @@ Deferred: `mx open` (terminal/editor layout).
 For a fresh session / new machine:
 
 - **Done and verified:** the full TS pnpm monorepo (`@mx/core` source + `@mx/cli` source + `npm/` publishable package), all commands (`init`, `status`, `update`, `repo`, `work` incl. `worktree`/`port`/`path`), env-based runtime discovery, templates copied into `npm/templates/` at build time, CI workflow for PR checks, `scripts/release.sh` for local publishing, MIT license, and a consumer README at `npm/README.md`. `pnpm typecheck/lint/test/build` are green; the packed tarball installs via `npm i -g` and runs self-contained from outside the repo. Hosted at `github.com/roulabs/mx`, branch `main`.
-- **Shipped:** `@roulabs/mx@1.0.0` published 2026-06-04 (https://www.npmjs.com/package/@roulabs/mx), tag `v1.0.0` on `main`. End-user install: `npm i -g @roulabs/mx` → `mx` command.
+- **Shipped:** `@roulabs/mx` is live on npm at https://www.npmjs.com/package/@roulabs/mx (first release `v1.0.0` on 2026-06-04). For the currently-published version, run `git describe --tags --abbrev=0` or check the npm page. End-user install: `npm i -g @roulabs/mx` → `mx` command.
 - **Start working:** `pnpm install && pnpm build`, then `export MX_RUNTIME="$PWD/.mx"` and `pnpm mx init`. Iterate with `pnpm dev` (watch) + `pnpm mx ...`; run `pnpm typecheck && pnpm lint && pnpm test` before committing.
 - **Next release:** bump `npm/package.json` version, commit, then `pnpm release`. The script uses `--auth-type=web` so a browser opens for 2FA-protected publish (no OTP typing).
 - **Not done yet:** `mx open` (terminal/editor layout). Optional next idea: isolated per-env state (separate DB schema / container) for safe parallel runs.
