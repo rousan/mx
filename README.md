@@ -43,9 +43,16 @@ mx/                                  # pnpm workspace
         └── src/                     # tsup -> dist/bin/mx.js (the bin)
 ```
 
-## Develop
+## Prerequisites
+
+- **Node >= 22** and **pnpm** (`corepack enable` provides the pinned `packageManager` version).
+- **git** on PATH.
+- npm publish targets public `registry.npmjs.org`; a corp `.npmrc` registry is fine for installing deps (the first `pnpm install` may be slow on a corp mirror — it is not stuck).
+
+## Develop (including on a fresh machine)
 
 ```bash
+git clone git@github.com:roulabs/mx.git && cd mx
 pnpm install
 pnpm build                       # bundle apps/cli/dist/bin/mx.js (pnpm dev = watch)
 export MX_RUNTIME="$PWD/.mx"     # gitignored dev runtime in this repo
@@ -97,6 +104,8 @@ git commit -am "release vX.Y.Z" && git tag vX.Y.Z && git push --follow-tags
 ```
 
 CI (`.github/workflows/ci.yml`) runs typecheck/lint/test/build on every PR.
+
+**Not yet published.** Before the first release: add an `NPM_TOKEN` (npm automation token) to the repo secrets, and confirm the package name `mx-multiplexer` is available on npm (or change `apps/cli/package.json` `name` + the `--filter` targets in the root `package.json` scripts and `release.yml`). The packaging is verified end-to-end (`pnpm --filter mx-multiplexer pack` → `npm i -g <tarball>` runs self-contained), so a tag is all that's needed once the token is set.
 
 ## Roadmap
 

@@ -128,3 +128,12 @@ Deferred: `mx open` (terminal/editor layout).
 - **Runtime is env-addressed** (`$MX_RUNTIME` / `--runtime` / `~/mx`); never persist a runtime path in this repo. Dev uses the gitignored `.mx/` runtime.
 - **Release:** push a `v*` tag — `.github/workflows/release.yml` builds and runs `pnpm --filter mx-multiplexer publish` to public npm using the `NPM_TOKEN` secret. Cut a release with `pnpm --filter mx-multiplexer version <bump>`, commit, tag `vX.Y.Z`, push. Publishing targets `registry.npmjs.org` regardless of any local corp `.npmrc` registry.
 - Keep `apps/cli/templates/CLAUDE.md` and the CLI's behavior consistent — they're the contract feature sessions rely on. A runtime only sees template changes after `mx update`.
+
+## Status & where to pick up
+
+For a fresh session / new machine:
+
+- **Done and verified:** the full TS pnpm monorepo (`@mx/core` + `apps/cli`), all commands (`init`, `status`, `update`, `repo`, `work` incl. `worktree`/`port`/`path`), env-based runtime discovery, templates shipped inside the CLI package, CI + release GitHub Actions, MIT license, and a consumer README. `pnpm typecheck/lint/test/build` are green; the packed tarball installs via `npm i -g` and runs self-contained from outside the repo. Hosted at `github.com/roulabs/mx`, branch `main`.
+- **Start working:** `pnpm install && pnpm build`, then `export MX_RUNTIME="$PWD/.mx"` and `pnpm mx init`. Iterate with `pnpm dev` (watch) + `pnpm mx ...`; run `pnpm typecheck && pnpm lint && pnpm test` before committing.
+- **Not done yet:** the first npm publish — add an `NPM_TOKEN` repo secret, confirm the `mx-multiplexer` name is free on npm (or change it in `apps/cli/package.json` plus the `--filter` targets in root `package.json` and `release.yml`), then `pnpm --filter mx-multiplexer version <bump>` → tag `vX.Y.Z` → push. `mx open` (terminal/editor layout) is deferred. Optional next idea: isolated per-env state (separate DB schema / container) for safe parallel runs.
+- **Gotchas already handled in code (keep them):** never run mx against a real runtime — use `/tmp` or `.mx`; the first `pnpm install` on a corp npm mirror is slow, not stuck; `--base` is resolved to a commit SHA with an `origin/<ref>` fallback to avoid git's DWIM overriding `-b`; `inferContext` realpaths both sides so symlinked roots (e.g. macOS `/tmp`) match.
