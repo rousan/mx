@@ -34,7 +34,8 @@ mx/                                  # pnpm workspace
 ├── tsconfig.base.json · eslint.config.js · .prettierrc.json · .nvmrc · LICENSE
 ├── CLAUDE.md                        # how to work on mx
 ├── README.md                        # this file
-├── .github/workflows/               # ci.yml (PRs) + release.yml (publish on v* tag)
+├── .github/workflows/ci.yml         # typecheck/lint/test/build on PRs
+├── scripts/release.sh               # local release driver (pnpm release)
 ├── templates/                       # runtime assets (CLAUDE.md, work.json, .code-workspace)
 ├── packages/
 │   └── core/                        # @mx/core — typed, tested domain logic
@@ -100,16 +101,23 @@ Read commands take `--porcelain` for stable JSON; mutations echo the resulting o
 
 ## Release
 
-Publishing is automated by `.github/workflows/release.yml` on a `v*` tag (requires an `NPM_TOKEN` repo secret). The workflow runs `pnpm build` to populate `npm/`, then `npm publish` from `./npm`:
+Publishing is driven locally by `pnpm release` (`scripts/release.sh`) — no CI tokens to maintain. One-time on the publisher's machine:
 
 ```bash
-cd npm && npm version <patch|minor|major> && cd ..
-git commit -am "release vX.Y.Z" && git tag vX.Y.Z && git push --follow-tags
+npm login                                                # caches the npm session
 ```
 
-CI (`.github/workflows/ci.yml`) runs typecheck/lint/test/build on every PR.
+To cut a release:
 
-**Not yet published.** Before the first release: add an `NPM_TOKEN` (npm automation token) to the repo secrets, and confirm the package name `mx-multiplexer` is available on npm (or change `npm/package.json` `name`). The packaging is verified end-to-end (`pnpm build && cd npm && npm pack` → `npm i -g <tarball>` runs self-contained), so a tag is all that's needed once the token is set.
+```bash
+$EDITOR npm/package.json                                 # bump "version"
+git commit -am "release vX.Y.Z"
+pnpm release                                             # full pipeline + confirm prompt
+```
+
+`pnpm release` verifies you're logged in to npm, the tree is clean, the tag doesn't exist, and the version isn't already on the registry; runs `pnpm typecheck && pnpm lint && pnpm test && pnpm build`; shows a tarball preview; asks for confirmation; then `npm publish`es from `npm/` and pushes the `vX.Y.Z` tag.
+
+CI (`.github/workflows/ci.yml`) still runs typecheck/lint/test/build on every PR.
 
 ## Roadmap
 
@@ -117,6 +125,6 @@ CI (`.github/workflows/ci.yml`) runs typecheck/lint/test/build on every PR.
 - [x] Env-based runtime discovery (`--runtime` / `$MX_RUNTIME` / default `~/mx`)
 - [x] Per-service free-port allocation across all works (no fixed blocks)
 - [x] TypeScript pnpm monorepo (`@mx/core` + `apps/cli`), lint/test/build tooling
-- [x] npm distribution (`mx-multiplexer`) + GitHub Actions CI/release
+- [x] npm distribution (`mx-multiplexer`) — `pnpm release` for local publish, GitHub Actions CI for PR checks
 - [ ] `mx open` terminal + editor layout
 - [ ] Optional: isolated per-env state (separate DB schema / container) for safe parallel runs

@@ -76,7 +76,8 @@ mx/                                  # pnpm workspace (TypeScript); repo = githu
 ├── tsconfig.base.json · eslint.config.js · .prettierrc.json · .nvmrc · LICENSE
 ├── CLAUDE.md                        # this file — how to work on mx
 ├── README.md                        # dev/source guide
-├── .github/workflows/               # ci.yml (PRs) + release.yml (publish on v* tag)
+├── .github/workflows/ci.yml         # typecheck/lint/test/build on PRs
+├── scripts/release.sh               # local release driver (pnpm release)
 ├── packages/
 │   └── core/                        # @mx/core — pure, typed, unit-tested domain logic
 │       └── src/                     #   errors, types, fsutil, json, git, templates,
@@ -133,14 +134,14 @@ Deferred: `mx open` (terminal/editor layout).
 - **TypeScript pnpm monorepo, zero runtime dependencies.** Both source packages (`@mx/core`, `@mx/cli`) use only `node:` builtins; tsup bundles `@mx/core` into the CLI so the published `mx-multiplexer` package installs no deps. Tooling (tsup, eslint, vitest, prettier) is devDeps only. `@mx/cli` is private; the published thing is the `npm/` folder.
 - **Workflow:** `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm build` (and `pnpm dev` to watch). Add a Vitest test in `packages/core/test` for new core logic.
 - **Runtime is env-addressed** (`$MX_RUNTIME` / `--runtime` / `~/mx`); never persist a runtime path in this repo. Dev uses the gitignored `.mx/` runtime.
-- **Release:** push a `v*` tag — `.github/workflows/release.yml` runs `pnpm build` (populates `npm/`) and then `npm publish` from `./npm` using the `NPM_TOKEN` secret. To cut a release, bump `npm/package.json` version (e.g. `cd npm && npm version <patch|minor|major>`), commit, tag `vX.Y.Z`, push. Publishing targets `registry.npmjs.org` regardless of any local corp `.npmrc` registry.
+- **Release:** local-driven via `pnpm release` (which runs `scripts/release.sh`). One-time on the publisher's machine: `npm login`. To cut a release, bump the `"version"` in `npm/package.json`, commit, then `pnpm release` — the script verifies npm auth + clean tree + fresh tag + unpublished version, runs typecheck/lint/test/build, shows a tarball preview, prompts to confirm, then `npm publish`es from `npm/` and pushes the `vX.Y.Z` tag. No GitHub Actions secret to maintain; publishing targets `registry.npmjs.org` regardless of any local corp `.npmrc` registry.
 - Keep `templates/CLAUDE.md` and the CLI's behavior consistent — they're the contract feature sessions rely on. A runtime only sees template changes after `pnpm build` (which copies them into `npm/templates/`) and `mx update`.
 
 ## Status & where to pick up
 
 For a fresh session / new machine:
 
-- **Done and verified:** the full TS pnpm monorepo (`@mx/core` source + `@mx/cli` source + `npm/` publishable package), all commands (`init`, `status`, `update`, `repo`, `work` incl. `worktree`/`port`/`path`), env-based runtime discovery, templates copied into `npm/templates/` at build time, CI + release GitHub Actions, MIT license, and a consumer README at `npm/README.md`. `pnpm typecheck/lint/test/build` are green; the packed tarball installs via `npm i -g` and runs self-contained from outside the repo. Hosted at `github.com/roulabs/mx`, branch `main`.
+- **Done and verified:** the full TS pnpm monorepo (`@mx/core` source + `@mx/cli` source + `npm/` publishable package), all commands (`init`, `status`, `update`, `repo`, `work` incl. `worktree`/`port`/`path`), env-based runtime discovery, templates copied into `npm/templates/` at build time, CI workflow for PR checks, `scripts/release.sh` for local publishing, MIT license, and a consumer README at `npm/README.md`. `pnpm typecheck/lint/test/build` are green; the packed tarball installs via `npm i -g` and runs self-contained from outside the repo. Hosted at `github.com/roulabs/mx`, branch `main`.
 - **Start working:** `pnpm install && pnpm build`, then `export MX_RUNTIME="$PWD/.mx"` and `pnpm mx init`. Iterate with `pnpm dev` (watch) + `pnpm mx ...`; run `pnpm typecheck && pnpm lint && pnpm test` before committing.
-- **Not done yet:** the first npm publish — add an `NPM_TOKEN` repo secret, confirm the `mx-multiplexer` name is free on npm (or change `npm/package.json` `name`), then `cd npm && npm version <bump>` → tag `vX.Y.Z` → push. `mx open` (terminal/editor layout) is deferred. Optional next idea: isolated per-env state (separate DB schema / container) for safe parallel runs.
+- **Not done yet:** the first npm publish — `npm login` once on this machine, then `pnpm release` cuts `mx-multiplexer@1.0.0`. `mx open` (terminal/editor layout) is deferred. Optional next idea: isolated per-env state (separate DB schema / container) for safe parallel runs.
 - **Gotchas already handled in code (keep them):** never run mx against a real runtime — use `/tmp` or `.mx`; the first `pnpm install` on a corp npm mirror is slow, not stuck; `--base` is resolved to a commit SHA with an `origin/<ref>` fallback to avoid git's DWIM overriding `-b`; `inferContext` realpaths both sides so symlinked roots (e.g. macOS `/tmp`) match.
