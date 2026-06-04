@@ -1,5 +1,5 @@
-# machine-local runtime pointer (each device records its own)
-.mx-runtime
+# local dev runtime (set MX_RUNTIME=$PWD/.mx to use it)
+.mx/
 
 # build output
 dist/

@@ -28,7 +28,7 @@ export {
 } from './runtime';
 export type { InitResult, UpdateResult } from './runtime';
 
-export { findProjectRoot, templatesDir, runtimePointerPath } from './templates';
+export { stampClaudeMd, removeStaleRuntimeReadme } from './templates';
 
 export {
   repoNameFromUrl,

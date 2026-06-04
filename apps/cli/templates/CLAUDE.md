@@ -1,5 +1,5 @@
-<!-- Installed by project-mx. Don't hand-edit this file in the runtime —
-     edit templates/CLAUDE.md in project-mx and run `mx update`. -->
+<!-- Installed by the mx CLI. Don't hand-edit this file in the runtime —
+     edit apps/cli/templates/CLAUDE.md in the mx source repo and run `mx update`. -->
 
 # mx — multiplexed parallel work across repos
 
@@ -21,15 +21,15 @@ Every read command takes `--porcelain` for stable JSON; parse that instead of sc
 
 `mx/` is where **feature work** happens. Sessions launched here implement a feature inside a
 `works/<feature>/` folder. mx *itself* — this template, the `mx` CLI — is maintained in a separate
-**`project-mx/`** folder outside this tree. If you were opened here to change how mx works, you're
-in the wrong place: switch to `project-mx/`. Don't edit `repos/`, `works/`, or the runtime files
-from here.
+**mx source checkout** (the `github.com/roulabs/mx` repo), outside this tree. If you were opened
+here to change how mx works, you're in the wrong place: switch to that repo. Don't edit `repos/`,
+`works/`, or the runtime files from here.
 
 ## Layout
 
 ```
 mx/
-├── CLAUDE.md               # this file (installed by project-mx)
+├── CLAUDE.md               # this file (installed by the mx CLI)
 ├── .mx-root                # empty marker: "this is the mx root"
 ├── repos/                  # PRISTINE reference clones, each on its default branch
 │   ├── repo-a/

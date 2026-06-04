@@ -33,6 +33,6 @@ Works (features):
 The -n <name> selector may be omitted when your cwd implies it: inside a work folder or
 worktree (works/<work>/...) the work is inferred; inside repos/<repo>/... the repo is inferred.
 
-Runtime discovery: --runtime <path>  ->  $MX_RUNTIME  ->  .mx-runtime file.
+Runtime discovery: --runtime <path>  ->  $MX_RUNTIME  ->  default ~/mx.
 --porcelain emits stable JSON on reads; errors are {"error","code"} with a non-zero exit.
 `;

@@ -1,5 +1,5 @@
 {
-  "name": "project-mx",
+  "name": "mx",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,8 +9,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm --filter mx run build",
-    "dev": "pnpm --filter mx run dev",
+    "build": "pnpm --filter mx-multiplexer run build",
+    "dev": "pnpm --filter mx-multiplexer run dev",
+    "mx": "node apps/cli/dist/bin/mx.js",
     "typecheck": "pnpm -r run typecheck",
     "lint": "eslint .",
     "format": "prettier --write .",

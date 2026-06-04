@@ -1,85 +1,101 @@
-# project-mx — source for the mx system
+# mx — source & control panel for the mx system
 
-This folder is the **source of truth** for **mx** ("multiplexer"), a system for running several features in parallel across shared repos using git worktrees. You are working on mx *itself* here — the CLI, the templates, the docs — not on any feature.
+This repo is the **source of truth** for **mx** ("multiplexer"), a system for running several features in parallel across shared repos using git worktrees. You are working on mx *itself* here — the CLI, the core library, the templates, the docs — not on any feature. The published CLI lives on npm as `mx-multiplexer` (command `mx`); the source is hosted at `github.com/roulabs/mx`.
 
-mx produces a **runtime**: a single `mx/` folder elsewhere on this device, containing `repos/`, `works/`, and the `CLAUDE.md` stamped from `templates/`. **One device has one runtime instance.** Sessions launched in the runtime do feature work; sessions here build and maintain the tool.
+mx produces a **runtime**: an `mx/` folder somewhere on the device, containing `repos/`, `works/`, and a `CLAUDE.md` stamped from the templates shipped inside the CLI. The source repo and any runtime are fully **decoupled** — this repo is never tied to a particular runtime.
 
 ## The core principle: mx owns runtime state
 
-`mx` (the CLI in `bin/mx`) is the **single owner** of all runtime state — the per-work manifest (`work.json`) and the VS Code `.code-workspace`. Feature sessions in the runtime never hand-edit those files and never run raw `git worktree`; they go through `mx` commands, which read state and (for reads) emit stable JSON via `--porcelain`. `project-mx` and the feature sessions are just harnesses around the `mx` CLI.
+`mx` is the **single owner** of all runtime state — the per-work manifest (`work.json`) and the VS Code `.code-workspace`. Feature sessions in the runtime never hand-edit those files and never run raw `git worktree`; they go through `mx` commands, which read state and (for reads) emit stable JSON via `--porcelain`. The source repo and feature sessions are just harnesses around the CLI.
 
-## Running the CLI
+## Architecture
 
-`bin/mx` is a thin launcher on `$PATH` via the user's `~/.zshrc` (`export PATH="$HOME/Projects/project-mx/bin:$PATH"`); it execs the bundled CLI at `apps/cli/dist/bin/mx.js`. So `mx` is callable globally, but it reflects **built** output: after changing CLI/core code run `pnpm build` (or keep `pnpm dev` watching) before the change is live. Editing files under `templates/` needs no rebuild (they're read at runtime). The active runtime is `~/mx`, recorded in `.mx-runtime`.
+A TypeScript pnpm monorepo:
+
+- **`packages/core` (`@mx/core`)** — pure, typed, unit-tested domain logic. Functions take inputs, return plain data, and `throw MxError`; they never `console.log` or `process.exit`, and never assume an on-disk layout (paths like the templates dir are passed in).
+- **`apps/cli` (`mx-multiplexer`)** — the CLI over `@mx/core`: arg parsing, cwd→`-n` inference, output formatting (`--porcelain` vs human), exit codes. Bundled by tsup into a single dependency-free `apps/cli/dist/bin/mx.js`. Ships the runtime `templates/`.
+
+New behavior is normally a core function plus thin CLI wiring.
+
+## Running the CLI (dev vs global)
+
+There is **no global PATH coupling to this repo**. The global `mx` exists only when you install a build: `npm i -g mx-multiplexer` (npm owns that bin).
+
+For development, run the local build via the workspace:
+
+```bash
+pnpm install
+pnpm build                     # bundle apps/cli/dist/bin/mx.js (pnpm dev = watch)
+export MX_RUNTIME="$PWD/.mx"   # a gitignored dev runtime in this repo
+pnpm mx init                   # = node apps/cli/dist/bin/mx.js init
+pnpm mx status
+```
+
+`mx` reflects **built** output: after changing CLI/core code, `pnpm build` (or keep `pnpm dev` running). Editing files under `apps/cli/templates/` needs no rebuild (read at runtime).
 
 ## Finding the runtime
 
-One runtime per device. The CLI locates it in this order:
+The CLI resolves the runtime in order:
 
-1. `--runtime <path>` flag (explicit override).
+1. `--runtime <path>` flag.
 2. `$MX_RUNTIME` environment variable.
-3. The path recorded in `.mx-runtime` at the project root (written by `mx init`).
+3. Default `~/mx`.
 
-`.mx-runtime` is machine-local and gitignored. Commands resolve the runtime through this mechanism — never hardcode a path. `bin/mx` locates `project-mx` (for template stamping) via its own file path.
+No pointer file is written anywhere. A consumer (or you, on any machine) sets `$MX_RUNTIME` once, or relies on the `~/mx` default. Commands resolve the runtime through this mechanism — never hardcode a path.
 
 ## Source-of-truth rule
 
-Everything a runtime uses is generated from this project. The runtime's `CLAUDE.md` is an **installed copy** of `templates/CLAUDE.md`. The per-work `work.json` and `.code-workspace` are **generated programmatically** by the CLI (not text-substituted); `templates/work.json` and `templates/workspace.code-workspace` hold their reference shapes.
+The runtime's `CLAUDE.md` is an **installed copy** of `apps/cli/templates/CLAUDE.md`. The per-work `work.json` and `.code-workspace` are **generated programmatically** by the CLI (not text-substituted); `apps/cli/templates/{work.json,workspace.code-workspace}` hold their reference shapes.
 
-- To change runtime guidance, edit `templates/CLAUDE.md`, then run `mx update`.
-- Never hand-edit a runtime's installed `CLAUDE.md` — it will drift from this source.
-- A live runtime is build output; treat its top-level files that way.
-- The runtime carries **only** a `CLAUDE.md` (no runtime `README.md`).
+- To change runtime guidance, edit `apps/cli/templates/CLAUDE.md`, then run `mx update`.
+- Templates are part of the CLI package (shipped via its `files`) and resolved relative to the installed bin, so `init`/`update` work the same in dev and once installed from npm.
+- Never hand-edit a runtime's installed `CLAUDE.md`; the runtime carries **only** a `CLAUDE.md` (no runtime README).
 
 ## `mx update`
 
-The runtime's `CLAUDE.md` is an installed copy of `templates/CLAUDE.md`; edits here don't reach the runtime until you sync. `mx update` re-stamps that file into the discovered runtime (and removes a stale runtime `README.md` if one lingers). It does **not** touch `repos/` or anything under `works/`.
+`mx update` re-stamps the runtime `CLAUDE.md` from `apps/cli/templates/CLAUDE.md` into the discovered runtime (and removes a stale runtime `README.md` if one lingers). It does **not** touch `repos/` or anything under `works/`.
 
-## Touching the runtime while developing (hard rule)
+## Testing against a runtime (hard rule)
 
-**Never test the CLI against the real runtime.** During development, all testing happens against a throwaway sandbox runtime under `/tmp` — never the user's real runtime (e.g. `~/Projects/mx`) and never its real clones (`agents`, `muze-ai`, …).
+**Never test the CLI against a real/production runtime.** Point `$MX_RUNTIME` at a throwaway `/tmp` runtime (or this repo's `.mx/`) and test there:
 
-The only sanctioned writes to the real runtime are the explicit commands the **user** chooses to run (`init`, `repo add`, `work new`, `work ... worktree add/rm`, `work ... destroy`, `update`). When you are developing or verifying, instead:
+```bash
+export MX_RUNTIME=/tmp/mx-sbx
+node apps/cli/dist/bin/mx.js init    # or: pnpm mx init
+```
 
-1. Create a sandbox and point everything at it: `export MX_RUNTIME=/tmp/mx-sbx` then `./bin/mx init /tmp/mx-sbx`.
-2. Use locally-created throwaway git repos as clone sources (`git init` in `/tmp/...`) so tests need no network and never touch real remotes.
-3. Run the full scenario against the sandbox only.
-4. **Clean up afterward:** `rm -rf /tmp/mx-sbx` and remove the stray pointer — `mx init` rewrites `.mx-runtime` at the project root, so a sandbox run will overwrite the real runtime pointer. Delete or restore `.mx-runtime` when done.
-
-If a change can only be confirmed against the real runtime, stop and ask the user to run the command themselves.
+Use locally-created throwaway git repos as clone sources (`git init` in `/tmp/...`) so tests need no network. Since the runtime location is env-only (no pointer file), sandbox runs can't corrupt a real runtime — but still target `/tmp`. `MX_TEMPLATES_DIR` overrides the templates dir if needed.
 
 ## Layout
 
 ```
-project-mx/                         # pnpm workspace (TypeScript)
-├── package.json                    # root scripts: build / dev / typecheck / lint / test
+mx/                                  # pnpm workspace (TypeScript); repo = github.com/roulabs/mx
+├── package.json                     # root scripts: build / dev / mx / typecheck / lint / test
 ├── pnpm-workspace.yaml
-├── tsconfig.base.json · eslint.config.js · .prettierrc.json · .nvmrc
-├── CLAUDE.md                       # this file — how to work on mx
-├── README.md                       # project overview + dev guide
-├── .gitignore
-├── .mx-runtime                     # machine-local runtime path (gitignored)
-├── bin/
-│   └── mx                          # thin launcher (on $PATH) -> apps/cli/dist/bin/mx.js
-├── templates/                      # runtime data, read at runtime (source of truth)
-│   ├── CLAUDE.md                   # installed into a runtime — feature-session rules
-│   ├── work.json                   # reference shape (CLI generates programmatically)
-│   └── workspace.code-workspace
+├── tsconfig.base.json · eslint.config.js · .prettierrc.json · .nvmrc · LICENSE
+├── CLAUDE.md                        # this file — how to work on mx
+├── README.md                        # dev/source guide
+├── .github/workflows/               # ci.yml (PRs) + release.yml (publish on v* tag)
 ├── packages/
-│   └── core/                       # @mx/core — pure, typed, unit-tested domain logic
-│       └── src/                    # errors, types, fsutil, json, git, templates,
-│                                   #   runtime, ports, repos, works, status, index
+│   └── core/                        # @mx/core — pure, typed, unit-tested domain logic
+│       └── src/                     #   errors, types, fsutil, json, git, templates,
+│                                    #   runtime, ports, repos, works, status, index
 └── apps/
-    └── cli/                        # mx — CLI over @mx/core (args, output, help, main,
-        └── src/                    #   commands/{global,repo,work}); tsup -> dist/bin/mx.js
+    └── cli/                         # mx-multiplexer — CLI over @mx/core
+        ├── templates/               # runtime assets stamped into a runtime (ship with the package)
+        │   ├── CLAUDE.md            # feature-session rules
+        │   ├── work.json            # reference shape
+        │   └── workspace.code-workspace
+        └── src/                     # args, output, help, paths, main, commands/{global,repo,work}
+                                     #   tsup -> dist/bin/mx.js (the bin)
 ```
 
 ## The runtime model
 
 ```
-mx/
+mx/ (a runtime, e.g. ~/mx or ./.mx)
 ├── .mx-root            # marker file
-├── CLAUDE.md           # from templates/CLAUDE.md
+├── CLAUDE.md           # from apps/cli/templates/CLAUDE.md
 ├── repos/<repo>/       # pristine clones — read-only reference
 └── works/<feature>/    # one folder per feature
     ├── work.json       # manifest, owned by mx
@@ -87,50 +103,28 @@ mx/
     └── <repo>/         # git worktree on the feature branch
 ```
 
-`templates/CLAUDE.md` is the **authoritative description** of how feature sessions behave (never edit `repos/`, never hand-edit `work.json`, never raw-`git` worktrees, ask before adding a worktree, keep branches on teardown, per-service free-port allocation). Read it before changing anything that affects runtime behavior, and keep it consistent with the CLI.
+`apps/cli/templates/CLAUDE.md` is the **authoritative description** of how feature sessions behave (never edit `repos/`, never hand-edit `work.json`, never raw-`git` worktrees, ask before adding a worktree, keep branches on teardown, per-service free-port allocation). Keep it consistent with the CLI.
 
-## The mx CLI — command contracts
+## Command contracts
 
-Implemented in `bin/mx` (Node, single file, zero deps). Each command resolves the runtime via the discovery order above. Reads accept `--porcelain` (stable JSON); mutations echo the resulting object; errors under `--porcelain` are `{"error","code"}` with a non-zero exit.
-
-The `-n <name>` selector can be **omitted when the cwd implies it**: inside `works/<work>/…` infers the work (and, in a worktree, the repo); inside `repos/<repo>/…` infers the repo. An explicit `-n` always overrides. Comparison is realpath-based (handles symlinked roots).
+Implemented in `apps/cli` over `@mx/core`. Each command resolves the runtime via the discovery order above. Reads accept `--porcelain` (stable JSON); mutations echo the resulting object; errors are `{"error","code"}` with a non-zero exit. `-n <name>` may be omitted when the cwd implies it (inside `works/<work>/…` infers the work and, in a worktree, the repo; inside `repos/<repo>/…` infers the repo).
 
 **Global**
-- **`mx init [path]`** — idempotent scaffold/adopt of a runtime (default `~/mx`): create `repos/`, `works/`, `.mx-root`; stamp `CLAUDE.md`; record the path in `.mx-runtime`. Never clobbers existing `repos/`/`works/`. Does not clone repos.
+- **`mx init [path]`** — scaffold/adopt a runtime (target = path arg, else `$MX_RUNTIME`, else `~/mx`): create `repos/`, `works/`, `.mx-root`; stamp `CLAUDE.md`. Idempotent; no clone; no pointer written.
 - **`mx status [--porcelain]`** — runtime path, repos + branches, works + worktrees + ports.
 - **`mx update`** — re-stamp the runtime `CLAUDE.md`.
 - **`mx help` / `mx version`**.
 
-**Repos** — `mx repo`
-- **`add <git-url> [--name <n>]`** — clone into `repos/<name>` (the only command that clones).
-- **`ls`** · **`-n <name> fetch`** · **`-n <name> info`** · **`-n <name> rm`** (refuses if any work uses it).
+**Repos** — `mx repo`: `add <git-url> [--name <n>]` (only command that clones) · `ls` · `-n <name> fetch` · `-n <name> info` · `-n <name> rm` (refuses if any work uses it).
 
-**Works** — `mx work`
-- **`new <name> [--description <text>]`** — create the work folder, `work.json`, and empty `.code-workspace`. Name is immutable. Output includes the work folder's absolute `path`.
-- **`ls`** · **`-n <name> info`** · **`-n <name> describe <text>`** · **`-n <name> path`** (prints the work folder path; plain output is the bare path so `cd "$(mx work -n <name> path)"` works).
-- **`-n <name> worktree add <repo> [--branch <b>] [--base <ref>]`** — create a worktree from `repos/<repo>`, register it in `work.json` + `.code-workspace`. `--branch` is the new branch (default = work name; reused if it exists). `--base` is the start point: it's resolved to a commit SHA (trying the ref as given, then `origin/<ref>`) before `git worktree add -b`, so a bare branch name forks correctly instead of git DWIM-ing a same-named local branch.
-- **`-n <name> worktree ls`** · **`-n <name> worktree rm <repo>`** (refuses on uncommitted changes; keeps branch).
-- **`-n <name> port set <repo> <service> [<port>]`** — record a port (auto-picks a free one across all works if omitted; explicit port must be free). Only updates `work.json`.
-- **`-n <name> port unset <repo> <service>`** · **`-n <name> port ls`**
-- **`-n <name> destroy`** — remove worktrees + work folder; refuses if any worktree is dirty; **keeps branches**.
+**Works** — `mx work`: `new <name> [--description <t>]` (prints the folder path) · `ls` · `-n <name> info` · `describe <t>` · `path` · `worktree add <repo> [--branch <b>] [--base <ref>]` / `ls` / `rm <repo>` · `port set <repo> <service> [<port>]` / `unset` / `ls` · `destroy`. `--base` resolves to a commit SHA (trying the ref, then `origin/<ref>`) so a bare branch name forks correctly; `worktree rm` / `destroy` refuse on uncommitted changes and keep branches; ports are unique across **all** works (no blocks).
 
-Deferred: **`mx open`** (terminal/editor layout) — not built yet.
-
-Generated-file shapes (CLI fills these programmatically):
-- `work.json`: `{ "name", "description", "worktrees": [ { "repo", "branch", "ports": { "<service>": <port> } } ] }` — no `status` field, no port blocks.
-- `.code-workspace` `folders[]` entry: `{ "name": "<repo>", "path": "<repo>" }`.
-
-Invariants the CLI enforces:
-- Never write into `repos/<repo>` except via `git worktree add`.
-- Worktree creation happens only on an explicit `worktree add` command — never as a side effect.
-- Ports are unique across **all** works (no fixed blocks); allocation scans every `work.json`.
-- `worktree rm` / `destroy` refuse on uncommitted changes and never delete branches.
-- Always resolve the runtime through discovery; never assume a fixed location.
+Deferred: `mx open` (terminal/editor layout).
 
 ## Conventions
 
-- **TypeScript pnpm monorepo.** Domain logic lives in `@mx/core` as pure functions that return data and `throw MxError` — never `console.log` / `process.exit`. The CLI (`apps/cli`) owns arg parsing, cwd→`-n` inference, output formatting (`--porcelain` vs human), and exit codes. Keep that separation: new behavior is a core function plus a thin CLI wiring.
-- **Zero runtime dependencies.** Both packages use only `node:` builtins; tsup bundles `@mx/core` into the CLI so the shipped `dist/bin/mx.js` needs no `node_modules`. Tooling (tsup, eslint, vitest, prettier) is devDeps only.
+- **TypeScript pnpm monorepo, zero runtime dependencies.** Both packages use only `node:` builtins; tsup bundles `@mx/core` into the CLI so the published package installs no deps (`@mx/core` is a build-time devDependency, kept `private`). Tooling (tsup, eslint, vitest, prettier) is devDeps only.
 - **Workflow:** `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm build` (and `pnpm dev` to watch). Add a Vitest test in `packages/core/test` for new core logic.
-- **Testing override:** set `MX_RUNTIME_POINTER` (and `MX_RUNTIME`) to a `/tmp` path so a sandbox `init` never clobbers the real `.mx-runtime`; `MX_TEMPLATES_DIR` overrides the templates dir.
-- Keep `templates/CLAUDE.md` and the CLI's behavior consistent — they're the contract feature sessions rely on. If one changes, update the other in the same pass, and remember a runtime only sees changes after `mx update`.
+- **Runtime is env-addressed** (`$MX_RUNTIME` / `--runtime` / `~/mx`); never persist a runtime path in this repo. Dev uses the gitignored `.mx/` runtime.
+- **Release:** push a `v*` tag — `.github/workflows/release.yml` builds and runs `pnpm --filter mx-multiplexer publish` to public npm using the `NPM_TOKEN` secret. Cut a release with `pnpm --filter mx-multiplexer version <bump>`, commit, tag `vX.Y.Z`, push. Publishing targets `registry.npmjs.org` regardless of any local corp `.npmrc` registry.
+- Keep `apps/cli/templates/CLAUDE.md` and the CLI's behavior consistent — they're the contract feature sessions rely on. A runtime only sees template changes after `mx update`.

@@ -1,10 +1,16 @@
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { MxError } from './errors';
 import { exists, isGitRepo, listDirs, realpath } from './fsutil';
 import { readJson, writeJson } from './json';
-import { runtimePointerPath, stampClaudeMd, removeStaleRuntimeReadme } from './templates';
+import { stampClaudeMd, removeStaleRuntimeReadme } from './templates';
 import type { Work, Worktree, RuntimeOpts, InferredContext } from './types';
+
+/**
+ * Default runtime location used when neither `--runtime` nor `$MX_RUNTIME` is set.
+ */
+const DEFAULT_RUNTIME = path.join(os.homedir(), 'mx');
 
 /**
  * Path to a runtime's `repos/` directory.
@@ -61,24 +67,14 @@ export const workspaceFile = (root: string, name: string): string =>
   path.join(workDir(root, name), `${name}.code-workspace`);
 
 /**
- * Resolve the runtime path via flag, then `$MX_RUNTIME`, then the `.mx-runtime`
- * pointer.
+ * Resolve the runtime path: `--runtime` flag, then `$MX_RUNTIME`, then the
+ * default `~/mx`. The location is never persisted in the source tree.
  *
  * @param opts - Resolution options carrying an explicit `--runtime` flag.
  * @returns Absolute runtime path.
  */
 export function discoverRuntime(opts: RuntimeOpts = {}): string {
-  let p = opts.runtime || process.env.MX_RUNTIME || null;
-  if (!p) {
-    const ptr = runtimePointerPath();
-    if (exists(ptr)) p = fs.readFileSync(ptr, 'utf8').trim() || null;
-  }
-  if (!p) {
-    throw new MxError(
-      'no runtime found — set --runtime <path>, $MX_RUNTIME, or run `mx init`',
-      'NO_RUNTIME',
-    );
-  }
+  const p = opts.runtime || process.env.MX_RUNTIME || DEFAULT_RUNTIME;
   return path.resolve(p);
 }
 
@@ -190,14 +186,16 @@ export interface InitResult {
 
 /**
  * Scaffold or adopt a runtime: ensure `repos/`, `works/`, and `.mx-root` exist,
- * stamp `CLAUDE.md`, drop a stale runtime README, and record the pointer.
+ * stamp `CLAUDE.md`, and drop a stale runtime README.
  *
- * Idempotent: never clobbers existing `repos/`/`works/`.
+ * Idempotent: never clobbers existing `repos/`/`works/`. The runtime location is
+ * not persisted anywhere — callers address it via `$MX_RUNTIME` / `--runtime`.
  *
  * @param target0 - Desired runtime path (resolved to absolute).
+ * @param templatesDir - Directory holding the `CLAUDE.md` template to stamp.
  * @returns The runtime path and the list of paths created/stamped this run.
  */
-export function initRuntime(target0: string): InitResult {
+export function initRuntime(target0: string, templatesDir: string): InitResult {
   const target = path.resolve(target0);
   const created: string[] = [];
   for (const d of [target, reposDir(target), worksDir(target)]) {
@@ -211,9 +209,8 @@ export function initRuntime(target0: string): InitResult {
     fs.writeFileSync(marker, '');
     created.push(marker);
   }
-  created.push(stampClaudeMd(target));
+  created.push(stampClaudeMd(target, templatesDir));
   removeStaleRuntimeReadme(target);
-  fs.writeFileSync(runtimePointerPath(), target + '\n');
   return { runtime: target, created };
 }
 
@@ -232,10 +229,11 @@ export interface UpdateResult {
  * runtime README. Leaves `repos/` and `works/` untouched.
  *
  * @param root - Runtime root.
+ * @param templatesDir - Directory holding the `CLAUDE.md` template to stamp.
  * @returns The runtime path and the re-stamped files.
  */
-export function updateRuntime(root: string): UpdateResult {
-  const dest = stampClaudeMd(root);
+export function updateRuntime(root: string, templatesDir: string): UpdateResult {
+  const dest = stampClaudeMd(root, templatesDir);
   removeStaleRuntimeReadme(root);
   return { runtime: root, updated: [dest] };
 }

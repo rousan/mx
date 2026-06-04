@@ -1,5 +1,0 @@
-#!/bin/sh
-# Thin launcher kept on $PATH so `mx` resolves globally. The real CLI is the
-# bundled output at apps/cli/dist/bin/mx.js — build it with `pnpm build` (or run
-# `pnpm dev` to rebuild on change). This file deliberately holds no logic.
-exec node "$(dirname "$0")/../apps/cli/dist/bin/mx.js" "$@"

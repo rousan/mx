@@ -9,6 +9,7 @@ import {
   portSet,
   repoNameFromUrl,
   inferContext,
+  discoverRuntime,
   readWork,
   writeWork,
 } from '../src/index';
@@ -99,6 +100,19 @@ describe('readWork / writeWork round-trip', () => {
     };
     seedWork(root, work);
     expect(readWork(root, 'feat')).toEqual(work);
+  });
+});
+
+describe('discoverRuntime', () => {
+  it('prefers --runtime, then $MX_RUNTIME, then the ~/mx default', () => {
+    const saved = process.env.MX_RUNTIME;
+    delete process.env.MX_RUNTIME;
+    expect(discoverRuntime({})).toBe(path.join(os.homedir(), 'mx'));
+    process.env.MX_RUNTIME = '/tmp/env-runtime';
+    expect(discoverRuntime({})).toBe('/tmp/env-runtime');
+    expect(discoverRuntime({ runtime: '/tmp/flag-runtime' })).toBe('/tmp/flag-runtime');
+    if (saved === undefined) delete process.env.MX_RUNTIME;
+    else process.env.MX_RUNTIME = saved;
   });
 });
 

@@ -1,14 +1,13 @@
-import * as os from 'node:os';
-import * as path from 'node:path';
 import {
   initRuntime,
   updateRuntime,
   requireRuntime,
+  discoverRuntime,
   statusRuntime,
-  runtimePointerPath,
   MxError,
 } from '@mx/core';
 import { emit } from '../output';
+import { templatesDir } from '../paths';
 import type { Flags } from '../args';
 
 /**
@@ -20,12 +19,13 @@ import type { Flags } from '../args';
 export function runGlobal(positionals: string[], flags: Flags): void {
   switch (positionals[0]) {
     case 'init': {
-      // Default to ~/mx; an explicit path arg or --runtime overrides.
-      const target = positionals[1] || flags.runtime || path.join(os.homedir(), 'mx');
-      const res = initRuntime(target);
+      // Target: explicit path arg, else the resolved runtime (--runtime / $MX_RUNTIME / ~/mx).
+      const target = positionals[1] || discoverRuntime({ runtime: flags.runtime });
+      const res = initRuntime(target, templatesDir());
       emit(() => {
-        console.log(`Runtime ready at ${res.runtime}  (pointer: ${runtimePointerPath()})`);
+        console.log(`Runtime ready at ${res.runtime}`);
         for (const c of res.created) console.log(`  + ${c}`);
+        console.log(`  (export MX_RUNTIME=${res.runtime} to address it without --runtime)`);
       }, res);
       return;
     }
@@ -53,7 +53,7 @@ export function runGlobal(positionals: string[], flags: Flags): void {
     }
     case 'update': {
       const root = requireRuntime({ runtime: flags.runtime });
-      const res = updateRuntime(root);
+      const res = updateRuntime(root, templatesDir());
       emit(() => console.log(`Re-stamped CLAUDE.md into ${res.runtime}`), res);
       return;
     }
