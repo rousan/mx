@@ -115,9 +115,14 @@ git commit -am "release vX.Y.Z"
 pnpm release                                             # full pipeline + confirm prompt
 ```
 
-`pnpm release` verifies you're logged in to npm, the tree is clean, the tag doesn't exist, and the version isn't already on the registry; runs `pnpm typecheck && pnpm lint && pnpm test && pnpm build`; shows a tarball preview; asks for confirmation; then `npm publish`es from `npm/` and pushes the `vX.Y.Z` tag.
+`pnpm release` verifies you're logged in to npm, the tree is clean, the tag doesn't exist, and the version isn't already on the registry; runs `pnpm typecheck && pnpm lint && pnpm test && pnpm build`; shows a tarball preview; asks for confirmation; then `npm publish`es from `npm/` and pushes the `vX.Y.Z` tag. Note: if publishing under a new scoped name (e.g. `@neworg/...`) for the first time, the npm org must already exist — the npm CLI has no `create` subcommand, so create the org via https://www.npmjs.com/org/create (Free plan = unlimited public packages).
 
 CI (`.github/workflows/ci.yml`) still runs typecheck/lint/test/build on every PR.
+
+Gotchas worth knowing for future releases:
+
+- **Name availability vs. publishability.** `npm view <name>` returning 404 does not guarantee a name will publish. npm has an opaque similarity heuristic that rejects unscoped names at publish time (e.g. `mxcli` was rejected as too similar to `mx-cli`). **Scoped names (`@org/name`) bypass this check entirely** — which is why we settled on `@roulabs/mx`.
+- **Propagation lag on a fresh scope's first publish.** It can take 5+ minutes before `npm view`, search, and the package's web page reflect the publish, even after the CLI confirms `+ @scope/pkg@X.Y.Z`. The version-specific endpoint resolves immediately though — confirm with `curl -s https://registry.npmjs.org/@<scope>/<pkg>/latest | head -c 200`.
 
 ## Roadmap
 
