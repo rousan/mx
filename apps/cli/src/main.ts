@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { MxError } from '@mx/core';
 import { parseArgs } from './args';
 import { setPorcelain, emit, fail } from './output';
@@ -7,9 +10,19 @@ import { dispatchRepo } from './commands/repo';
 import { dispatchWork } from './commands/work';
 
 /**
- * CLI version, surfaced by `mx version` / `mx --version`.
+ * CLI version, surfaced by `mx version` / `mx --version`. Read from the
+ * installed package's `package.json` at startup so it stays in sync with
+ * whatever was published, no rebuild needed when bumping the version.
+ *
+ * The bundle lives at `<pkg>/bin/mx.js`; `package.json` is one level up.
  */
-const VERSION = '0.1.0';
+const VERSION: string = (() => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const pkg = JSON.parse(readFileSync(path.join(here, '..', 'package.json'), 'utf8')) as {
+    version: string;
+  };
+  return pkg.version;
+})();
 
 /**
  * Parse argv, dispatch to the matching command, and translate thrown
