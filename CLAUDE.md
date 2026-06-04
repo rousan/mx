@@ -10,10 +10,11 @@ mx produces a **runtime**: an `mx/` folder somewhere on the device, containing `
 
 ## Architecture
 
-A TypeScript pnpm monorepo:
+A TypeScript pnpm monorepo. **Source code and publishable npm package live in separate folders** — `apps/cli/` is the source; `npm/` is the bundled package that `npm publish` ships:
 
 - **`packages/core` (`@mx/core`)** — pure, typed, unit-tested domain logic. Functions take inputs, return plain data, and `throw MxError`; they never `console.log` or `process.exit`, and never assume an on-disk layout (paths like the templates dir are passed in).
-- **`apps/cli` (`mx-multiplexer`)** — the CLI over `@mx/core`: arg parsing, cwd→`-n` inference, output formatting (`--porcelain` vs human), exit codes. Bundled by tsup into a single dependency-free `apps/cli/dist/bin/mx.js`. Ships the runtime `templates/`.
+- **`apps/cli` (`@mx/cli`, private)** — CLI source over `@mx/core`: arg parsing, cwd→`-n` inference, output formatting (`--porcelain` vs human), exit codes. Bundled by tsup into a single dependency-free entry. The package itself is private and never published; it exists only as a workspace member so pnpm can wire `@mx/core` in.
+- **`npm/` (`mx-multiplexer`)** — the publishable package. `package.json` and `README.md` are committed (public metadata + user docs). `bin/mx.js`, `templates/`, and `LICENSE` are produced by `pnpm build` (gitignored). `npm publish` runs from this folder.
 
 New behavior is normally a core function plus thin CLI wiring.
 
@@ -25,13 +26,13 @@ For development, run the local build via the workspace:
 
 ```bash
 pnpm install
-pnpm build                     # bundle apps/cli/dist/bin/mx.js (pnpm dev = watch)
+pnpm build                     # populates npm/ (bin/mx.js + templates/ + LICENSE)
 export MX_RUNTIME="$PWD/.mx"   # a gitignored dev runtime in this repo
-pnpm mx init                   # = node apps/cli/dist/bin/mx.js init
+pnpm mx init                   # = node npm/bin/mx.js init
 pnpm mx status
 ```
 
-`mx` reflects **built** output: after changing CLI/core code, `pnpm build` (or keep `pnpm dev` running). Editing files under `apps/cli/templates/` needs no rebuild (read at runtime).
+`mx` reflects **built** output: after changing CLI/core code, `pnpm build` (or keep `pnpm dev` running). Templates live at `/templates` and are copied into `npm/templates/` at build, so editing them requires a rebuild to take effect.
 
 ## Finding the runtime
 
@@ -45,15 +46,15 @@ No pointer file is written anywhere. A consumer (or you, on any machine) sets `$
 
 ## Source-of-truth rule
 
-The runtime's `CLAUDE.md` is an **installed copy** of `apps/cli/templates/CLAUDE.md`. The per-work `work.json` and `.code-workspace` are **generated programmatically** by the CLI (not text-substituted); `apps/cli/templates/{work.json,workspace.code-workspace}` hold their reference shapes.
+The runtime's `CLAUDE.md` is an **installed copy** of `templates/CLAUDE.md` (at the repo root). The per-work `work.json` and `.code-workspace` are **generated programmatically** by the CLI (not text-substituted); `templates/{work.json,workspace.code-workspace}` hold their reference shapes.
 
-- To change runtime guidance, edit `apps/cli/templates/CLAUDE.md`, then run `mx update`.
-- Templates are part of the CLI package (shipped via its `files`) and resolved relative to the installed bin, so `init`/`update` work the same in dev and once installed from npm.
+- To change runtime guidance, edit `templates/CLAUDE.md`, run `pnpm build` (which copies the templates into `npm/templates/`), then run `mx update`.
+- Templates are resolved relative to the installed bin (`<pkg>/bin/mx.js` → `<pkg>/templates/`), so the CLI works the same in dev (`npm/bin/mx.js` → `npm/templates/`) and once installed from npm.
 - Never hand-edit a runtime's installed `CLAUDE.md`; the runtime carries **only** a `CLAUDE.md` (no runtime README).
 
 ## `mx update`
 
-`mx update` re-stamps the runtime `CLAUDE.md` from `apps/cli/templates/CLAUDE.md` into the discovered runtime (and removes a stale runtime `README.md` if one lingers). It does **not** touch `repos/` or anything under `works/`.
+`mx update` re-stamps the runtime `CLAUDE.md` from `templates/CLAUDE.md` into the discovered runtime (and removes a stale runtime `README.md` if one lingers). It does **not** touch `repos/` or anything under `works/`.
 
 ## Testing against a runtime (hard rule)
 
@@ -61,10 +62,10 @@ The runtime's `CLAUDE.md` is an **installed copy** of `apps/cli/templates/CLAUDE
 
 ```bash
 export MX_RUNTIME=/tmp/mx-sbx
-node apps/cli/dist/bin/mx.js init    # or: pnpm mx init
+node npm/bin/mx.js init              # or: pnpm mx init
 ```
 
-Use locally-created throwaway git repos as clone sources (`git init` in `/tmp/...`) so tests need no network. Since the runtime location is env-only (no pointer file), sandbox runs can't corrupt a real runtime — but still target `/tmp`. `MX_TEMPLATES_DIR` overrides the templates dir if needed.
+Use locally-created throwaway git repos as clone sources (`git init` in `/tmp/...`) so tests need no network. Since the runtime location is env-only (no pointer file), sandbox runs can't corrupt a real runtime — but still target `/tmp`. `MX_TEMPLATES_DIR` is available as an override for tests that want a fixture templates dir.
 
 ## Layout
 
@@ -80,14 +81,20 @@ mx/                                  # pnpm workspace (TypeScript); repo = githu
 │   └── core/                        # @mx/core — pure, typed, unit-tested domain logic
 │       └── src/                     #   errors, types, fsutil, json, git, templates,
 │                                    #   runtime, ports, repos, works, status, index
-└── apps/
-    └── cli/                         # mx-multiplexer — CLI over @mx/core
-        ├── templates/               # runtime assets stamped into a runtime (ship with the package)
-        │   ├── CLAUDE.md            # feature-session rules
-        │   ├── work.json            # reference shape
-        │   └── workspace.code-workspace
-        └── src/                     # args, output, help, paths, main, commands/{global,repo,work}
-                                     #   tsup -> dist/bin/mx.js (the bin)
+├── templates/                       # source-of-truth runtime assets (no code; copied to npm/templates at build)
+│   ├── CLAUDE.md                    # feature-session rules
+│   ├── work.json                    # reference shape
+│   └── workspace.code-workspace
+├── apps/
+│   └── cli/                         # @mx/cli (private) — CLI source
+│       ├── src/                     # args, output, help, paths, main, commands/{global,repo,work}
+│       └── tsup.config.ts           # bundles src/bin/mx.ts -> ../../npm/bin/mx.js, copies assets
+└── npm/                             # mx-multiplexer — publishable package
+    ├── package.json                 # committed (public metadata)
+    ├── README.md                    # committed (consumer docs)
+    ├── bin/mx.js                    # built by `pnpm build` (gitignored)
+    ├── templates/                   # copied from /templates by build (gitignored)
+    └── LICENSE                      # copied from repo root by build (gitignored)
 ```
 
 ## The runtime model
@@ -95,7 +102,7 @@ mx/                                  # pnpm workspace (TypeScript); repo = githu
 ```
 mx/ (a runtime, e.g. ~/mx or ./.mx)
 ├── .mx-root            # marker file
-├── CLAUDE.md           # from apps/cli/templates/CLAUDE.md
+├── CLAUDE.md           # from /templates/CLAUDE.md
 ├── repos/<repo>/       # pristine clones — read-only reference
 └── works/<feature>/    # one folder per feature
     ├── work.json       # manifest, owned by mx
@@ -103,7 +110,7 @@ mx/ (a runtime, e.g. ~/mx or ./.mx)
     └── <repo>/         # git worktree on the feature branch
 ```
 
-`apps/cli/templates/CLAUDE.md` is the **authoritative description** of how feature sessions behave (never edit `repos/`, never hand-edit `work.json`, never raw-`git` worktrees, ask before adding a worktree, keep branches on teardown, per-service free-port allocation). Keep it consistent with the CLI.
+`templates/CLAUDE.md` is the **authoritative description** of how feature sessions behave (never edit `repos/`, never hand-edit `work.json`, never raw-`git` worktrees, ask before adding a worktree, keep branches on teardown, per-service free-port allocation). Keep it consistent with the CLI.
 
 ## Command contracts
 
@@ -123,17 +130,17 @@ Deferred: `mx open` (terminal/editor layout).
 
 ## Conventions
 
-- **TypeScript pnpm monorepo, zero runtime dependencies.** Both packages use only `node:` builtins; tsup bundles `@mx/core` into the CLI so the published package installs no deps (`@mx/core` is a build-time devDependency, kept `private`). Tooling (tsup, eslint, vitest, prettier) is devDeps only.
+- **TypeScript pnpm monorepo, zero runtime dependencies.** Both source packages (`@mx/core`, `@mx/cli`) use only `node:` builtins; tsup bundles `@mx/core` into the CLI so the published `mx-multiplexer` package installs no deps. Tooling (tsup, eslint, vitest, prettier) is devDeps only. `@mx/cli` is private; the published thing is the `npm/` folder.
 - **Workflow:** `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm build` (and `pnpm dev` to watch). Add a Vitest test in `packages/core/test` for new core logic.
 - **Runtime is env-addressed** (`$MX_RUNTIME` / `--runtime` / `~/mx`); never persist a runtime path in this repo. Dev uses the gitignored `.mx/` runtime.
-- **Release:** push a `v*` tag — `.github/workflows/release.yml` builds and runs `pnpm --filter mx-multiplexer publish` to public npm using the `NPM_TOKEN` secret. Cut a release with `pnpm --filter mx-multiplexer version <bump>`, commit, tag `vX.Y.Z`, push. Publishing targets `registry.npmjs.org` regardless of any local corp `.npmrc` registry.
-- Keep `apps/cli/templates/CLAUDE.md` and the CLI's behavior consistent — they're the contract feature sessions rely on. A runtime only sees template changes after `mx update`.
+- **Release:** push a `v*` tag — `.github/workflows/release.yml` runs `pnpm build` (populates `npm/`) and then `npm publish` from `./npm` using the `NPM_TOKEN` secret. To cut a release, bump `npm/package.json` version (e.g. `cd npm && npm version <patch|minor|major>`), commit, tag `vX.Y.Z`, push. Publishing targets `registry.npmjs.org` regardless of any local corp `.npmrc` registry.
+- Keep `templates/CLAUDE.md` and the CLI's behavior consistent — they're the contract feature sessions rely on. A runtime only sees template changes after `pnpm build` (which copies them into `npm/templates/`) and `mx update`.
 
 ## Status & where to pick up
 
 For a fresh session / new machine:
 
-- **Done and verified:** the full TS pnpm monorepo (`@mx/core` + `apps/cli`), all commands (`init`, `status`, `update`, `repo`, `work` incl. `worktree`/`port`/`path`), env-based runtime discovery, templates shipped inside the CLI package, CI + release GitHub Actions, MIT license, and a consumer README. `pnpm typecheck/lint/test/build` are green; the packed tarball installs via `npm i -g` and runs self-contained from outside the repo. Hosted at `github.com/roulabs/mx`, branch `main`.
+- **Done and verified:** the full TS pnpm monorepo (`@mx/core` source + `@mx/cli` source + `npm/` publishable package), all commands (`init`, `status`, `update`, `repo`, `work` incl. `worktree`/`port`/`path`), env-based runtime discovery, templates copied into `npm/templates/` at build time, CI + release GitHub Actions, MIT license, and a consumer README at `npm/README.md`. `pnpm typecheck/lint/test/build` are green; the packed tarball installs via `npm i -g` and runs self-contained from outside the repo. Hosted at `github.com/roulabs/mx`, branch `main`.
 - **Start working:** `pnpm install && pnpm build`, then `export MX_RUNTIME="$PWD/.mx"` and `pnpm mx init`. Iterate with `pnpm dev` (watch) + `pnpm mx ...`; run `pnpm typecheck && pnpm lint && pnpm test` before committing.
-- **Not done yet:** the first npm publish — add an `NPM_TOKEN` repo secret, confirm the `mx-multiplexer` name is free on npm (or change it in `apps/cli/package.json` plus the `--filter` targets in root `package.json` and `release.yml`), then `pnpm --filter mx-multiplexer version <bump>` → tag `vX.Y.Z` → push. `mx open` (terminal/editor layout) is deferred. Optional next idea: isolated per-env state (separate DB schema / container) for safe parallel runs.
+- **Not done yet:** the first npm publish — add an `NPM_TOKEN` repo secret, confirm the `mx-multiplexer` name is free on npm (or change `npm/package.json` `name`), then `cd npm && npm version <bump>` → tag `vX.Y.Z` → push. `mx open` (terminal/editor layout) is deferred. Optional next idea: isolated per-env state (separate DB schema / container) for safe parallel runs.
 - **Gotchas already handled in code (keep them):** never run mx against a real runtime — use `/tmp` or `.mx`; the first `pnpm install` on a corp npm mirror is slow, not stuck; `--base` is resolved to a commit SHA with an `origin/<ref>` fallback to avoid git's DWIM overriding `-b`; `inferContext` realpaths both sides so symlinked roots (e.g. macOS `/tmp`) match.

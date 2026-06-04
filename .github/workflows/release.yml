@@ -2,6 +2,9 @@ name: Release
 
 # Publishes mx-multiplexer to npm when a v* tag is pushed.
 # Requires an NPM_TOKEN (npm automation token) in the repository secrets.
+#
+# The publishable package lives in /npm and is populated by `pnpm build`
+# (tsup -> npm/bin/mx.js, plus templates and LICENSE copied in).
 on:
   push:
     tags: ["v*"]
@@ -19,6 +22,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      - run: pnpm --filter mx-multiplexer publish --access public --no-git-checks
+      - run: npm publish --access public
+        working-directory: ./npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -5,6 +5,11 @@
 dist/
 *.tsbuildinfo
 
+# publishable package built by `pnpm build` (npm/package.json and npm/README.md are committed)
+npm/bin/
+npm/templates/
+npm/LICENSE
+
 # dependencies
 node_modules/
 

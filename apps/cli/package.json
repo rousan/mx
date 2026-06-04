@@ -1,32 +1,13 @@
 {
-  "name": "mx-multiplexer",
-  "version": "0.1.0",
-  "description": "mx — run several features in parallel across shared repos using git worktrees",
+  "name": "@mx/cli",
+  "version": "0.0.0",
+  "private": true,
   "type": "module",
-  "bin": {
-    "mx": "./dist/bin/mx.js"
-  },
-  "files": ["dist", "templates", "README.md", "LICENSE"],
-  "engines": {
-    "node": ">=22"
-  },
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/roulabs/mx.git",
-    "directory": "apps/cli"
-  },
-  "homepage": "https://github.com/roulabs/mx#readme",
-  "bugs": "https://github.com/roulabs/mx/issues",
-  "keywords": ["git", "worktree", "monorepo", "cli", "multiplexer", "parallel", "workflow", "dev"],
-  "publishConfig": {
-    "access": "public"
-  },
+  "description": "Source for the mx-multiplexer CLI. Published artifacts live in /npm.",
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "prepublishOnly": "tsup"
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
     "@mx/core": "workspace:*"

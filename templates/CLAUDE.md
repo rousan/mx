@@ -1,5 +1,5 @@
 <!-- Installed by the mx CLI. Don't hand-edit this file in the runtime —
-     edit apps/cli/templates/CLAUDE.md in the mx source repo and run `mx update`. -->
+     edit templates/CLAUDE.md in the mx source repo and run `mx update`. -->
 
 # mx — multiplexed parallel work across repos
 

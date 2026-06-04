@@ -12,7 +12,7 @@ import prettier from 'eslint-config-prettier';
  * concerns are owned entirely by Prettier.
  */
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**'] },
+  { ignores: ['**/dist/**', '**/node_modules/**', 'npm/bin/**', 'npm/templates/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   jsdoc.configs['flat/recommended-typescript'],

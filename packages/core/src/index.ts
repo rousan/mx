@@ -15,6 +15,7 @@ export {
   workDir,
   workManifest,
   workspaceFile,
+  defaultRuntime,
   discoverRuntime,
   requireRuntime,
   listRepoNames,

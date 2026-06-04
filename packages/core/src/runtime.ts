@@ -13,6 +13,16 @@ import type { Work, Worktree, RuntimeOpts, InferredContext } from './types';
 const DEFAULT_RUNTIME = path.join(os.homedir(), 'mx');
 
 /**
+ * Absolute path of the default runtime (`~/mx`). Resolved per call so tests
+ * that monkey-patch `os.homedir` see consistent results.
+ *
+ * @returns Absolute path to the default runtime.
+ */
+export function defaultRuntime(): string {
+  return path.resolve(DEFAULT_RUNTIME);
+}
+
+/**
  * Path to a runtime's `repos/` directory.
  *
  * @param root - Runtime root.

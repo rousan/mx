@@ -1,0 +1,32 @@
+{
+  "name": "mx-multiplexer",
+  "version": "1.0.0",
+  "description": "mx — run several features in parallel across shared repos using git worktrees",
+  "type": "module",
+  "bin": {
+    "mx": "./bin/mx.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/roulabs/mx.git"
+  },
+  "homepage": "https://github.com/roulabs/mx#readme",
+  "bugs": "https://github.com/roulabs/mx/issues",
+  "keywords": [
+    "git",
+    "worktree",
+    "monorepo",
+    "cli",
+    "multiplexer",
+    "parallel",
+    "workflow",
+    "dev"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}
