@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Local release driver for mx-multiplexer.
+# Local release driver for the mxcli npm package.
 #
 # Reads the target version from npm/package.json (you bump + commit it before
 # running this), runs the full check/build pipeline, publishes to npm using

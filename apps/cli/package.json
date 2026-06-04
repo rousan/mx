@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Source for the mx-multiplexer CLI. Published artifacts live in /npm.",
+  "description": "Source for the mxcli npm package. Published artifacts live in /npm.",
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",

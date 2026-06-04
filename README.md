@@ -4,7 +4,7 @@ Source and tooling for **mx** ("multiplexer") — a system for working on severa
 
 This repo is the **source** for mx: a TypeScript pnpm monorepo with the core library, the CLI, the runtime templates, and the docs. The thing it produces — a single `mx/` **runtime** with your cloned repos and live feature environments — lives wherever `$MX_RUNTIME` points (default `~/mx`), fully decoupled from this repo.
 
-Published on npm as **`mx-multiplexer`** (command `mx`). For end-user install/usage, see [`npm/README.md`](npm/README.md). The `npm/` folder is the publishable package — `pnpm build` populates it; `npm publish` ships it.
+Published on npm as **`mxcli`** (command `mx`). For end-user install/usage, see [`npm/README.md`](npm/README.md). The `npm/` folder is the publishable package — `pnpm build` populates it; `npm publish` ships it.
 
 ## Runtime vs. source
 
@@ -43,7 +43,7 @@ mx/                                  # pnpm workspace
 │   └── cli/                         # @mx/cli (private) — CLI source
 │       ├── src/                     # tsup -> ../../npm/bin/mx.js
 │       └── tsup.config.ts           # bundles into npm/ and copies assets on success
-└── npm/                             # mx-multiplexer — publishable package
+└── npm/                             # mxcli — publishable package
     ├── package.json · README.md     # committed (public metadata + consumer docs)
     └── bin/, templates/, LICENSE    # built by `pnpm build` (gitignored)
 ```
@@ -67,7 +67,7 @@ pnpm mx work new my-feature
 pnpm mx status
 ```
 
-`mx` runs the **built** output, so re-run `pnpm build` (or keep `pnpm dev` watching) after changing CLI/core code. Templates live at `/templates` (no code, just content) and are copied into `npm/templates/` at build — edits take effect on the next build. There is no global PATH coupling to this repo — the global `mx` comes only from installing a build (`npm i -g mx-multiplexer`).
+`mx` runs the **built** output, so re-run `pnpm build` (or keep `pnpm dev` watching) after changing CLI/core code. Templates live at `/templates` (no code, just content) and are copied into `npm/templates/` at build — edits take effect on the next build. There is no global PATH coupling to this repo — the global `mx` comes only from installing a build (`npm i -g mxcli`).
 
 ## Scripts
 
@@ -125,6 +125,6 @@ CI (`.github/workflows/ci.yml`) still runs typecheck/lint/test/build on every PR
 - [x] Env-based runtime discovery (`--runtime` / `$MX_RUNTIME` / default `~/mx`)
 - [x] Per-service free-port allocation across all works (no fixed blocks)
 - [x] TypeScript pnpm monorepo (`@mx/core` + `apps/cli`), lint/test/build tooling
-- [x] npm distribution (`mx-multiplexer`) — `pnpm release` for local publish, GitHub Actions CI for PR checks
+- [x] npm distribution (`mxcli`) — `pnpm release` for local publish, GitHub Actions CI for PR checks
 - [ ] `mx open` terminal + editor layout
 - [ ] Optional: isolated per-env state (separate DB schema / container) for safe parallel runs
