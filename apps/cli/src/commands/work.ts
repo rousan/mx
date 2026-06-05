@@ -10,6 +10,8 @@ import {
   worktreeList,
   worktreeRemove,
   workDestroy,
+  archiveWork,
+  unarchiveWork,
   portSet,
   portUnset,
   portList,
@@ -53,12 +55,16 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
 
   if (action === 'ls') {
     const root = requireRuntime({ runtime: flags.runtime });
-    const works = listWorksInfo(root);
+    const works = listWorksInfo(root, {
+      includeArchived: flags.all,
+      onlyArchived: flags.archived,
+    });
     emit(() => {
       for (const w of works) {
-        console.log(
-          `${w.name}  (${w.worktrees} worktree${w.worktrees === 1 ? '' : 's'})${w.description ? `  — ${w.description}` : ''}`,
-        );
+        const chip = w.isArchived ? `[archived ${(w.archived_at ?? '').slice(0, 10)}]  ` : '';
+        const desc = w.description ? `  — ${w.description}` : '';
+        const wts = `(${w.worktrees} worktree${w.worktrees === 1 ? '' : 's'})`;
+        console.log(`${chip}${w.name}  ${wts}${desc}`);
       }
     }, works);
     return;
@@ -94,7 +100,14 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
     case 'port':
       return workPort(root, name, positionals);
     case 'destroy': {
-      const res = workDestroy(root, name);
+      if (flags.force && !flags.porcelain) {
+        // Loud reminder right before the irreversible step. Goes to stderr so
+        // --porcelain consumers stay clean even if --force is set.
+        process.stderr.write(
+          `⚠  permanently removing work "${name}" — folder and any session summaries will be deleted (branches kept). This cannot be undone.\n`,
+        );
+      }
+      const res = workDestroy(root, name, { force: flags.force });
       emit(
         () =>
           console.log(
@@ -102,6 +115,44 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
           ),
         res,
       );
+      return;
+    }
+    case 'archive': {
+      if (!flags.porcelain) {
+        process.stderr.write(
+          `Reminder: write any pending session summary into works/${name}/sessions/ before archiving.\n`,
+        );
+      }
+      const res = archiveWork(root, name);
+      emit(
+        () =>
+          console.log(
+            `archived work ${name} at ${res.archived_at} (worktrees removed: ${res.removedWorktrees.join(', ') || 'none'}; branches kept)`,
+          ),
+        res,
+      );
+      return;
+    }
+    case 'unarchive': {
+      // Positionals after `unarchive` are `repo=branch` overrides for repos
+      // whose recorded branch is gone. Without overrides, unarchive uses the
+      // branches recorded in work.json.
+      const overrides: Record<string, string> = {};
+      for (const tok of positionals.slice(2)) {
+        const eq = tok.indexOf('=');
+        if (eq <= 0 || eq === tok.length - 1) {
+          throw new MxError(
+            `bad override: "${tok}" — expected <repo>=<branch>`,
+            'BAD_ARGS',
+          );
+        }
+        overrides[tok.slice(0, eq)] = tok.slice(eq + 1);
+      }
+      const res = unarchiveWork(root, name, overrides);
+      emit(() => {
+        console.log(`unarchived work ${name}`);
+        for (const r of res.restored) console.log(`  ${r.repo}  [${r.branch}]  -> ${r.path}`);
+      }, res);
       return;
     }
     default:

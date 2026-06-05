@@ -92,10 +92,12 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 | `mx repo add <git-url> [--name <n>]` | clone a pristine repo |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
 | `mx work new <name> [--description <t>]` | create a work (prints its folder path) |
-| `mx work ls` / `mx work -n <name> info\|describe\|path` | manage works |
+| `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works (ls hides archived by default) |
 | `mx work -n <name> worktree add\|ls\|rm <repo>` | manage a work's worktrees |
 | `mx work -n <name> port set\|unset\|ls <repo> <service> [<port>]` | allocate/release ports |
-| `mx work -n <name> destroy` | remove worktrees + work folder (keeps branches) |
+| `mx work -n <name> archive` | remove worktrees; keep folder + work.json + sessions/ + branches (recoverable) |
+| `mx work -n <name> unarchive [<repo>=<branch>...]` | re-create worktrees; positional overrides if recorded branches are missing |
+| `mx work -n <name> destroy --force` | **permanent**: delete the work folder (incl. sessions); branches kept. Prefer archive. |
 
 Read commands take `--porcelain` for stable JSON; mutations echo the resulting object; errors are `{"error","code"}` with a non-zero exit. `-n <name>` can be omitted when your cwd implies it (inside a work folder/worktree, or a pristine clone).
 

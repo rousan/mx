@@ -56,6 +56,22 @@ function removeFolderFromWorkspace(root: string, name: string, repo: string): vo
 }
 
 /**
+ * Empty a work's `.code-workspace` folder list (settings preserved). Used by
+ * `archiveWork` so the workspace file stays but doesn't reference paths whose
+ * worktrees were removed.
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ */
+function clearWorkspaceFolders(root: string, name: string): void {
+  const file = workspaceFile(root, name);
+  if (!exists(file)) return;
+  const ws: CodeWorkspace = readJson(file);
+  ws.folders = [];
+  writeJson(file, ws);
+}
+
+/**
  * A new work plus the absolute path of its folder.
  */
 export interface WorkNewResult extends Work {
@@ -64,8 +80,9 @@ export interface WorkNewResult extends Work {
 }
 
 /**
- * Create a new work: its folder, an empty `work.json`, and an empty
- * `.code-workspace`. The name is immutable thereafter.
+ * Create a new work: its folder, an empty `work.json`, an empty
+ * `.code-workspace`, and an empty `sessions/` directory. The name is
+ * immutable thereafter.
  *
  * @param root - Runtime root.
  * @param name - New work name.
@@ -76,6 +93,7 @@ export function workNew(root: string, name: string, description = ''): WorkNewRe
   const dir = workDir(root, name);
   if (exists(dir)) throw new MxError(`work already exists: ${name}`, 'EXISTS');
   fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(path.join(dir, 'sessions'), { recursive: true });
   const work: Work = { name, description, worktrees: [] };
   writeWork(root, work);
   writeJson(workspaceFile(root, name), { folders: [], settings: {} });
@@ -92,19 +110,50 @@ export interface WorkSummary {
   description: string;
   /** Number of worktrees in the work. */
   worktrees: number;
+  /** True when the work is archived. */
+  isArchived: boolean;
+  /** ISO-8601 timestamp of when the work was archived; null on active works. */
+  archived_at: string | null;
 }
 
 /**
- * Summaries of all works.
+ * Options for filtering `listWorksInfo`.
+ */
+export interface ListWorksOpts {
+  /** Include archived works alongside active ones (default: active only). */
+  includeArchived?: boolean;
+  /** Restrict to archived works only. */
+  onlyArchived?: boolean;
+}
+
+/**
+ * Summaries of works.
+ *
+ * By default returns only active (non-archived) works. Pass
+ * `includeArchived` to include archived ones, or `onlyArchived` to restrict
+ * to archived ones.
  *
  * @param root - Runtime root.
- * @returns One summary per work.
+ * @param opts - Filter options.
+ * @returns One summary per work matching the filter.
  */
-export function listWorksInfo(root: string): WorkSummary[] {
-  return listWorkNames(root).map((name) => {
-    const w = readWork(root, name);
-    return { name, description: w.description ?? '', worktrees: (w.worktrees ?? []).length };
-  });
+export function listWorksInfo(root: string, opts: ListWorksOpts = {}): WorkSummary[] {
+  return listWorkNames(root)
+    .map((name) => {
+      const w = readWork(root, name);
+      return {
+        name,
+        description: w.description ?? '',
+        worktrees: (w.worktrees ?? []).length,
+        isArchived: w.isArchived === true,
+        archived_at: w.archived_at ?? null,
+      };
+    })
+    .filter((s) => {
+      if (opts.onlyArchived) return s.isArchived;
+      if (opts.includeArchived) return true;
+      return !s.isArchived;
+    });
 }
 
 /**
@@ -292,14 +341,44 @@ export interface WorkDestroyResult {
 }
 
 /**
- * Remove all of a work's worktrees and its folder, refusing if any worktree is
- * dirty. Feature branches are kept.
+ * Options for `workDestroy`.
+ */
+export interface WorkDestroyOpts {
+  /**
+   * Required gate for destroy. Without it, the call throws `NEED_FORCE` with
+   * a message pointing at `archiveWork`. mx ships archive as the recommended
+   * soft-delete; destroy is reserved for cases where the user truly wants the
+   * work folder gone (incl. `work.json` history and any session summaries).
+   */
+  force?: boolean;
+}
+
+/**
+ * Permanently remove a work: delete all of its worktrees and the work folder
+ * itself (incl. `work.json`, `.code-workspace`, and `sessions/`). Feature
+ * branches are kept.
+ *
+ * Requires `opts.force` — without it, throws `NEED_FORCE` and hints at
+ * `archiveWork`, which is the reversible alternative. Refuses on uncommitted
+ * changes in any worktree.
  *
  * @param root - Runtime root.
  * @param name - Work name.
+ * @param opts - Must include `force: true`.
  * @returns The removed worktrees and confirmation branches were kept.
  */
-export function workDestroy(root: string, name: string): WorkDestroyResult {
+export function workDestroy(
+  root: string,
+  name: string,
+  opts: WorkDestroyOpts = {},
+): WorkDestroyResult {
+  if (!opts.force) {
+    throw new MxError(
+      `refusing to destroy "${name}" — destroy is permanent and removes the work folder including any session summaries. ` +
+        `Use \`mx work archive\` to soft-delete (recoverable via \`mx work unarchive\`), or re-run with \`--force\` if you really want this gone.`,
+      'NEED_FORCE',
+    );
+  }
   const work = readWork(root, name);
   const dirty: string[] = [];
   for (const wt of work.worktrees ?? []) {
@@ -320,4 +399,149 @@ export function workDestroy(root: string, name: string): WorkDestroyResult {
   }
   fs.rmSync(workDir(root, name), { recursive: true, force: true });
   return { work: name, removedWorktrees: removed, branchesKept: true };
+}
+
+/**
+ * Result of archiving a work.
+ */
+export interface ArchiveResult {
+  /** Work name. */
+  work: string;
+  /** ISO-8601 timestamp the work was marked archived. */
+  archived_at: string;
+  /** Repos whose worktrees were removed. */
+  removedWorktrees: string[];
+  /** Always true: branches are intentionally kept. */
+  branchesKept: boolean;
+}
+
+/**
+ * Archive a work: remove all of its worktrees, empty the `.code-workspace`
+ * folder list, and flip `isArchived: true` (with `archived_at` set) in
+ * `work.json`. The work folder, manifest, sessions, and branches are all
+ * retained — `unarchiveWork` re-creates worktrees from `work.json` later.
+ *
+ * Refuses on uncommitted changes in any worktree, or if the work is already
+ * archived.
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ * @returns Archive timestamp and the list of worktrees that were removed.
+ */
+export function archiveWork(root: string, name: string): ArchiveResult {
+  const work = readWork(root, name);
+  if (work.isArchived === true) {
+    throw new MxError(`work "${name}" is already archived`, 'ALREADY_ARCHIVED');
+  }
+  const dirty: string[] = [];
+  for (const wt of work.worktrees ?? []) {
+    const dest = path.join(workDir(root, name), wt.repo);
+    if (exists(dest) && isDirty(dest)) dirty.push(wt.repo);
+  }
+  if (dirty.length) {
+    throw new MxError(
+      `cannot archive "${name}" — uncommitted changes in: ${dirty.join(', ')}. Commit or discard, then retry.`,
+      'DIRTY',
+    );
+  }
+  const removed: string[] = [];
+  for (const wt of work.worktrees ?? []) {
+    const dest = path.join(workDir(root, name), wt.repo);
+    if (exists(dest)) git(['-C', repoPath(root, wt.repo), 'worktree', 'remove', dest]); // keeps branch
+    removed.push(wt.repo);
+  }
+  clearWorkspaceFolders(root, name);
+  const archived_at = new Date().toISOString();
+  work.isArchived = true;
+  work.archived_at = archived_at;
+  writeWork(root, work);
+  return { work: name, archived_at, removedWorktrees: removed, branchesKept: true };
+}
+
+/**
+ * One restored worktree's details, returned from `unarchiveWork`.
+ */
+export interface UnarchiveRestoredWorktree {
+  /** Repo name. */
+  repo: string;
+  /** Branch the worktree is now checked out on (may differ from the recorded one when overridden). */
+  branch: string;
+  /** Absolute worktree path. */
+  path: string;
+  /** Ports as recorded in `work.json` (unchanged across archive/unarchive). */
+  ports: Record<string, number>;
+}
+
+/**
+ * Result of unarchiving a work.
+ */
+export interface UnarchiveResult {
+  /** Work name. */
+  work: string;
+  /** Restored worktree details, one per repo. */
+  restored: UnarchiveRestoredWorktree[];
+}
+
+/**
+ * Unarchive a work: re-create worktrees from the branches recorded in
+ * `work.json`, or from explicit overrides when the recorded branches are
+ * missing. Repopulates the `.code-workspace` and clears the archive flag.
+ *
+ * If any desired branch (recorded or overridden) does not exist in its
+ * pristine clone, throws `NO_REF` listing exactly which repos lack which
+ * branches, with a hint to re-run with overrides. The overrides map
+ * `repo -> branch`; on success, the worktree entries in `work.json` are
+ * updated to the actually-used branches.
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ * @param overrides - Optional `repo -> branch` overrides for any worktree.
+ * @returns The restored worktrees.
+ */
+export function unarchiveWork(
+  root: string,
+  name: string,
+  overrides: Record<string, string> = {},
+): UnarchiveResult {
+  const work = readWork(root, name);
+  if (work.isArchived !== true) {
+    throw new MxError(`work "${name}" is not archived`, 'NOT_ARCHIVED');
+  }
+  const desired = (work.worktrees ?? []).map((wt) => ({
+    repo: wt.repo,
+    branch: overrides[wt.repo] ?? wt.branch,
+    ports: wt.ports ?? {},
+  }));
+
+  const missing: { repo: string; branch: string }[] = [];
+  for (const d of desired) {
+    const rp = repoPath(root, d.repo);
+    if (!isGitRepo(rp)) {
+      throw new MxError(`pristine clone missing for repo: ${d.repo}`, 'NO_REPO');
+    }
+    if (!branchExists(rp, d.branch)) missing.push({ repo: d.repo, branch: d.branch });
+  }
+  if (missing.length) {
+    const list = missing.map((m) => `${m.repo}=${m.branch}`).join(', ');
+    const overrideHint = missing.map((m) => `${m.repo}=<branch>`).join(' ');
+    throw new MxError(
+      `cannot unarchive "${name}" — branch(es) not found: ${list}. ` +
+        `Re-run with explicit overrides: \`mx work -n ${name} unarchive ${overrideHint}\`.`,
+      'NO_REF',
+    );
+  }
+
+  const restored: UnarchiveRestoredWorktree[] = [];
+  for (const d of desired) {
+    const dest = path.join(workDir(root, name), d.repo);
+    git(['-C', repoPath(root, d.repo), 'worktree', 'add', dest, d.branch]);
+    addFolderToWorkspace(root, name, d.repo);
+    restored.push({ repo: d.repo, branch: d.branch, path: dest, ports: d.ports });
+  }
+
+  work.worktrees = restored.map((r) => ({ repo: r.repo, branch: r.branch, ports: r.ports }));
+  work.isArchived = false;
+  delete work.archived_at;
+  writeWork(root, work);
+  return { work: name, restored };
 }

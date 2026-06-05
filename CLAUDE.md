@@ -109,9 +109,10 @@ mx/ (a runtime, e.g. ~/mx or ./.mx)
 │   └── <path>.md       # body-only entries; agent owns content and nesting
 ├── repos/<repo>/       # pristine clones — read-only reference
 └── works/<feature>/    # one folder per feature
-    ├── work.json       # manifest, owned by mx
+    ├── work.json       # manifest, owned by mx; carries isArchived + archived_at when archived
     ├── <feature>.code-workspace
-    └── <repo>/         # git worktree on the feature branch
+    ├── sessions/       # one md per session, written when the user asks at end-of-session
+    └── <repo>/         # git worktree on the feature branch (absent while archived)
 ```
 
 `templates/CLAUDE.md` is the **authoritative description** of how feature sessions behave (never edit `repos/`, never hand-edit `work.json`, never raw-`git` worktrees, ask before adding a worktree, keep branches on teardown, per-service free-port allocation). Keep it consistent with the CLI.
@@ -128,7 +129,7 @@ Implemented in `apps/cli` over `@mx/core`. Each command resolves the runtime via
 
 **Repos** — `mx repo`: `add <git-url> [--name <n>]` (only command that clones) · `ls` · `-n <name> fetch` · `-n <name> info` · `-n <name> rm` (refuses if any work uses it).
 
-**Works** — `mx work`: `new <name> [--description <t>]` (prints the folder path) · `ls` · `-n <name> info` · `describe <t>` · `path` · `worktree add <repo> [--branch <b>] [--base <ref>]` / `ls` / `rm <repo>` · `port set <repo> <service> [<port>]` / `unset` / `ls` · `destroy`. `--base` resolves to a commit SHA (trying the ref, then `origin/<ref>`) so a bare branch name forks correctly; `worktree rm` / `destroy` refuse on uncommitted changes and keep branches; ports are unique across **all** works (no blocks).
+**Works** — `mx work`: `new <name> [--description <t>]` (creates folder, empty `work.json`, empty `sessions/`; prints path) · `ls [--all|--archived]` (default: active only) · `-n <name> info` · `describe <t>` · `path` · `worktree add <repo> [--branch <b>] [--base <ref>]` / `ls` / `rm <repo>` · `port set <repo> <service> [<port>]` / `unset` / `ls` · `archive` (removes worktrees, keeps folder + manifest + sessions + branches; recoverable via `unarchive`) · `unarchive [<repo>=<branch>...]` (re-creates worktrees from `work.json`; positional `repo=branch` overrides per-repo when a recorded branch is missing) · `destroy --force` (PERMANENT: deletes the work folder including session summaries; branches still kept). `--base` resolves to a commit SHA (trying the ref, then `origin/<ref>`) so a bare branch name forks correctly; `worktree rm` / `archive` / `destroy` refuse on uncommitted changes; ports are unique across **all** works (no blocks). `archive` flips `isArchived: true` and stamps `archived_at` in `work.json`; `unarchive` clears them.
 
 Deferred: `mx open` (terminal/editor layout).
 

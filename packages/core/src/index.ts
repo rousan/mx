@@ -56,15 +56,22 @@ export {
   worktreeList,
   worktreeRemove,
   workDestroy,
+  archiveWork,
+  unarchiveWork,
 } from './works';
 export type {
   WorkNewResult,
   WorkSummary,
+  ListWorksOpts,
   WorkPathResult,
   WorktreeAddOpts,
   WorktreeAddResult,
   WorktreeRemoveResult,
+  WorkDestroyOpts,
   WorkDestroyResult,
+  ArchiveResult,
+  UnarchiveResult,
+  UnarchiveRestoredWorktree,
 } from './works';
 
 export { allocatedPorts, nextFreePort, portSet, portUnset, portList } from './ports';

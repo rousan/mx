@@ -14,6 +14,13 @@ import {
   updateRuntime,
   readWork,
   writeWork,
+  workNew,
+  worktreeAdd,
+  archiveWork,
+  unarchiveWork,
+  workDestroy,
+  listWorksInfo,
+  repoAdd,
 } from '../src/index';
 import { resolveBase } from '../src/git';
 import type { Work } from '../src/types';
@@ -209,5 +216,161 @@ describe('resolveBase', () => {
     expect(resolveBase(clone, 'feature-base')).toMatch(/^[0-9a-f]{40}$/);
     expect(resolveBase(clone, 'main')).toMatch(/^[0-9a-f]{40}$/);
     expect(resolveBase(clone, 'no-such-ref')).toBeNull();
+  });
+});
+
+describe('archive / unarchive / destroy lifecycle', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+  const runGit = (cwd: string, args: string[]) =>
+    execFileSync('git', args, { cwd, stdio: 'ignore' });
+
+  /**
+   * Build a runtime with a pristine clone and a single work with one worktree
+   * on a branch named after the work. Returns the runtime root and the source
+   * git repo path (so tests can mutate branches there to simulate "branch gone").
+   */
+  function fixture(): { root: string; src: string; repoName: string; workName: string } {
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'x');
+    runGit(src, ['add', '-A']);
+    runGit(src, ['commit', '-qm', 'init']);
+
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, src, 'app');
+    workNew(root, 'feat', 'a feature');
+    worktreeAdd(root, 'feat', 'app', { branch: 'feat' });
+    return { root, src, repoName: 'app', workName: 'feat' };
+  }
+
+  it('workNew creates an empty sessions/ folder', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const res = workNew(root, 'feat');
+    const sessions = path.join(res.path, 'sessions');
+    expect(fs.existsSync(sessions)).toBe(true);
+    expect(fs.statSync(sessions).isDirectory()).toBe(true);
+    expect(fs.readdirSync(sessions)).toEqual([]);
+  });
+
+  it('archive removes worktrees, empties .code-workspace folders, sets isArchived + archived_at', () => {
+    const { root, workName } = fixture();
+    const wtDir = path.join(root, 'works', workName, 'app');
+    const wsFile = path.join(root, 'works', workName, `${workName}.code-workspace`);
+    expect(fs.existsSync(wtDir)).toBe(true);
+    expect(JSON.parse(fs.readFileSync(wsFile, 'utf8')).folders).toHaveLength(1);
+
+    const res = archiveWork(root, workName);
+    expect(res.removedWorktrees).toEqual(['app']);
+    expect(fs.existsSync(wtDir)).toBe(false);
+    expect(JSON.parse(fs.readFileSync(wsFile, 'utf8')).folders).toEqual([]);
+    const w = readWork(root, workName);
+    expect(w.isArchived).toBe(true);
+    expect(w.archived_at).toBe(res.archived_at);
+    // worktree entry retained in manifest so unarchive can rebuild from it.
+    expect(w.worktrees.map((wt) => wt.repo)).toEqual(['app']);
+  });
+
+  it('archive refuses when already archived', () => {
+    const { root, workName } = fixture();
+    archiveWork(root, workName);
+    expect(() => archiveWork(root, workName)).toThrow(/already archived/);
+  });
+
+  it('archive refuses on uncommitted changes', () => {
+    const { root, workName } = fixture();
+    const wt = path.join(root, 'works', workName, 'app');
+    fs.writeFileSync(path.join(wt, 'dirty.txt'), 'unstaged work');
+    expect(() => archiveWork(root, workName)).toThrow(/uncommitted changes/);
+    // Work remains active.
+    expect(readWork(root, workName).isArchived).not.toBe(true);
+  });
+
+  it('unarchive restores worktrees from recorded branches and clears archived state', () => {
+    const { root, workName } = fixture();
+    archiveWork(root, workName);
+    const res = unarchiveWork(root, workName);
+    expect(res.restored).toHaveLength(1);
+    expect(res.restored[0]).toMatchObject({ repo: 'app', branch: 'feat' });
+    expect(fs.existsSync(path.join(root, 'works', workName, 'app'))).toBe(true);
+
+    const wsFile = path.join(root, 'works', workName, `${workName}.code-workspace`);
+    expect(JSON.parse(fs.readFileSync(wsFile, 'utf8')).folders).toHaveLength(1);
+
+    const w = readWork(root, workName);
+    expect(w.isArchived).toBe(false);
+    expect(w.archived_at).toBeUndefined();
+  });
+
+  it('unarchive errors with a branch-list hint when the recorded branch is gone', () => {
+    const { root, workName } = fixture();
+    archiveWork(root, workName);
+    // Delete the feature branch from the pristine clone so unarchive can't find it.
+    runGit(path.join(root, 'repos', 'app'), ['branch', '-D', 'feat']);
+    let err: unknown;
+    try {
+      unarchiveWork(root, workName);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeDefined();
+    const msg = (err as Error).message;
+    expect(msg).toMatch(/branch\(es\) not found/);
+    expect(msg).toMatch(/app=feat/);
+    expect(msg).toMatch(/unarchive app=<branch>/);
+  });
+
+  it('unarchive applies repo=branch overrides and updates the manifest', () => {
+    const { root, workName } = fixture();
+    // Create a distinct branch in the pristine clone for the override.
+    // (`main` is checked out there, so git won't allow a worktree-add of `main`.)
+    runGit(path.join(root, 'repos', 'app'), ['branch', 'alt']);
+    archiveWork(root, workName);
+    runGit(path.join(root, 'repos', 'app'), ['branch', '-D', 'feat']);
+    const res = unarchiveWork(root, workName, { app: 'alt' });
+    expect(res.restored[0].branch).toBe('alt');
+    const w = readWork(root, workName);
+    expect(w.isArchived).toBe(false);
+    expect(w.worktrees[0].branch).toBe('alt');
+  });
+
+  it('unarchive refuses when the work is not archived', () => {
+    const { root, workName } = fixture();
+    expect(() => unarchiveWork(root, workName)).toThrow(/not archived/);
+  });
+
+  it('destroy without --force errors and leaves everything intact', () => {
+    const { root, workName } = fixture();
+    expect(() => workDestroy(root, workName)).toThrow(/Use `mx work archive`/);
+    expect(fs.existsSync(path.join(root, 'works', workName))).toBe(true);
+  });
+
+  it('destroy --force removes the work folder', () => {
+    const { root, workName } = fixture();
+    const res = workDestroy(root, workName, { force: true });
+    expect(res.removedWorktrees).toEqual(['app']);
+    expect(fs.existsSync(path.join(root, 'works', workName))).toBe(false);
+  });
+
+  it('listWorksInfo filters archived by default and respects --all / --archived', () => {
+    const { root } = fixture();
+    // Add a second work and archive it.
+    workNew(root, 'feat2');
+    worktreeAdd(root, 'feat2', 'app', { branch: 'feat2' });
+    archiveWork(root, 'feat2');
+
+    expect(listWorksInfo(root).map((w) => w.name)).toEqual(['feat']);
+    expect(listWorksInfo(root, { includeArchived: true }).map((w) => w.name).sort()).toEqual([
+      'feat',
+      'feat2',
+    ]);
+    const onlyArchived = listWorksInfo(root, { onlyArchived: true });
+    expect(onlyArchived.map((w) => w.name)).toEqual(['feat2']);
+    expect(onlyArchived[0].isArchived).toBe(true);
+    expect(onlyArchived[0].archived_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 });

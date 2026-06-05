@@ -41,6 +41,7 @@ mx/
     └── feature-a/
         ├── work.json       # manifest — owned by `mx`, do not hand-edit
         ├── feature-a.code-workspace
+        ├── sessions/       # session summaries (see § Session summaries)
         ├── repo-a/         # worktree of repo-a on this feature's branch
         └── repo-b/         # worktree of repo-b on this feature's branch
 ```
@@ -149,6 +150,37 @@ Three triggers for new entries:
 For ephemeral scratch (a debugging journey in progress, a hypothesis you're testing) — write without asking. It's notes; promote or delete later.
 
 **What's worth writing:** rationale, history, gotchas, cross-system invariants, debugging journeys, RCAs, session summaries, project-local procedures, imported reference material — your call. When in doubt, save it; prune later.
+
+## Session summaries — detailed record of each working session
+
+Each work has a `sessions/` folder that accumulates one markdown file per working session. The goal: another agent (a fresh Claude session, or a different agent like Codex / Cursor) can read these files and start a new session with full context — including findings from external sources that may no longer be accessible.
+
+### Single trigger — never auto-write
+
+Write a session summary **only when the user explicitly asks at end of session**: *"add the session summary before I close"*, *"save this session"*, etc. Never auto-write. Never propose mid-session. Never proactively suggest at end of session unless asked. The user owns the trigger.
+
+### Filename
+
+`works/<feature>/sessions/YYYY-MM-DD-HH-MM-<slug>.md` — date, 24-hour time (dash-separated; colons aren't portable on Windows), then a short kebab-case slug describing the session's subject. Use the time you started the session (or now, if unsure).
+
+### Content — distillation, not transcript
+
+The summary is detailed but **not a transcript**. Capture the substance of what happened so a future agent can pick up the work without re-doing all the discovery:
+
+- **Goal** — what we set out to do this session.
+- **What we learned from external sources.** When you fetched URLs, looked at attached images, read attached files, or ran web searches: distill the relevant findings into the summary. The URL, file path, or image may not be accessible later — the *information* must live in the summary.
+- **What worked** — code shipped, decisions reached, approaches that succeeded. Include commit SHAs and PR links when applicable.
+- **Dead ends** — hypotheses tried and falsified, approaches abandoned, and *why* each was abandoned (saves the next session from re-running the same dead end).
+- **Files touched** — paths modified, with a sentence on what changed and why.
+- **State at session end** — in-flight changes, tests passing/failing, PRs open, commits ahead of main.
+- **Next steps / open questions** — what should the next session pick up?
+- **Cross-references** — context-registry entries (by `path`) created or updated this session; prior session files this builds on (by filename).
+
+Length is not a virtue; completeness is. The bar: a fresh agent can read just this file and continue the work cold.
+
+### Cross-link with the context registry
+
+Sessions and the context registry complement each other. When this session created or updated an entry in `<runtime>/context/`, list it under "Cross-references" in the session file. Conversely, when promoting a finding into a durable registry entry, you may reference the session file in the entry's body for provenance.
 
 ## How to do things (always via mx)
 

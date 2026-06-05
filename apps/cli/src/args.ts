@@ -11,6 +11,12 @@ export interface Flags {
   help: boolean;
   /** Show version and exit. */
   version: boolean;
+  /** Bypass safety gates (currently: `mx work destroy --force`). */
+  force: boolean;
+  /** Include archived items alongside active ones (currently: `mx work ls --all`). */
+  all: boolean;
+  /** Restrict to archived items only (currently: `mx work ls --archived`). */
+  archived: boolean;
   /** Explicit runtime path from `--runtime`. */
   runtime?: string;
   /** Target name from `-n`/`--name`. */
@@ -57,7 +63,14 @@ const VALUE_FLAGS: Record<string, 'runtime' | 'name' | 'description' | 'branch' 
  */
 export function parseArgs(argv: string[]): ParsedArgs {
   const positionals: string[] = [];
-  const flags: Flags = { porcelain: false, help: false, version: false };
+  const flags: Flags = {
+    porcelain: false,
+    help: false,
+    version: false,
+    force: false,
+    all: false,
+    archived: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--porcelain' || a === '--json') {
@@ -66,6 +79,12 @@ export function parseArgs(argv: string[]): ParsedArgs {
       flags.help = true;
     } else if (a === '--version' || a === '-v') {
       flags.version = true;
+    } else if (a === '--force') {
+      flags.force = true;
+    } else if (a === '--all') {
+      flags.all = true;
+    } else if (a === '--archived') {
+      flags.archived = true;
     } else if (a.startsWith('--') && a.includes('=')) {
       const eq = a.indexOf('=');
       const key = VALUE_FLAGS[a.slice(0, eq)];

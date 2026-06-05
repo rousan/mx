@@ -22,6 +22,15 @@ export interface Work {
   description: string;
   /** Worktrees in the work, one per repo. */
   worktrees: Worktree[];
+  /**
+   * True when the work is archived: its worktrees have been removed but its
+   * folder, manifest, and `sessions/` are retained. Branches are preserved.
+   * Unset / false for active works. The complementary `archived_at` carries
+   * the timestamp of when this was set.
+   */
+  isArchived?: boolean;
+  /** ISO-8601 timestamp set when `isArchived` flips to true; cleared on unarchive. */
+  archived_at?: string;
 }
 
 /**
