@@ -35,3 +35,28 @@ export function removeStaleRuntimeReadme(targetDir: string): boolean {
   }
   return false;
 }
+
+/**
+ * Stamp the starter `context/INDEX.json` into a runtime, **only if it doesn't
+ * already exist**.
+ *
+ * The context registry is user data — accumulated across sessions — so we
+ * never overwrite it. Both `mx init` (idempotent re-runs) and `mx update`
+ * (existing runtimes upgrading) call this; both want the same semantics.
+ *
+ * Creates the `context/` directory if missing. Returns the destination path
+ * if newly stamped, `null` if it already existed.
+ *
+ * @param targetDir - The runtime root to write into.
+ * @param templatesDir - Directory containing the source `context/INDEX.json` template.
+ * @returns Absolute path of the stamped file, or `null` if it was already present.
+ */
+export function stampContextIndex(targetDir: string, templatesDir: string): string | null {
+  const dest = path.join(targetDir, 'context', 'INDEX.json');
+  if (exists(dest)) return null;
+  const src = path.join(templatesDir, 'context', 'INDEX.json');
+  if (!exists(src)) throw new MxError(`missing template: ${src}`, 'NO_TEMPLATE');
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
+  return dest;
+}

@@ -86,7 +86,10 @@ export function runGlobal(positionals: string[], flags: Flags): void {
     case 'update': {
       const root = requireRuntime({ runtime: flags.runtime });
       const res = updateRuntime(root, templatesDir());
-      emit(() => console.log(`Re-stamped CLAUDE.md into ${res.runtime}`), res);
+      emit(() => {
+        console.log(`Updated runtime at ${res.runtime}`);
+        for (const p of res.updated) console.log(`  + ${p}`);
+      }, res);
       return;
     }
     default:

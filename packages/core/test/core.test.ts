@@ -10,6 +10,8 @@ import {
   repoNameFromUrl,
   inferContext,
   discoverRuntime,
+  initRuntime,
+  updateRuntime,
   readWork,
   writeWork,
 } from '../src/index';
@@ -133,6 +135,58 @@ describe('inferContext', () => {
 
     process.chdir(os.tmpdir());
     expect(inferContext(root)).toEqual({ work: null, repo: null });
+  });
+});
+
+describe('context registry stamping', () => {
+  // Resolved once: real templates dir shipped in this repo (packages/core/test → repo root → templates).
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+
+  it('initRuntime stamps context/INDEX.json with an empty array', () => {
+    const runtime = path.join(tmp(), 'rt');
+    const res = initRuntime(runtime, TEMPLATES_DIR);
+    const indexPath = path.join(runtime, 'context', 'INDEX.json');
+    expect(fs.existsSync(indexPath)).toBe(true);
+    expect(res.created).toContain(indexPath);
+    expect(JSON.parse(fs.readFileSync(indexPath, 'utf8'))).toEqual([]);
+  });
+
+  it('initRuntime preserves an existing context/INDEX.json (user content)', () => {
+    const runtime = path.join(tmp(), 'rt');
+    fs.mkdirSync(path.join(runtime, 'context'), { recursive: true });
+    const existing = [
+      { path: 'auth/tokens', description: 'pre-existing entry — must not be clobbered' },
+    ];
+    fs.writeFileSync(path.join(runtime, 'context', 'INDEX.json'), JSON.stringify(existing));
+    const res = initRuntime(runtime, TEMPLATES_DIR);
+    const idx = JSON.parse(fs.readFileSync(path.join(runtime, 'context', 'INDEX.json'), 'utf8'));
+    expect(idx).toEqual(existing);
+    expect(res.created).not.toContain(path.join(runtime, 'context', 'INDEX.json'));
+  });
+
+  it('updateRuntime creates context/INDEX.json when the runtime has no context/ yet', () => {
+    const runtime = path.join(tmp(), 'rt');
+    initRuntime(runtime, TEMPLATES_DIR);
+    // Simulate an "old" runtime without the context registry.
+    fs.rmSync(path.join(runtime, 'context'), { recursive: true, force: true });
+    const res = updateRuntime(runtime, TEMPLATES_DIR);
+    const indexPath = path.join(runtime, 'context', 'INDEX.json');
+    expect(fs.existsSync(indexPath)).toBe(true);
+    expect(res.updated).toContain(indexPath);
+    expect(JSON.parse(fs.readFileSync(indexPath, 'utf8'))).toEqual([]);
+  });
+
+  it('updateRuntime preserves an existing context/INDEX.json', () => {
+    const runtime = path.join(tmp(), 'rt');
+    initRuntime(runtime, TEMPLATES_DIR);
+    const existing = [
+      { path: 'infra/cell/guide', description: 'how cell deploys work' },
+    ];
+    const indexPath = path.join(runtime, 'context', 'INDEX.json');
+    fs.writeFileSync(indexPath, JSON.stringify(existing));
+    const res = updateRuntime(runtime, TEMPLATES_DIR);
+    expect(JSON.parse(fs.readFileSync(indexPath, 'utf8'))).toEqual(existing);
+    expect(res.updated).not.toContain(indexPath);
   });
 });
 

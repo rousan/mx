@@ -36,7 +36,7 @@ mx/                                  # pnpm workspace
 ├── README.md                        # this file
 ├── .github/workflows/ci.yml         # typecheck/lint/test/build on PRs
 ├── scripts/release.sh               # local release driver (pnpm release)
-├── templates/                       # runtime assets (CLAUDE.md, work.json, .code-workspace)
+├── templates/                       # runtime assets (CLAUDE.md, work.json, .code-workspace, context/INDEX.json)
 ├── packages/
 │   └── core/                        # @mx/core — typed, tested domain logic
 ├── apps/
@@ -86,7 +86,7 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 
 | command | does |
 |---|---|
-| `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `CLAUDE.md`) |
+| `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `CLAUDE.md`, `context/INDEX.json`) |
 | `mx status [--porcelain]` | list repos, works, worktrees, and ports |
 | `mx update` | re-stamp the runtime's `CLAUDE.md` from the template |
 | `mx repo add <git-url> [--name <n>]` | clone a pristine repo |

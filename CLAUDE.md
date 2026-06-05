@@ -54,7 +54,7 @@ The runtime's `CLAUDE.md` is an **installed copy** of `templates/CLAUDE.md` (at 
 
 ## `mx update`
 
-`mx update` re-stamps the runtime `CLAUDE.md` from `templates/CLAUDE.md` into the discovered runtime (and removes a stale runtime `README.md` if one lingers). It does **not** touch `repos/` or anything under `works/`.
+`mx update` re-stamps the runtime `CLAUDE.md` from `templates/CLAUDE.md` into the discovered runtime, stamps `context/INDEX.json` **only if missing** (existing user content is preserved), and removes a stale runtime `README.md` if one lingers. It does **not** touch `repos/` or anything under `works/`.
 
 ## Testing against a runtime (hard rule)
 
@@ -104,6 +104,9 @@ mx/                                  # pnpm workspace (TypeScript); repo = githu
 mx/ (a runtime, e.g. ~/mx or ./.mx)
 ├── .mx-root            # marker file
 ├── CLAUDE.md           # from /templates/CLAUDE.md
+├── context/            # shared memory across all features (see runtime CLAUDE.md § Context registry)
+│   ├── INDEX.json      # source of truth for entry metadata; stamped by mx init (only if missing)
+│   └── <path>.md       # body-only entries; agent owns content and nesting
 ├── repos/<repo>/       # pristine clones — read-only reference
 └── works/<feature>/    # one folder per feature
     ├── work.json       # manifest, owned by mx
@@ -118,9 +121,9 @@ mx/ (a runtime, e.g. ~/mx or ./.mx)
 Implemented in `apps/cli` over `@mx/core`. Each command resolves the runtime via the discovery order above. Reads accept `--porcelain` (stable JSON); mutations echo the resulting object; errors are `{"error","code"}` with a non-zero exit. `-n <name>` may be omitted when the cwd implies it (inside `works/<work>/…` infers the work and, in a worktree, the repo; inside `repos/<repo>/…` infers the repo).
 
 **Global**
-- **`mx init [path]`** — scaffold/adopt a runtime (target = path arg, else `$MX_RUNTIME`, else `~/mx`): create `repos/`, `works/`, `.mx-root`; stamp `CLAUDE.md`. Idempotent; no clone; no pointer written.
+- **`mx init [path]`** — scaffold/adopt a runtime (target = path arg, else `$MX_RUNTIME`, else `~/mx`): create `repos/`, `works/`, `.mx-root`; stamp `CLAUDE.md`; stamp `context/INDEX.json` (only if missing — context is user data). Idempotent; no clone; no pointer written.
 - **`mx status [--porcelain]`** — runtime path, repos + branches, works + worktrees + ports.
-- **`mx update`** — re-stamp the runtime `CLAUDE.md`.
+- **`mx update`** — re-stamp the runtime `CLAUDE.md`; stamp `context/INDEX.json` only if missing.
 - **`mx help` / `mx version`**.
 
 **Repos** — `mx repo`: `add <git-url> [--name <n>]` (only command that clones) · `ls` · `-n <name> fetch` · `-n <name> info` · `-n <name> rm` (refuses if any work uses it).

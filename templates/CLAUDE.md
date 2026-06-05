@@ -31,6 +31,9 @@ here to change how mx works, you're in the wrong place: switch to that repo. Don
 mx/
 ├── CLAUDE.md               # this file (installed by the mx CLI)
 ├── .mx-root                # empty marker: "this is the mx root"
+├── context/                # shared memory across all features (see § Context registry)
+│   ├── INDEX.json          # single source of truth — metadata for every entry
+│   └── <path>.md           # body-only entries; nested folders allowed
 ├── repos/                  # PRISTINE reference clones, each on its default branch
 │   ├── repo-a/
 │   └── repo-b/
@@ -71,6 +74,63 @@ mx/
    its instructions live inside the worktree and apply.
 4. The work root is **not** a git repo. Run build/test/git commands from inside the relevant worktree.
 5. If several sessions share one work, the user gives each a lane (usually one repo). Stay in your lane.
+
+## Context registry — shared memory across every feature in this runtime
+
+`<runtime>/context/` is mx-owned institutional memory for this runtime — findings, decisions, runbooks, notes, debugging journeys, RCAs, session summaries, project-local procedures, imported reference material, anything worth carrying across sessions. mx stamps a starter `INDEX.json` at init; everything after that is yours to shape.
+
+### Two-file design
+
+- **`INDEX.json`** — the **single source of truth** for all entry metadata. JSON array.
+- **Body files** at `<runtime>/context/<path>.md` — **only the prose**. No frontmatter, no in-file header. To know what an entry is about, look up its `path` in INDEX.
+
+### INDEX.json schema
+
+Top-level JSON array of entry objects. The schema is **closed** — these fields, these types, nothing else. Adding ad-hoc fields will drift across sessions; don't.
+
+| field | type | required | notes |
+|---|---|---|---|
+| `path` | `string` | yes | **The unique identifier.** Kebab-case segments separated by `/`. No `.md` extension. Regex: `^[a-z0-9-]+(/[a-z0-9-]+)*$`. File lives at `<runtime>/context/<path>.md`. |
+| `description` | `string` | yes | 1–3 sentences covering (a) the gist / key claim, (b) where in the system it applies, (c) when this entry is relevant — enough to decide *whether to open the body* without actually opening it. |
+| `type` | `string` | no | Free-form label. Suggested vocabulary: `fact`, `decision`, `runbook`, `note`, `skill`. |
+| `tags` | `string[]` | no | Free-form tag strings. |
+| `related` | `string[]` | no | Each item is another entry's `path`. |
+| `last_verified` | `string` | no | ISO date `YYYY-MM-DD`. Use for entries where freshness matters. |
+
+Example entry:
+
+```json
+{
+  "path": "auth/tokens",
+  "description": "Session tokens are namespaced by tenant_id, 30-day expiry, rotated on password or role change. Validation happens at the edge in middleware/auth.go before any handler runs. Read when touching multi-tenant request handling, session lifecycle, or token storage.",
+  "type": "fact",
+  "tags": ["auth", "security"],
+  "related": ["auth/tenant-isolation"],
+  "last_verified": "2026-06-05"
+}
+```
+
+### Reading
+
+1. Read `<runtime>/context/INDEX.json` — every entry's metadata in one Read.
+2. Open files at `<runtime>/context/<path>.md` for entries whose metadata matches the current task.
+3. Grep `<runtime>/context/` for keywords when INDEX doesn't surface a match.
+
+A 30-second skim of INDEX is free; do it before any non-trivial task. Skip only for typo-fix-level work.
+
+### Maintain INDEX.json as you go
+
+When you add, rename, remove, or restructure an entry, update INDEX in the same change. Drift means orphan files (invisible to future sessions) or stale entries (false positives). After editing INDEX, sanity-check it parses as valid JSON.
+
+### Organize as much as you can
+
+- **Nest by subject** — `infra/cell/guide`, `auth/tokens`, `payments/stripe/webhook-quirks`. Match the domain's natural divisions.
+- **One concept per file.** If you can't fit the gist + scope + when-relevant into a 1–3 sentence `description`, the file is doing too much — split it. Aim for ≤ ~200 lines per body file; line count is just a tripwire that flags "look closer." When in doubt, factor the shared concept out into its own entry and `related`-link from the children.
+- **Cross-link via `related` in INDEX**, not in body content.
+
+### Write whatever's worth carrying forward
+
+Rationale, history, gotchas, cross-system invariants, debugging journeys, RCAs, session summaries, project-local procedures, imported docs — your call. When in doubt, save it; prune later.
 
 ## How to do things (always via mx)
 

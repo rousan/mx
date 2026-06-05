@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { MxError } from './errors';
 import { exists, isGitRepo, listDirs, realpath } from './fsutil';
 import { readJson, writeJson } from './json';
-import { stampClaudeMd, removeStaleRuntimeReadme } from './templates';
+import { stampClaudeMd, stampContextIndex, removeStaleRuntimeReadme } from './templates';
 import type { Work, Worktree, RuntimeOpts, InferredContext } from './types';
 
 /**
@@ -220,6 +220,8 @@ export function initRuntime(target0: string, templatesDir: string): InitResult {
     created.push(marker);
   }
   created.push(stampClaudeMd(target, templatesDir));
+  const ctxIndex = stampContextIndex(target, templatesDir);
+  if (ctxIndex) created.push(ctxIndex);
   removeStaleRuntimeReadme(target);
   return { runtime: target, created };
 }
@@ -244,6 +246,9 @@ export interface UpdateResult {
  */
 export function updateRuntime(root: string, templatesDir: string): UpdateResult {
   const dest = stampClaudeMd(root, templatesDir);
+  const updated = [dest];
+  const ctxIndex = stampContextIndex(root, templatesDir);
+  if (ctxIndex) updated.push(ctxIndex);
   removeStaleRuntimeReadme(root);
-  return { runtime: root, updated: [dest] };
+  return { runtime: root, updated };
 }
