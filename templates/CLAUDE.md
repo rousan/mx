@@ -112,9 +112,19 @@ Example entry:
 
 ### Reading
 
+Primary path:
+
 1. Read `<runtime>/context/INDEX.json` — every entry's metadata in one Read.
 2. Open files at `<runtime>/context/<path>.md` for entries whose metadata matches the current task.
-3. Grep `<runtime>/context/` for keywords when INDEX doesn't surface a match.
+
+When INDEX descriptions don't surface what you need — and often they won't — fall back to anything that works:
+
+- **Grep `<runtime>/context/`** for keywords. Frequently the term you need lives in a body, not in any description.
+- **`ls` the folder recursively** to spot entries on disk that aren't indexed (orphans), and read them directly when relevant.
+- **Follow `related` chains** outward from a known-relevant entry to find the rest of a cluster.
+- **Read everything** if the registry is small (< ~30 entries) and you're starting unfamiliar work — cheaper than guessing.
+
+INDEX is the *primary* discovery surface, not the only one. Use whatever gets you to the right entry fastest — direct grep, full-content scan, recursive read, following links, your judgment.
 
 A 30-second skim of INDEX is free; do it before any non-trivial task. Skip only for typo-fix-level work.
 
@@ -128,9 +138,17 @@ When you add, rename, remove, or restructure an entry, update INDEX in the same 
 - **One concept per file.** If you can't fit the gist + scope + when-relevant into a 1–3 sentence `description`, the file is doing too much — split it. Aim for ≤ ~200 lines per body file; line count is just a tripwire that flags "look closer." When in doubt, factor the shared concept out into its own entry and `related`-link from the children.
 - **Cross-link via `related` in INDEX**, not in body content.
 
-### Write whatever's worth carrying forward
+### When and what to write
 
-Rationale, history, gotchas, cross-system invariants, debugging journeys, RCAs, session summaries, project-local procedures, imported docs — your call. When in doubt, save it; prune later.
+Three triggers for new entries:
+
+1. **When the user asks.** "Save this," "remember this," "add to context" — write the entry immediately and update INDEX.
+2. **When you make a non-obvious discovery during the session.** A root cause you traced, a system invariant you confirmed, a decision reached together, a gotcha that tripped you up — propose inline: *"This seems worth saving — add it as `<path>` with this description? OK?"* Write only after the user confirms.
+3. **Before ending a substantial session.** Review what was learned and propose 1–3 entries the user can approve. Catches durable findings you didn't surface mid-stream.
+
+For ephemeral scratch (a debugging journey in progress, a hypothesis you're testing) — write without asking. It's notes; promote or delete later.
+
+**What's worth writing:** rationale, history, gotchas, cross-system invariants, debugging journeys, RCAs, session summaries, project-local procedures, imported reference material — your call. When in doubt, save it; prune later.
 
 ## How to do things (always via mx)
 
