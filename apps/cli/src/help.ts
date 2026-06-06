@@ -5,8 +5,8 @@ export const HELP = `mx — control panel for the mx runtime
 
 Global:
   mx init [path]                         scaffold/adopt a runtime (default ~/mx)
-  mx status [--porcelain]                show runtime, repos, works, ports
-  mx update                              re-stamp runtime CLAUDE.md from templates
+  mx status [--porcelain]                show runtime, repos, works, ports  (aliases: mx s, mx st)
+  mx update                              re-sync runtime from current templates + backfill structural scaffolding
   mx help | version
 
 Repos (pristine clones):

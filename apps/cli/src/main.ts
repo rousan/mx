@@ -32,6 +32,10 @@ export function main(): void {
   const { positionals, flags } = parseArgs(process.argv.slice(2));
   setPorcelain(flags.porcelain);
 
+  // Shortcut aliases — `mx s` / `mx st` map to `mx status`. Users hit this
+  // command very often; saving the keystrokes pays off.
+  if (positionals[0] === 's' || positionals[0] === 'st') positionals[0] = 'status';
+
   try {
     if (flags.version || positionals[0] === 'version') {
       emit(() => console.log(`mx ${VERSION}`), { version: VERSION });

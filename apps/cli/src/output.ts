@@ -7,6 +7,57 @@ import { MxError } from '@mx/core';
 type HumanOutput = (() => void) | string | null;
 
 /**
+ * True when stdout looks like an interactive terminal and the user hasn't
+ * opted out via the standard `NO_COLOR` env var. Sampled once at module
+ * load; TTY state doesn't change mid-process.
+ *
+ * @see https://no-color.org
+ */
+const USE_COLOR = process.stdout.isTTY && !process.env.NO_COLOR;
+
+/**
+ * Wrap a string in an ANSI code, or return it unchanged when color is off
+ * (NO_COLOR set, or stdout isn't a TTY — e.g. piped or redirected).
+ *
+ * @param s - The string to style.
+ * @param code - The ANSI SGR parameter (e.g. `2` for dim, `1` for bold).
+ * @returns The styled string in TTY+color mode, otherwise `s` unchanged.
+ */
+function wrap(s: string, code: number): string {
+  return USE_COLOR ? `\x1b[${code}m${s}\x1b[0m` : s;
+}
+
+/**
+ * Dim — for low-priority metadata (paths, branches, counts, timestamps).
+ *
+ * @param s - The string to style.
+ * @returns The dimmed string, or `s` unchanged when color is off.
+ */
+export function dim(s: string): string {
+  return wrap(s, 2);
+}
+
+/**
+ * Bold — for section headers and entity names that should stand out.
+ *
+ * @param s - The string to style.
+ * @returns The bolded string, or `s` unchanged when color is off.
+ */
+export function bold(s: string): string {
+  return wrap(s, 1);
+}
+
+/**
+ * Cyan — used sparingly for accent values (e.g. port numbers).
+ *
+ * @param s - The string to style.
+ * @returns The cyan string, or `s` unchanged when color is off.
+ */
+export function cyan(s: string): string {
+  return wrap(s, 36);
+}
+
+/**
  * Module-level porcelain toggle, set once from the parsed flags at startup.
  */
 let porcelain = false;
