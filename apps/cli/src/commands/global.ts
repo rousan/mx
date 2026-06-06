@@ -139,7 +139,9 @@ function renderStatus(data: StatusResult): void {
     ...data.works.flatMap((w) => (w.worktrees ?? []).map((wt) => wt.repo.length)),
   );
 
-  for (const w of data.works) {
+  for (let i = 0; i < data.works.length; i++) {
+    if (i > 0) console.log(); // breathing room between works
+    const w = data.works[i];
     const wts = w.worktrees ?? [];
     const name = w.name.padEnd(workNameW);
     const chip =
@@ -159,7 +161,8 @@ function renderStatus(data: StatusResult): void {
         .map(([s, p]) => `${dim(`${s}:`)}${cyan(String(p))}`)
         .join('  ');
       const portsCol = ports ? `  ${ports}` : '';
-      console.log(`      ${repo}  ${branch}${portsCol}`);
+      // 4-space step from the work-name column makes hierarchy unambiguous.
+      console.log(`        ${repo}  ${branch}${portsCol}`);
     }
   }
   console.log();
