@@ -18,7 +18,7 @@ Repos (pristine clones):
 
 Works (features):
   mx work new <name> [--description <t>]                creates folder + empty work.json + sessions/
-  mx work ls [--all|--archived] [--porcelain]           default: active only
+  mx work ls [--archived] [--porcelain]                 default: all works (archived marked); --archived filters to archived only
   mx work -n <name> info [--porcelain]
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
   mx work -n <name> describe <text>

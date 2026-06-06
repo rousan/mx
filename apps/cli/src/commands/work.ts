@@ -55,16 +55,21 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
 
   if (action === 'ls') {
     const root = requireRuntime({ runtime: flags.runtime });
+    // Default: every work, with the archived ones marked. --archived narrows
+    // the listing to archived works only (handy when you want to see what's
+    // recoverable without scrolling past the active set).
     const works = listWorksInfo(root, {
-      includeArchived: flags.all,
+      includeArchived: true,
       onlyArchived: flags.archived,
     });
     emit(() => {
       for (const w of works) {
-        const chip = w.isArchived ? `[archived ${(w.archived_at ?? '').slice(0, 10)}]  ` : '';
+        const chip = w.isArchived
+          ? `  [archived ${(w.archived_at ?? '').slice(0, 10)}]`
+          : '';
         const desc = w.description ? `  — ${w.description}` : '';
-        const wts = `(${w.worktrees} worktree${w.worktrees === 1 ? '' : 's'})`;
-        console.log(`${chip}${w.name}  ${wts}${desc}`);
+        const wts = `  (${w.worktrees} worktree${w.worktrees === 1 ? '' : 's'})`;
+        console.log(`${w.name}${chip}${wts}${desc}`);
       }
     }, works);
     return;

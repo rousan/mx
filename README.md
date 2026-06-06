@@ -92,7 +92,7 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 | `mx repo add <git-url> [--name <n>]` | clone a pristine repo |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
 | `mx work new <name> [--description <t>]` | create a work (prints its folder path) |
-| `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works (ls hides archived by default) |
+| `mx work ls [--archived]` / `mx work -n <name> info\|describe\|path` | manage works (ls shows all by default, marking archived; `--archived` filters to archived only) |
 | `mx work -n <name> worktree add\|ls\|rm <repo>` | manage a work's worktrees |
 | `mx work -n <name> port set\|unset\|ls <repo> <service> [<port>]` | allocate/release ports |
 | `mx work -n <name> archive` | remove worktrees; keep folder + work.json + sessions/ + branches (recoverable) |
