@@ -237,18 +237,55 @@ export interface UpdateResult {
 }
 
 /**
- * Re-stamp the runtime `CLAUDE.md` from the current template and drop a stale
- * runtime README. Leaves `repos/` and `works/` untouched.
+ * Ensure mx-owned structural directories inside a single work folder. Purely
+ * additive and **non-destructive**: only creates missing directories; never
+ * touches `work.json`, `.code-workspace`, worktree code, session files, or
+ * anything else the user owns. Both `workNew` (initial creation) and
+ * `updateRuntime` (backfill on existing runtimes) call this so the structural
+ * contract lives in exactly one place.
  *
  * @param root - Runtime root.
- * @param templatesDir - Directory holding the `CLAUDE.md` template to stamp.
- * @returns The runtime path and the re-stamped files.
+ * @param workName - Work to scaffold inside.
+ * @returns Paths newly created this call (empty if everything already existed).
+ */
+export function ensureWorkScaffolding(root: string, workName: string): string[] {
+  const created: string[] = [];
+  const sessions = path.join(workDir(root, workName), 'sessions');
+  if (!exists(sessions)) {
+    fs.mkdirSync(sessions, { recursive: true });
+    created.push(sessions);
+  }
+  return created;
+}
+
+/**
+ * Re-sync a runtime with the current mx version. The contract:
+ *
+ * - **mx-owned generated content is re-stamped:** root `CLAUDE.md` always;
+ *   `context/INDEX.json` only when missing.
+ * - **mx-owned structural directories are backfilled across every work**
+ *   (e.g. `<work>/sessions/`) so existing runtimes get new scaffolding the
+ *   same way fresh ones do. Future per-work or per-repo additions slot into
+ *   `ensureWorkScaffolding` and will propagate automatically here.
+ * - **User data is never touched:** `work.json` contents, `.code-workspace`,
+ *   worktree code, session body files, context body files, and existing
+ *   `INDEX.json` are all left exactly as-is.
+ * - A stale runtime `README.md` (legacy) is removed if present.
+ *
+ * `repos/` is not modified.
+ *
+ * @param root - Runtime root.
+ * @param templatesDir - Directory holding the templates to stamp.
+ * @returns The runtime path and every file/directory created or re-stamped.
  */
 export function updateRuntime(root: string, templatesDir: string): UpdateResult {
-  const dest = stampClaudeMd(root, templatesDir);
-  const updated = [dest];
+  const updated: string[] = [];
+  updated.push(stampClaudeMd(root, templatesDir));
   const ctxIndex = stampContextIndex(root, templatesDir);
   if (ctxIndex) updated.push(ctxIndex);
+  for (const workName of listWorkNames(root)) {
+    updated.push(...ensureWorkScaffolding(root, workName));
+  }
   removeStaleRuntimeReadme(root);
   return { runtime: root, updated };
 }

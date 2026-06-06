@@ -88,7 +88,7 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 |---|---|
 | `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `CLAUDE.md`, `context/INDEX.json`) |
 | `mx status [--porcelain]` | list repos, works, worktrees, and ports |
-| `mx update` | re-stamp the runtime's `CLAUDE.md` from the template |
+| `mx update` | re-sync runtime with current mx version: re-stamp `CLAUDE.md`, create `context/INDEX.json` + per-work `sessions/` if missing. Non-destructive — never modifies user data. |
 | `mx repo add <git-url> [--name <n>]` | clone a pristine repo |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
 | `mx work new <name> [--description <t>]` | create a work (prints its folder path) |

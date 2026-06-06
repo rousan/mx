@@ -54,7 +54,14 @@ The runtime's `CLAUDE.md` is an **installed copy** of `templates/CLAUDE.md` (at 
 
 ## `mx update`
 
-`mx update` re-stamps the runtime `CLAUDE.md` from `templates/CLAUDE.md` into the discovered runtime, stamps `context/INDEX.json` **only if missing** (existing user content is preserved), and removes a stale runtime `README.md` if one lingers. It does **not** touch `repos/` or anything under `works/`.
+`mx update` re-syncs a runtime with the current mx version. Its contract is strictly **non-destructive — user data is never touched.** It:
+
+- re-stamps the runtime `CLAUDE.md` from `templates/CLAUDE.md` (mx-owned generated content; always regenerated);
+- stamps `context/INDEX.json` **only if missing** (existing index content is preserved);
+- **backfills mx-owned structural directories across every work** — currently `<work>/sessions/` for any work that pre-dates that scaffolding. Future per-work or per-repo additions slot into `ensureWorkScaffolding` in `@mx/core` and propagate the same way.
+- removes a stale runtime `README.md` if one lingers (legacy cleanup).
+
+It does **not** modify `work.json` contents, `.code-workspace` files, worktree code, session body files, context body files, or anything under `repos/`. Every output path it reports in `updated` is either a re-stamped template or a newly-created empty directory.
 
 ## Testing against a runtime (hard rule)
 
@@ -124,7 +131,7 @@ Implemented in `apps/cli` over `@mx/core`. Each command resolves the runtime via
 **Global**
 - **`mx init [path]`** — scaffold/adopt a runtime (target = path arg, else `$MX_RUNTIME`, else `~/mx`): create `repos/`, `works/`, `.mx-root`; stamp `CLAUDE.md`; stamp `context/INDEX.json` (only if missing — context is user data). Idempotent; no clone; no pointer written.
 - **`mx status [--porcelain]`** — runtime path, repos + branches, works + worktrees + ports.
-- **`mx update`** — re-stamp the runtime `CLAUDE.md`; stamp `context/INDEX.json` only if missing.
+- **`mx update`** — re-stamp the runtime `CLAUDE.md`; stamp `context/INDEX.json` only if missing; backfill `<work>/sessions/` for every work that lacks it. Never modifies user data.
 - **`mx help` / `mx version`**.
 
 **Repos** — `mx repo`: `add <git-url> [--name <n>]` (only command that clones) · `ls` · `-n <name> fetch` · `-n <name> info` · `-n <name> rm` (refuses if any work uses it).

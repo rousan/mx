@@ -12,6 +12,7 @@ import {
   writeWork,
   findWorktree,
   listWorkNames,
+  ensureWorkScaffolding,
 } from './runtime';
 import type { Work, Worktree } from './types';
 
@@ -93,10 +94,10 @@ export function workNew(root: string, name: string, description = ''): WorkNewRe
   const dir = workDir(root, name);
   if (exists(dir)) throw new MxError(`work already exists: ${name}`, 'EXISTS');
   fs.mkdirSync(dir, { recursive: true });
-  fs.mkdirSync(path.join(dir, 'sessions'), { recursive: true });
   const work: Work = { name, description, worktrees: [] };
   writeWork(root, work);
   writeJson(workspaceFile(root, name), { folders: [], settings: {} });
+  ensureWorkScaffolding(root, name);
   return { ...work, path: dir };
 }
 

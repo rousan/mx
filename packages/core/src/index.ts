@@ -26,6 +26,7 @@ export {
   inferContext,
   initRuntime,
   updateRuntime,
+  ensureWorkScaffolding,
 } from './runtime';
 export type { InitResult, UpdateResult } from './runtime';
 

@@ -195,6 +195,51 @@ describe('context registry stamping', () => {
     expect(JSON.parse(fs.readFileSync(indexPath, 'utf8'))).toEqual(existing);
     expect(res.updated).not.toContain(indexPath);
   });
+
+  it('updateRuntime backfills missing per-work sessions/ without touching user data', () => {
+    const runtime = path.join(tmp(), 'rt');
+    initRuntime(runtime, TEMPLATES_DIR);
+    // Create two works; simulate a "pre-v1.2.0" state by removing sessions/.
+    workNew(runtime, 'feat-a');
+    workNew(runtime, 'feat-b');
+    const sessionsA = path.join(runtime, 'works', 'feat-a', 'sessions');
+    const sessionsB = path.join(runtime, 'works', 'feat-b', 'sessions');
+    fs.rmSync(sessionsA, { recursive: true });
+    fs.rmSync(sessionsB, { recursive: true });
+    expect(fs.existsSync(sessionsA)).toBe(false);
+    expect(fs.existsSync(sessionsB)).toBe(false);
+
+    // Capture user data BEFORE update so we can verify it's untouched.
+    const manifestA = path.join(runtime, 'works', 'feat-a', 'work.json');
+    const workspaceA = path.join(runtime, 'works', 'feat-a', 'feat-a.code-workspace');
+    const manifestSnapshot = fs.readFileSync(manifestA, 'utf8');
+    const workspaceSnapshot = fs.readFileSync(workspaceA, 'utf8');
+
+    const res = updateRuntime(runtime, TEMPLATES_DIR);
+    expect(fs.existsSync(sessionsA)).toBe(true);
+    expect(fs.existsSync(sessionsB)).toBe(true);
+    expect(res.updated).toContain(sessionsA);
+    expect(res.updated).toContain(sessionsB);
+
+    // User data untouched.
+    expect(fs.readFileSync(manifestA, 'utf8')).toBe(manifestSnapshot);
+    expect(fs.readFileSync(workspaceA, 'utf8')).toBe(workspaceSnapshot);
+  });
+
+  it('updateRuntime does not re-create per-work sessions/ that already exists', () => {
+    const runtime = path.join(tmp(), 'rt');
+    initRuntime(runtime, TEMPLATES_DIR);
+    workNew(runtime, 'feat');
+    const sessions = path.join(runtime, 'works', 'feat', 'sessions');
+    // Add a real session file; it must survive untouched.
+    const note = path.join(sessions, '2026-06-06-12-00-existing.md');
+    fs.writeFileSync(note, '# preexisting note\n');
+    const before = fs.readFileSync(note, 'utf8');
+
+    const res = updateRuntime(runtime, TEMPLATES_DIR);
+    expect(res.updated).not.toContain(sessions);
+    expect(fs.readFileSync(note, 'utf8')).toBe(before);
+  });
 });
 
 describe('resolveBase', () => {
