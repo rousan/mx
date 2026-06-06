@@ -115,7 +115,7 @@ Example entry:
 
 Primary path:
 
-1. Read `<runtime>/context/INDEX.json` — every entry's metadata in one Read.
+1. **Read `<runtime>/context/INDEX.json` on every task** — trivial or not, small or large. Skimming a metadata index is cheap; the cost of missing a relevant entry is high. This is a hard rule, not a heuristic.
 2. Open files at `<runtime>/context/<path>.md` for entries whose metadata matches the current task.
 
 When INDEX descriptions don't surface what you need — and often they won't — fall back to anything that works:
@@ -123,11 +123,9 @@ When INDEX descriptions don't surface what you need — and often they won't —
 - **Grep `<runtime>/context/`** for keywords. Frequently the term you need lives in a body, not in any description.
 - **`ls` the folder recursively** to spot entries on disk that aren't indexed (orphans), and read them directly when relevant.
 - **Follow `related` chains** outward from a known-relevant entry to find the rest of a cluster.
-- **Read everything** if the registry is small (< ~30 entries) and you're starting unfamiliar work — cheaper than guessing.
+- **Read everything** when in doubt — better than guessing.
 
 INDEX is the *primary* discovery surface, not the only one. Use whatever gets you to the right entry fastest — direct grep, full-content scan, recursive read, following links, your judgment.
-
-A 30-second skim of INDEX is free; do it before any non-trivial task. Skip only for typo-fix-level work.
 
 ### Maintain INDEX.json as you go
 
