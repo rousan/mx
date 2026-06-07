@@ -158,7 +158,10 @@ function renderStatus(data: StatusResult): void {
       w.isArchived === true
         ? `  ${dim(`[archived ${(w.archived_at ?? '').slice(0, 10)}]`)}`
         : '';
-    console.log(`    ${bold(w.name)}${chip}`);
+    // Active work names anchor with bold; archived ones recede with dim so
+    // the eye lands on active works first.
+    const styledName = w.isArchived === true ? dim(w.name) : bold(w.name);
+    console.log(`    ${styledName}${chip}`);
 
     if (wts.length === 0) {
       console.log(`        ${dim('(no worktrees)')}`);

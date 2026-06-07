@@ -83,7 +83,10 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         const chip = w.isArchived === true
           ? `  ${dim(`[archived ${(w.archived_at ?? '').slice(0, 10)}]`)}`
           : '';
-        console.log(`${bold(w.name)}${chip}`);
+        // Active work names anchor with bold; archived ones recede with dim
+        // so the eye lands on active works first.
+        const styledName = w.isArchived === true ? dim(w.name) : bold(w.name);
+        console.log(`${styledName}${chip}`);
 
         if (w.description) {
           console.log(`  ${dim(`— ${w.description}`)}`);
@@ -125,7 +128,8 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         const archivedChip = work.isArchived === true
           ? `  ${dim(`[archived ${(work.archived_at ?? '').slice(0, 10)}]`)}`
           : '';
-        console.log(`${bold(work.name)}${archivedChip}`);
+        const styledName = work.isArchived === true ? dim(work.name) : bold(work.name);
+        console.log(`${styledName}${archivedChip}`);
         if (work.description) console.log(`  ${dim('description')}  ${dim(work.description)}`);
         const wts = work.worktrees ?? [];
         console.log(`  ${dim('worktrees  ')}  ${dim(`${wts.length}`)}`);
