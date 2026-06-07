@@ -11,93 +11,58 @@ type HumanOutput = (() => void) | string | null;
  * opted out via the standard `NO_COLOR` env var. Sampled once at module
  * load; TTY state doesn't change mid-process.
  *
+ * The CLI is intentionally monochrome — only typography weight (bold) and
+ * intensity (dim) carry visual hierarchy. The TTY check still gates these so
+ * piped/redirected output stays as plain text without ANSI codes.
+ *
  * @see https://no-color.org
  */
-const USE_COLOR = process.stdout.isTTY && !process.env.NO_COLOR;
+const USE_STYLE = process.stdout.isTTY && !process.env.NO_COLOR;
 
 /**
- * Wrap a string in an ANSI code, or return it unchanged when color is off
+ * Wrap a string in an ANSI code, or return it unchanged when styling is off
  * (NO_COLOR set, or stdout isn't a TTY — e.g. piped or redirected).
  *
  * @param s - The string to style.
  * @param code - The ANSI SGR parameter (e.g. `2` for dim, `1` for bold).
- * @returns The styled string in TTY+color mode, otherwise `s` unchanged.
+ * @returns The styled string in TTY mode, otherwise `s` unchanged.
  */
 function wrap(s: string, code: number): string {
-  return USE_COLOR ? `\x1b[${code}m${s}\x1b[0m` : s;
+  return USE_STYLE ? `\x1b[${code}m${s}\x1b[0m` : s;
 }
 
 /**
- * Dim — for low-priority metadata (paths, branches, counts, timestamps).
+ * Dim — for everything that isn't a primary identifier: paths, branches,
+ * counts, dates, ports, archived chips, descriptions, port labels, port
+ * values. The bulk of the output sits at this tier.
  *
  * @param s - The string to style.
- * @returns The dimmed string, or `s` unchanged when color is off.
+ * @returns The dimmed string, or `s` unchanged when styling is off.
  */
 export function dim(s: string): string {
   return wrap(s, 2);
 }
 
 /**
- * Bold — for section headers and entity names that should stand out.
+ * Bold — for the small set of elements that should anchor a block: section
+ * titles (`mx`, `repos`, `works`, `context`), and the work name at the head
+ * of a per-work block.
  *
  * @param s - The string to style.
- * @returns The bolded string, or `s` unchanged when color is off.
+ * @returns The bolded string, or `s` unchanged when styling is off.
  */
 export function bold(s: string): string {
   return wrap(s, 1);
 }
 
-/**
- * Cyan — used sparingly for accent values (e.g. port numbers, branches).
- *
- * @param s - The string to style.
- * @returns The cyan string, or `s` unchanged when color is off.
- */
-export function cyan(s: string): string {
-  return wrap(s, 36);
-}
-
-/**
- * Green — semantic success indicator. Use for `✓` markers and short
- * "completed" status words; not for whole paragraphs.
- *
- * @param s - The string to style.
- * @returns The green string, or `s` unchanged when color is off.
- */
-export function green(s: string): string {
-  return wrap(s, 32);
-}
-
-/**
- * Yellow — semantic warning / heads-up indicator. Use for `⚠` markers and
- * one-line reminders before mutating actions; not for prose.
- *
- * @param s - The string to style.
- * @returns The yellow string, or `s` unchanged when color is off.
- */
-export function yellow(s: string): string {
-  return wrap(s, 33);
-}
-
-/**
- * Red — semantic error indicator. Used for the `mx:` error prefix on stderr
- * via `fail()`.
- *
- * @param s - The string to style.
- * @returns The red string, or `s` unchanged when color is off.
- */
-export function red(s: string): string {
-  return wrap(s, 31);
-}
-
-/** Convenience: a green check mark for "this happened successfully". */
+/** Plain `✓` glyph — "this happened successfully". Shape carries the semantic. */
 export function check(): string {
-  return green('✓');
+  return '✓';
 }
 
-/** Convenience: a yellow warning sign for "heads up before proceeding". */
+/** Plain `⚠` glyph — "heads up before proceeding". Shape carries the semantic. */
 export function warn(): string {
-  return yellow('⚠');
+  return '⚠';
 }
 
 /**
@@ -135,8 +100,8 @@ export function emit(human: HumanOutput, data: unknown): void {
  * Print an error and exit with a non-zero code.
  *
  * In porcelain mode emits `{ error, code }` JSON on stdout; otherwise prints a
- * `mx: <message>` line to stderr. `MxError` codes are preserved; other errors
- * report `INTERNAL`.
+ * `mx: <message>` line to stderr (with the `mx:` prefix bolded when stderr is
+ * a TTY). `MxError` codes are preserved; other errors report `INTERNAL`.
  *
  * @param err - The thrown error.
  * @returns Never returns; the process exits.
@@ -147,8 +112,8 @@ export function fail(err: unknown): never {
   if (porcelain) {
     process.stdout.write(JSON.stringify({ error: message, code }, null, 2) + '\n');
   } else {
-    // Red prefix when stderr is a TTY; bare text when piped/redirected.
-    const prefix = process.stderr.isTTY && !process.env.NO_COLOR ? `\x1b[31mmx:\x1b[0m` : 'mx:';
+    const useStyle = process.stderr.isTTY && !process.env.NO_COLOR;
+    const prefix = useStyle ? `\x1b[1mmx:\x1b[0m` : 'mx:';
     process.stderr.write(`${prefix} ${message}\n`);
   }
   process.exit(1);

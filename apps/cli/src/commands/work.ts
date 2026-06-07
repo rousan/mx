@@ -17,7 +17,7 @@ import {
   portList,
   MxError,
 } from '@mx/core';
-import { emit, dim, bold, cyan, check, warn, yellow } from '../output';
+import { emit, dim, bold, check, warn } from '../output';
 import type { Flags } from '../args';
 
 /**
@@ -83,23 +83,23 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         const chip = w.isArchived === true
           ? `  ${dim(`[archived ${(w.archived_at ?? '').slice(0, 10)}]`)}`
           : '';
-        const wtCount = dim(`${wts.length} worktree${wts.length === 1 ? '' : 's'}`);
-        const sessCount = dim(`${w.sessions} session${w.sessions === 1 ? '' : 's'}`);
-        console.log(`${bold(w.name)}${chip}  ${wtCount}  ${sessCount}`);
+        console.log(`${bold(w.name)}${chip}`);
 
         if (w.description) {
           console.log(`  ${dim(`— ${w.description}`)}`);
         }
 
-        if (wts.length > 0) {
+        if (wts.length === 0) {
+          console.log(`  ${dim('(no worktrees)')}`);
+        } else {
           const repoW = Math.max(...wts.map((t) => t.repo.length));
           for (const t of wts) {
-            // Cyan the repo name (sibling identifier of the branch) so it
-            // visually subordinates to the bold work name above.
-            const repo = cyan(t.repo.padEnd(repoW));
-            const branch = cyan(`[${t.branch}]`);
+            // All worktree row content sits at the dim tier so the bold work
+            // name above is the only "loud" element in the block.
+            const repo = dim(t.repo.padEnd(repoW));
+            const branch = dim(`[${t.branch}]`);
             const ports = Object.entries(t.ports ?? {})
-              .map(([s, p]) => `${dim(`${s}:`)}${cyan(String(p))}`)
+              .map(([s, p]) => `${dim(`${s}:${p}`)}`)
               .join('  ');
             const portsCol = ports ? `  ${ports}` : '';
             console.log(`  ${repo}  ${branch}${portsCol}`);
@@ -131,10 +131,10 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         console.log(`  ${dim('worktrees  ')}  ${dim(`${wts.length}`)}`);
         for (const wt of wts) {
           const ports = Object.entries(wt.ports ?? {})
-            .map(([s, p]) => `${dim(`${s}:`)}${cyan(String(p))}`)
+            .map(([s, p]) => `${dim(`${s}:`)}${dim(String(p))}`)
             .join('  ');
           const portsCol = ports ? `  ${ports}` : '';
-          console.log(`      ${cyan(wt.repo)}  ${cyan(`[${wt.branch}]`)}${portsCol}`);
+          console.log(`      ${dim(wt.repo)}  ${dim(`[${wt.branch}]`)}${portsCol}`);
         }
       }, work);
       return;
@@ -160,7 +160,7 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         // Loud reminder right before the irreversible step. Goes to stderr so
         // --porcelain consumers stay clean even if --force is set.
         process.stderr.write(
-          `${warn()} ${yellow(`permanently removing work "${name}" — folder and any session summaries will be deleted (branches kept). This cannot be undone.`)}\n`,
+          `${warn()} ${dim(`permanently removing work "${name}" — folder and any session summaries will be deleted (branches kept). This cannot be undone.`)}\n`,
         );
       }
       const res = workDestroy(root, name, { force: flags.force });
@@ -205,7 +205,7 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       emit(() => {
         console.log(`${check()} unarchived work ${bold(name)}`);
         for (const r of res.restored) {
-          console.log(`  ${r.repo}  ${cyan(`[${r.branch}]`)}  ${dim(`→ ${r.path}`)}`);
+          console.log(`  ${r.repo}  ${dim(`[${r.branch}]`)}  ${dim(`→ ${r.path}`)}`);
         }
       }, res);
       return;
@@ -235,7 +235,7 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
       emit(
         () =>
           console.log(
-            `${check()} added worktree ${bold(res.repo)} ${cyan(`[${res.branch}]`)} ${dim(`→ ${res.path}`)}`,
+            `${check()} added worktree ${bold(res.repo)} ${dim(`[${res.branch}]`)} ${dim(`→ ${res.path}`)}`,
           ),
         res,
       );
@@ -250,10 +250,10 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
         }
         const repoW = Math.max(...list.map((wt) => wt.repo.length));
         for (const wt of list) {
-          const repo = cyan(wt.repo.padEnd(repoW));
-          const branch = cyan(`[${wt.branch}]`);
+          const repo = dim(wt.repo.padEnd(repoW));
+          const branch = dim(`[${wt.branch}]`);
           const ports = Object.entries(wt.ports ?? {})
-            .map(([s, p]) => `${dim(`${s}:`)}${cyan(String(p))}`)
+            .map(([s, p]) => `${dim(`${s}:`)}${dim(String(p))}`)
             .join('  ');
           const portsCol = ports ? `  ${ports}` : '';
           console.log(`${repo}  ${branch}${portsCol}`);
@@ -302,7 +302,7 @@ function workPort(root: string, name: string, positionals: string[]): void {
       emit(
         () =>
           console.log(
-            `${check()} ${res.repo}${dim('.')}${res.service} ${dim('→')} ${cyan(String(res.port))}`,
+            `${check()} ${res.repo}${dim('.')}${res.service} ${dim('→')} ${dim(String(res.port))}`,
           ),
         res,
       );
@@ -342,7 +342,7 @@ function workPort(root: string, name: string, positionals: string[]): void {
           // the plain "repo.service" then re-render.
           const plain = `${e.repo}.${e.service}`;
           const pad = ' '.repeat(lhsW - plain.length);
-          console.log(`${lhs}${pad}  ${dim('→')}  ${cyan(String(e.port))}`);
+          console.log(`${lhs}${pad}  ${dim('→')}  ${dim(String(e.port))}`);
         }
       }, map);
       return;

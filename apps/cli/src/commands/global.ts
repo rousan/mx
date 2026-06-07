@@ -9,7 +9,7 @@ import {
   MxError,
 } from '@mx/core';
 import type { StatusResult } from '@mx/core';
-import { emit, dim, bold, cyan, check } from '../output';
+import { emit, dim, bold, check } from '../output';
 import { templatesDir } from '../paths';
 import type { Flags } from '../args';
 
@@ -83,26 +83,17 @@ export function runGlobal(positionals: string[], flags: Flags): void {
 }
 
 /**
- * Plural-agreeing label like "1 entry" / "12 entries".
- *
- * @param n - The count.
- * @param singular - Singular noun (used when `n === 1`).
- * @param plural_ - Plural noun.
- * @returns The number followed by the correctly-pluralized noun.
- */
-function plural(n: number, singular: string, plural_: string): string {
-  return `${n} ${n === 1 ? singular : plural_}`;
-}
-
-/**
- * Render `mx status` in a calm, sectioned, aligned layout.
+ * Render `mx status` in a calm, monochrome, sectioned layout.
  *
  * Three sections — context, repos, works — each with computed column widths
- * so names line up vertically. Bold for `mx` header and section titles; dim
- * for low-priority metadata (paths, branches, counts, dates); cyan for port
- * numbers. Archived works are tagged with a dim `archived YYYY-MM-DD` chip;
- * their worktrees are still listed so a reader can see what `unarchive`
- * would restore. Each work line also shows its session-summary count.
+ * so names line up vertically. Only typography weight (bold + dim) carries
+ * visual hierarchy; no color. Bold marks the `mx` header, section titles,
+ * and work names. Everything else (paths, branches, archived chips, ports,
+ * port labels, port values) sits at the dim tier. Archived works are tagged
+ * with a dim `[archived YYYY-MM-DD]` chip after the work name; their
+ * worktrees are still listed so a reader can see what `unarchive` would
+ * restore. Per-work counts (worktree count, session count) are intentionally
+ * omitted — the indented worktree rows themselves are the indicator.
  *
  * @param data - The runtime status snapshot.
  */
@@ -112,9 +103,7 @@ function renderStatus(data: StatusResult): void {
   console.log();
 
   // --- context registry ----------------------------------------------------
-  const ctx = data.context.entries;
-  const ctxLabel = ctx === 0 ? dim('(none yet)') : dim(`(${plural(ctx, 'entry', 'entries')})`);
-  console.log(`  ${bold('context')}  ${ctxLabel}`);
+  console.log(`  ${bold('context')}  ${dim(`(${data.context.entries})`)}`);
   console.log();
 
   // --- repos ---------------------------------------------------------------
@@ -155,44 +144,34 @@ function renderStatus(data: StatusResult): void {
 
   // Column widths — computed from plain (un-styled) text so ANSI codes
   // applied later don't throw off padding.
-  const workNameW = Math.max(...ordered.map((w) => w.name.length));
   const wtRepoW = Math.max(
     0,
     ...ordered.flatMap((w) => (w.worktrees ?? []).map((wt) => wt.repo.length)),
-  );
-  const hasArchived = archived.length > 0;
-  const chipPlainW = hasArchived ? 'archived YYYY-MM-DD'.length : 0;
-  const wtCountW = Math.max(
-    ...ordered.map((w) =>
-      (w.worktrees ?? []).length === 0
-        ? 'no worktrees'.length
-        : plural((w.worktrees ?? []).length, 'worktree', 'worktrees').length,
-    ),
   );
 
   for (let i = 0; i < ordered.length; i++) {
     if (i > 0) console.log(); // breathing room between works
     const w = ordered[i];
     const wts = w.worktrees ?? [];
-    const sessions = w.sessions ?? 0;
 
-    const namePart = w.name.padEnd(workNameW);
-    const chipPlain =
-      w.isArchived === true ? `archived ${(w.archived_at ?? '').slice(0, 10)}` : '';
-    const chipPart = hasArchived ? `  ${dim(chipPlain.padEnd(chipPlainW))}` : '';
-    const wtCountPlain =
-      wts.length === 0 ? 'no worktrees' : plural(wts.length, 'worktree', 'worktrees');
-    const wtCountPart = `  ${dim(wtCountPlain.padEnd(wtCountW))}`;
-    const sessionsPart = `  ${dim(plural(sessions, 'session', 'sessions'))}`;
-    console.log(`    ${namePart}${chipPart}${wtCountPart}${sessionsPart}`);
+    const chip =
+      w.isArchived === true
+        ? `  ${dim(`[archived ${(w.archived_at ?? '').slice(0, 10)}]`)}`
+        : '';
+    console.log(`    ${bold(w.name)}${chip}`);
+
+    if (wts.length === 0) {
+      console.log(`        ${dim('(no worktrees)')}`);
+      continue;
+    }
 
     for (const t of wts) {
-      // Cyan the repo (sibling identifier of the branch) so the bold work
-      // name above stays the only "loud" element in the section.
-      const repo = cyan(t.repo.padEnd(wtRepoW));
-      const branch = cyan(`[${t.branch}]`);
+      // All worktree row content sits at the dim tier; the bold work name
+      // above is the only "loud" element in the section.
+      const repo = dim(t.repo.padEnd(wtRepoW));
+      const branch = dim(`[${t.branch}]`);
       const ports = Object.entries(t.ports ?? {})
-        .map(([s, p]) => `${dim(`${s}:`)}${cyan(String(p))}`)
+        .map(([s, p]) => dim(`${s}:${p}`))
         .join('  ');
       const portsCol = ports ? `  ${ports}` : '';
       // 4-space step from the work-name column makes hierarchy unambiguous.
