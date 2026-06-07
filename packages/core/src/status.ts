@@ -1,10 +1,10 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { listWorkNames, readWork, workDir } from './runtime';
 import { listReposInfo } from './repos';
+import { listWorksInfo } from './works';
 import { exists } from './fsutil';
 import { readJson } from './json';
-import type { RepoSummary, Work } from './types';
+import type { RepoSummary } from './types';
+import type { WorkSummary } from './works';
 
 /**
  * Runtime-level context-registry summary (counts only — INDEX.json itself is
@@ -16,13 +16,11 @@ export interface StatusContext {
 }
 
 /**
- * A work with the in-status fields it carries: its manifest plus a count of
- * session-summary files (`.md` files in `<work>/sessions/`).
+ * A work as surfaced by `mx status` — alias of `WorkSummary` (the full
+ * manifest plus session count). Kept as a separate export name so callers
+ * that imported `StatusWork` historically still resolve.
  */
-export type StatusWork = Work & {
-  /** Number of `.md` files in `<work>/sessions/`. 0 if the folder is missing. */
-  sessions: number;
-};
+export type StatusWork = WorkSummary;
 
 /**
  * Full runtime overview: path, registry summary, pristine repos, and works
@@ -58,20 +56,6 @@ function countContextEntries(root: string): number {
 }
 
 /**
- * Count session-summary files in `<work>/sessions/`. Only `.md` files are
- * counted; any other dropped files are ignored.
- *
- * @param root - Runtime root.
- * @param workName - Work folder name.
- * @returns Number of session files; 0 if the folder doesn't exist yet.
- */
-function countSessions(root: string, workName: string): number {
-  const dir = path.join(workDir(root, workName), 'sessions');
-  if (!exists(dir)) return 0;
-  return fs.readdirSync(dir).filter((n) => n.endsWith('.md')).length;
-}
-
-/**
  * Assemble a runtime status snapshot.
  *
  * @param root - Runtime root.
@@ -79,15 +63,10 @@ function countSessions(root: string, workName: string): number {
  *   annotated with session counts.
  */
 export function statusRuntime(root: string): StatusResult {
-  const repos = listReposInfo(root);
-  const works: StatusWork[] = listWorkNames(root).map((name) => ({
-    ...readWork(root, name),
-    sessions: countSessions(root, name),
-  }));
   return {
     runtime: root,
     context: { entries: countContextEntries(root) },
-    repos,
-    works,
+    repos: listReposInfo(root),
+    works: listWorksInfo(root, { includeArchived: true }),
   };
 }

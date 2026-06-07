@@ -13,6 +13,7 @@ import {
   findWorktree,
   listWorkNames,
   ensureWorkScaffolding,
+  countSessions,
 } from './runtime';
 import type { Work, Worktree } from './types';
 
@@ -102,20 +103,18 @@ export function workNew(root: string, name: string, description = ''): WorkNewRe
 }
 
 /**
- * One-line summary of a work for listings.
+ * A work as surfaced by listings: the full manifest plus a count of session
+ * summaries on disk. Same shape used by `mx status`'s works section
+ * (re-exported there as `StatusWork`).
+ *
+ * Note (1.6.0+): `worktrees` is now the full array of `Worktree` records
+ * (previously a count). Consumers wanting the count should use
+ * `worktrees.length`.
  */
-export interface WorkSummary {
-  /** Work name. */
-  name: string;
-  /** Work description. */
-  description: string;
-  /** Number of worktrees in the work. */
-  worktrees: number;
-  /** True when the work is archived. */
-  isArchived: boolean;
-  /** ISO-8601 timestamp of when the work was archived; null on active works. */
-  archived_at: string | null;
-}
+export type WorkSummary = Work & {
+  /** Number of `.md` files in `<work>/sessions/`. */
+  sessions: number;
+};
 
 /**
  * Options for filtering `listWorksInfo`.
@@ -128,7 +127,7 @@ export interface ListWorksOpts {
 }
 
 /**
- * Summaries of works.
+ * Listings of works with full per-work detail (manifest + session count).
  *
  * By default returns only active (non-archived) works. Pass
  * `includeArchived` to include archived ones, or `onlyArchived` to restrict
@@ -136,24 +135,18 @@ export interface ListWorksOpts {
  *
  * @param root - Runtime root.
  * @param opts - Filter options.
- * @returns One summary per work matching the filter.
+ * @returns One entry per work matching the filter.
  */
 export function listWorksInfo(root: string, opts: ListWorksOpts = {}): WorkSummary[] {
   return listWorkNames(root)
-    .map((name) => {
-      const w = readWork(root, name);
-      return {
-        name,
-        description: w.description ?? '',
-        worktrees: (w.worktrees ?? []).length,
-        isArchived: w.isArchived === true,
-        archived_at: w.archived_at ?? null,
-      };
-    })
-    .filter((s) => {
-      if (opts.onlyArchived) return s.isArchived;
+    .map((name) => ({
+      ...readWork(root, name),
+      sessions: countSessions(root, name),
+    }))
+    .filter((w) => {
+      if (opts.onlyArchived) return w.isArchived === true;
       if (opts.includeArchived) return true;
-      return !s.isArchived;
+      return w.isArchived !== true;
     });
 }
 

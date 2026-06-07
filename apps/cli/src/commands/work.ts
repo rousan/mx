@@ -63,24 +63,46 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       onlyArchived: flags.archived,
     });
     emit(() => {
-      // Human mode: active works first, then archived. Within each group,
-      // preserve the natural alphabetical order. Porcelain consumers see the
-      // raw order (above) unchanged.
+      // Human mode: detailed per-work view — header line with name + chip +
+      // counts; then optional description; then indented worktree rows with
+      // branches and ports. Active works first, archived after; alphabetical
+      // within each group. Porcelain consumers see the raw order above.
       const ordered = [
-        ...works.filter((w) => !w.isArchived),
-        ...works.filter((w) => w.isArchived),
+        ...works.filter((w) => w.isArchived !== true),
+        ...works.filter((w) => w.isArchived === true),
       ];
       if (ordered.length === 0) {
         console.log(dim('no works yet — `mx work new <name>`'));
         return;
       }
-      for (const w of ordered) {
-        const chip = w.isArchived
+      for (let i = 0; i < ordered.length; i++) {
+        if (i > 0) console.log();
+        const w = ordered[i];
+        const wts = w.worktrees ?? [];
+
+        const chip = w.isArchived === true
           ? `  ${dim(`[archived ${(w.archived_at ?? '').slice(0, 10)}]`)}`
           : '';
-        const desc = w.description ? `  ${dim(`— ${w.description}`)}` : '';
-        const wts = `  ${dim(`(${w.worktrees} worktree${w.worktrees === 1 ? '' : 's'})`)}`;
-        console.log(`${bold(w.name)}${chip}${wts}${desc}`);
+        const wtCount = dim(`${wts.length} worktree${wts.length === 1 ? '' : 's'}`);
+        const sessCount = dim(`${w.sessions} session${w.sessions === 1 ? '' : 's'}`);
+        console.log(`${bold(w.name)}${chip}  ${wtCount}  ${sessCount}`);
+
+        if (w.description) {
+          console.log(`  ${dim(`— ${w.description}`)}`);
+        }
+
+        if (wts.length > 0) {
+          const repoW = Math.max(...wts.map((t) => t.repo.length));
+          for (const t of wts) {
+            const repo = t.repo.padEnd(repoW);
+            const branch = cyan(`[${t.branch}]`);
+            const ports = Object.entries(t.ports ?? {})
+              .map(([s, p]) => `${dim(`${s}:`)}${cyan(String(p))}`)
+              .join('  ');
+            const portsCol = ports ? `  ${ports}` : '';
+            console.log(`  ${repo}  ${branch}${portsCol}`);
+          }
+        }
       }
     }, works);
     return;

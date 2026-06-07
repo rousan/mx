@@ -163,6 +163,23 @@ export function findWorktree(work: Work, repo: string): Worktree | null {
 }
 
 /**
+ * Count session-summary files in a work's `sessions/` folder. Only `.md`
+ * files are counted; anything else (READMEs, dropped notes, hidden files)
+ * is ignored. Returns 0 if the folder doesn't exist yet.
+ *
+ * Single source of truth used by both `listWorksInfo` and `statusRuntime`.
+ *
+ * @param root - Runtime root.
+ * @param workName - Work folder name.
+ * @returns Number of session files.
+ */
+export function countSessions(root: string, workName: string): number {
+  const dir = path.join(workDir(root, workName), 'sessions');
+  if (!exists(dir)) return 0;
+  return fs.readdirSync(dir).filter((n) => n.endsWith('.md')).length;
+}
+
+/**
  * Infer the work and/or repo from the current working directory so `-n` can be
  * omitted. Comparison uses realpath to survive symlinked roots.
  *
