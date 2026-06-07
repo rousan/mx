@@ -94,7 +94,9 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         if (wts.length > 0) {
           const repoW = Math.max(...wts.map((t) => t.repo.length));
           for (const t of wts) {
-            const repo = t.repo.padEnd(repoW);
+            // Cyan the repo name (sibling identifier of the branch) so it
+            // visually subordinates to the bold work name above.
+            const repo = cyan(t.repo.padEnd(repoW));
             const branch = cyan(`[${t.branch}]`);
             const ports = Object.entries(t.ports ?? {})
               .map(([s, p]) => `${dim(`${s}:`)}${cyan(String(p))}`)
@@ -132,7 +134,7 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
             .map(([s, p]) => `${dim(`${s}:`)}${cyan(String(p))}`)
             .join('  ');
           const portsCol = ports ? `  ${ports}` : '';
-          console.log(`      ${wt.repo}  ${cyan(`[${wt.branch}]`)}${portsCol}`);
+          console.log(`      ${cyan(wt.repo)}  ${cyan(`[${wt.branch}]`)}${portsCol}`);
         }
       }, work);
       return;
@@ -248,7 +250,7 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
         }
         const repoW = Math.max(...list.map((wt) => wt.repo.length));
         for (const wt of list) {
-          const repo = wt.repo.padEnd(repoW);
+          const repo = cyan(wt.repo.padEnd(repoW));
           const branch = cyan(`[${wt.branch}]`);
           const ports = Object.entries(wt.ports ?? {})
             .map(([s, p]) => `${dim(`${s}:`)}${cyan(String(p))}`)

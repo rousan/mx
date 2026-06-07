@@ -187,8 +187,10 @@ function renderStatus(data: StatusResult): void {
     console.log(`    ${namePart}${chipPart}${wtCountPart}${sessionsPart}`);
 
     for (const t of wts) {
-      const repo = t.repo.padEnd(wtRepoW);
-      const branch = dim(`[${t.branch}]`);
+      // Cyan the repo (sibling identifier of the branch) so the bold work
+      // name above stays the only "loud" element in the section.
+      const repo = cyan(t.repo.padEnd(wtRepoW));
+      const branch = cyan(`[${t.branch}]`);
       const ports = Object.entries(t.ports ?? {})
         .map(([s, p]) => `${dim(`${s}:`)}${cyan(String(p))}`)
         .join('  ');
