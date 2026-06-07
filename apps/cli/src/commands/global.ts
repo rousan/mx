@@ -9,7 +9,7 @@ import {
   MxError,
 } from '@mx/core';
 import type { StatusResult } from '@mx/core';
-import { emit, dim, bold, cyan } from '../output';
+import { emit, dim, bold, cyan, check } from '../output';
 import { templatesDir } from '../paths';
 import type { Flags } from '../args';
 
@@ -28,18 +28,18 @@ import type { Flags } from '../args';
 function runtimeEnvHint(runtime: string): string[] {
   const envRuntime = process.env.MX_RUNTIME ? path.resolve(process.env.MX_RUNTIME) : null;
   if (envRuntime === runtime) {
-    return ['', `$MX_RUNTIME already points here — you're set.`];
+    return ['', `${dim('$MX_RUNTIME already points here — you\'re set.')}`];
   }
   if (runtime === defaultRuntime() && !envRuntime) {
-    return ['', `This is the default mx runtime (~/mx) — no MX_RUNTIME setup needed.`];
+    return ['', `${dim('This is the default mx runtime (~/mx) — no MX_RUNTIME setup needed.')}`];
   }
   return [
     '',
-    `Point mx at this runtime by adding to your shell config (~/.zshrc, ~/.bashrc):`,
+    `Point mx at this runtime by adding to your shell config ${dim('(~/.zshrc, ~/.bashrc)')}:`,
     '',
-    `  export MX_RUNTIME="${runtime}"`,
+    `  ${bold(`export MX_RUNTIME="${runtime}"`)}`,
     '',
-    `Without it, future \`mx\` commands fall back to the default ~/mx.`,
+    dim('Without it, future `mx` commands fall back to the default ~/mx.'),
   ];
 }
 
@@ -56,8 +56,8 @@ export function runGlobal(positionals: string[], flags: Flags): void {
       const target = positionals[1] || discoverRuntime({ runtime: flags.runtime });
       const res = initRuntime(target, templatesDir());
       emit(() => {
-        console.log(`Runtime ready at ${res.runtime}`);
-        for (const c of res.created) console.log(`  + ${c}`);
+        console.log(`${check()} Runtime ready at ${bold(res.runtime)}`);
+        for (const c of res.created) console.log(`  ${dim(`+ ${c}`)}`);
         for (const line of runtimeEnvHint(res.runtime)) console.log(line);
       }, res);
       return;
@@ -72,8 +72,8 @@ export function runGlobal(positionals: string[], flags: Flags): void {
       const root = requireRuntime({ runtime: flags.runtime });
       const res = updateRuntime(root, templatesDir());
       emit(() => {
-        console.log(`Updated runtime at ${res.runtime}`);
-        for (const p of res.updated) console.log(`  + ${p}`);
+        console.log(`${check()} Updated runtime at ${bold(res.runtime)}`);
+        for (const p of res.updated) console.log(`  ${dim(`+ ${p}`)}`);
       }, res);
       return;
     }

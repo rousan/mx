@@ -17,7 +17,7 @@ import {
   portList,
   MxError,
 } from '@mx/core';
-import { emit } from '../output';
+import { emit, dim, bold, cyan, check, warn, yellow } from '../output';
 import type { Flags } from '../args';
 
 /**
@@ -47,8 +47,8 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
     const name = need(positionals[2], 'usage: mx work new <name> [--description <text>]');
     const res = workNew(root, name, flags.description ?? '');
     emit(() => {
-      console.log(`created work ${res.name}`);
-      console.log(`  ${res.path}`);
+      console.log(`${check()} created work ${bold(res.name)}`);
+      console.log(`  ${dim(res.path)}`);
     }, res);
     return;
   }
@@ -70,13 +70,17 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         ...works.filter((w) => !w.isArchived),
         ...works.filter((w) => w.isArchived),
       ];
+      if (ordered.length === 0) {
+        console.log(dim('no works yet — `mx work new <name>`'));
+        return;
+      }
       for (const w of ordered) {
         const chip = w.isArchived
-          ? `  [archived ${(w.archived_at ?? '').slice(0, 10)}]`
+          ? `  ${dim(`[archived ${(w.archived_at ?? '').slice(0, 10)}]`)}`
           : '';
-        const desc = w.description ? `  — ${w.description}` : '';
-        const wts = `  (${w.worktrees} worktree${w.worktrees === 1 ? '' : 's'})`;
-        console.log(`${w.name}${chip}${wts}${desc}`);
+        const desc = w.description ? `  ${dim(`— ${w.description}`)}` : '';
+        const wts = `  ${dim(`(${w.worktrees} worktree${w.worktrees === 1 ? '' : 's'})`)}`;
+        console.log(`${bold(w.name)}${chip}${wts}${desc}`);
       }
     }, works);
     return;
@@ -93,10 +97,26 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
   switch (action) {
     case 'info': {
       const work = workInfo(root, name);
-      emit(() => console.log(JSON.stringify(work, null, 2)), work);
+      emit(() => {
+        const archivedChip = work.isArchived === true
+          ? `  ${dim(`[archived ${(work.archived_at ?? '').slice(0, 10)}]`)}`
+          : '';
+        console.log(`${bold(work.name)}${archivedChip}`);
+        if (work.description) console.log(`  ${dim('description')}  ${dim(work.description)}`);
+        const wts = work.worktrees ?? [];
+        console.log(`  ${dim('worktrees  ')}  ${dim(`${wts.length}`)}`);
+        for (const wt of wts) {
+          const ports = Object.entries(wt.ports ?? {})
+            .map(([s, p]) => `${dim(`${s}:`)}${cyan(String(p))}`)
+            .join('  ');
+          const portsCol = ports ? `  ${ports}` : '';
+          console.log(`      ${wt.repo}  ${cyan(`[${wt.branch}]`)}${portsCol}`);
+        }
+      }, work);
       return;
     }
     case 'path': {
+      // Raw path — meant for shell substitution, no styling.
       const res = workPath(root, name);
       emit(() => console.log(res.path), res);
       return;
@@ -104,7 +124,7 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
     case 'describe': {
       const text = need(positionals[2], 'usage: mx work -n <name> describe <text>');
       const work = workDescribe(root, name, text);
-      emit(() => console.log(`updated description of ${name}`), work);
+      emit(() => console.log(`${check()} updated description of ${bold(name)}`), work);
       return;
     }
     case 'worktree':
@@ -116,33 +136,30 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         // Loud reminder right before the irreversible step. Goes to stderr so
         // --porcelain consumers stay clean even if --force is set.
         process.stderr.write(
-          `⚠  permanently removing work "${name}" — folder and any session summaries will be deleted (branches kept). This cannot be undone.\n`,
+          `${warn()} ${yellow(`permanently removing work "${name}" — folder and any session summaries will be deleted (branches kept). This cannot be undone.`)}\n`,
         );
       }
       const res = workDestroy(root, name, { force: flags.force });
-      emit(
-        () =>
-          console.log(
-            `destroyed work ${name} (worktrees removed: ${res.removedWorktrees.join(', ') || 'none'}; branches kept)`,
-          ),
-        res,
-      );
+      emit(() => {
+        const removed = res.removedWorktrees.join(', ') || 'none';
+        console.log(`${check()} destroyed work ${bold(name)}`);
+        console.log(`  ${dim(`worktrees removed: ${removed}; branches kept`)}`);
+      }, res);
       return;
     }
     case 'archive': {
       if (!flags.porcelain) {
         process.stderr.write(
-          `Reminder: write any pending session summary into works/${name}/sessions/ before archiving.\n`,
+          `${warn()} ${dim(`Reminder: write any pending session summary into works/${name}/sessions/ before archiving.`)}\n`,
         );
       }
       const res = archiveWork(root, name);
-      emit(
-        () =>
-          console.log(
-            `archived work ${name} at ${res.archived_at} (worktrees removed: ${res.removedWorktrees.join(', ') || 'none'}; branches kept)`,
-          ),
-        res,
-      );
+      emit(() => {
+        const removed = res.removedWorktrees.join(', ') || 'none';
+        console.log(`${check()} archived work ${bold(name)}`);
+        console.log(`  ${dim(`at ${res.archived_at}`)}`);
+        console.log(`  ${dim(`worktrees removed: ${removed}; branches kept`)}`);
+      }, res);
       return;
     }
     case 'unarchive': {
@@ -162,8 +179,10 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       }
       const res = unarchiveWork(root, name, overrides);
       emit(() => {
-        console.log(`unarchived work ${name}`);
-        for (const r of res.restored) console.log(`  ${r.repo}  [${r.branch}]  -> ${r.path}`);
+        console.log(`${check()} unarchived work ${bold(name)}`);
+        for (const r of res.restored) {
+          console.log(`  ${r.repo}  ${cyan(`[${r.branch}]`)}  ${dim(`→ ${r.path}`)}`);
+        }
       }, res);
       return;
     }
@@ -189,17 +208,31 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
         'usage: mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>]',
       );
       const res = worktreeAdd(root, name, repo, { branch: flags.branch, base: flags.base });
-      emit(() => console.log(`added worktree ${res.repo} [${res.branch}] -> ${res.path}`), res);
+      emit(
+        () =>
+          console.log(
+            `${check()} added worktree ${bold(res.repo)} ${cyan(`[${res.branch}]`)} ${dim(`→ ${res.path}`)}`,
+          ),
+        res,
+      );
       return;
     }
     case 'ls': {
       const list = worktreeList(root, name);
       emit(() => {
+        if (list.length === 0) {
+          console.log(dim('no worktrees yet — `mx work -n <name> worktree add <repo>`'));
+          return;
+        }
+        const repoW = Math.max(...list.map((wt) => wt.repo.length));
         for (const wt of list) {
+          const repo = wt.repo.padEnd(repoW);
+          const branch = cyan(`[${wt.branch}]`);
           const ports = Object.entries(wt.ports ?? {})
-            .map(([s, p]) => `${s}:${p}`)
-            .join(', ');
-          console.log(`${wt.repo}  [${wt.branch}]${ports ? `  (${ports})` : ''}`);
+            .map(([s, p]) => `${dim(`${s}:`)}${cyan(String(p))}`)
+            .join('  ');
+          const portsCol = ports ? `  ${ports}` : '';
+          console.log(`${repo}  ${branch}${portsCol}`);
         }
       }, list);
       return;
@@ -207,7 +240,13 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
     case 'rm': {
       const repo = need(positionals[3], 'usage: mx work -n <name> worktree rm <repo>');
       const res = worktreeRemove(root, name, repo);
-      emit(() => console.log(`removed worktree ${res.repo} from ${name} (branch ${res.branch} kept)`), res);
+      emit(
+        () =>
+          console.log(
+            `${check()} removed worktree ${bold(res.repo)} ${dim(`from ${name} (branch ${res.branch} kept)`)}`,
+          ),
+        res,
+      );
       return;
     }
     default:
@@ -236,7 +275,13 @@ function workPort(root: string, name: string, positionals: string[]): void {
         if (!Number.isInteger(port)) throw new MxError(`invalid port: ${portArg}`, 'BAD_ARGS');
       }
       const res = portSet(root, name, repo, service, port);
-      emit(() => console.log(`${res.repo}.${res.service} -> ${res.port}`), res);
+      emit(
+        () =>
+          console.log(
+            `${check()} ${res.repo}${dim('.')}${res.service} ${dim('→')} ${cyan(String(res.port))}`,
+          ),
+        res,
+      );
       return;
     }
     case 'unset': {
@@ -244,16 +289,36 @@ function workPort(root: string, name: string, positionals: string[]): void {
       const repo = need(positionals[3], usage);
       const service = need(positionals[4], usage);
       const res = portUnset(root, name, repo, service);
-      emit(() => console.log(`unset ${res.repo}.${res.service} (was ${res.released})`), res);
+      emit(
+        () =>
+          console.log(
+            `${check()} unset ${res.repo}${dim('.')}${res.service} ${dim(`(was ${res.released})`)}`,
+          ),
+        res,
+      );
       return;
     }
     case 'ls': {
       const map = portList(root, name);
       emit(() => {
+        const entries: { repo: string; service: string; port: number }[] = [];
         for (const [repo, ports] of Object.entries(map)) {
           for (const [service, port] of Object.entries(ports)) {
-            console.log(`${repo}.${service} -> ${port}`);
+            entries.push({ repo, service, port });
           }
+        }
+        if (entries.length === 0) {
+          console.log(dim('no ports allocated yet — `mx work -n <name> port set <repo> <service>`'));
+          return;
+        }
+        const lhsW = Math.max(...entries.map((e) => `${e.repo}.${e.service}`.length));
+        for (const e of entries) {
+          const lhs = `${e.repo}${dim('.')}${e.service}`;
+          // padEnd works on visible length only since dim() adds invisible ANSI; pad
+          // the plain "repo.service" then re-render.
+          const plain = `${e.repo}.${e.service}`;
+          const pad = ' '.repeat(lhsW - plain.length);
+          console.log(`${lhs}${pad}  ${dim('→')}  ${cyan(String(e.port))}`);
         }
       }, map);
       return;

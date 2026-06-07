@@ -48,13 +48,56 @@ export function bold(s: string): string {
 }
 
 /**
- * Cyan — used sparingly for accent values (e.g. port numbers).
+ * Cyan — used sparingly for accent values (e.g. port numbers, branches).
  *
  * @param s - The string to style.
  * @returns The cyan string, or `s` unchanged when color is off.
  */
 export function cyan(s: string): string {
   return wrap(s, 36);
+}
+
+/**
+ * Green — semantic success indicator. Use for `✓` markers and short
+ * "completed" status words; not for whole paragraphs.
+ *
+ * @param s - The string to style.
+ * @returns The green string, or `s` unchanged when color is off.
+ */
+export function green(s: string): string {
+  return wrap(s, 32);
+}
+
+/**
+ * Yellow — semantic warning / heads-up indicator. Use for `⚠` markers and
+ * one-line reminders before mutating actions; not for prose.
+ *
+ * @param s - The string to style.
+ * @returns The yellow string, or `s` unchanged when color is off.
+ */
+export function yellow(s: string): string {
+  return wrap(s, 33);
+}
+
+/**
+ * Red — semantic error indicator. Used for the `mx:` error prefix on stderr
+ * via `fail()`.
+ *
+ * @param s - The string to style.
+ * @returns The red string, or `s` unchanged when color is off.
+ */
+export function red(s: string): string {
+  return wrap(s, 31);
+}
+
+/** Convenience: a green check mark for "this happened successfully". */
+export function check(): string {
+  return green('✓');
+}
+
+/** Convenience: a yellow warning sign for "heads up before proceeding". */
+export function warn(): string {
+  return yellow('⚠');
 }
 
 /**
@@ -104,7 +147,9 @@ export function fail(err: unknown): never {
   if (porcelain) {
     process.stdout.write(JSON.stringify({ error: message, code }, null, 2) + '\n');
   } else {
-    process.stderr.write(`mx: ${message}\n`);
+    // Red prefix when stderr is a TTY; bare text when piped/redirected.
+    const prefix = process.stderr.isTTY && !process.env.NO_COLOR ? `\x1b[31mmx:\x1b[0m` : 'mx:';
+    process.stderr.write(`${prefix} ${message}\n`);
   }
   process.exit(1);
 }

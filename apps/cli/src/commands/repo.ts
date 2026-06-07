@@ -8,7 +8,7 @@ import {
   repoRemove,
   MxError,
 } from '@mx/core';
-import { emit } from '../output';
+import { emit, dim, bold, check } from '../output';
 import type { Flags } from '../args';
 
 /**
@@ -40,13 +40,24 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
     case 'add': {
       const url = need(positionals[2], 'usage: mx repo add <git-url> [--name <n>]');
       const res = repoAdd(root, url, flags.name);
-      emit(() => console.log(`cloned ${res.name} -> ${res.path}`), res);
+      emit(() => console.log(`${check()} cloned ${bold(res.name)} ${dim(`→ ${res.path}`)}`), res);
       return;
     }
     case 'ls': {
       const repos = listReposInfo(root);
       emit(() => {
-        for (const r of repos) console.log(`${r.name}  [${r.branch}]  ${r.remote ?? '(no remote)'}`);
+        if (repos.length === 0) {
+          console.log(dim('no repos yet — `mx repo add <git-url>`'));
+          return;
+        }
+        const nameW = Math.max(...repos.map((r) => r.name.length));
+        const branchW = Math.max(...repos.map((r) => r.branch.length));
+        for (const r of repos) {
+          const name = r.name.padEnd(nameW);
+          const branch = dim(r.branch.padEnd(branchW));
+          const remote = dim(r.remote ?? '(no remote)');
+          console.log(`${name}  ${branch}  ${remote}`);
+        }
       }, repos);
       return;
     }
@@ -59,7 +70,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
       emit(
         () =>
           console.log(
-            `fetched ${res.name} — ${res.remoteBranches.length} branch(es) on origin, now on ${res.branch}`,
+            `${check()} fetched ${bold(res.name)} ${dim(`— ${res.remoteBranches.length} branch(es) on origin, now on ${res.branch}`)}`,
           ),
         res,
       );
@@ -72,12 +83,14 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
       );
       const res = repoInfo(root, name);
       emit(() => {
-        console.log(
-          `${res.name}\n  path:   ${res.path}\n  branch: ${res.branch}\n  remote: ${res.remote ?? '(none)'}`,
-        );
-        console.log(
-          `  used by works: ${res.worktreesInWorks.length ? res.worktreesInWorks.join(', ') : '(none)'}`,
-        );
+        console.log(bold(res.name));
+        console.log(`  ${dim('path  ')}  ${dim(res.path)}`);
+        console.log(`  ${dim('branch')}  ${dim(res.branch)}`);
+        console.log(`  ${dim('remote')}  ${dim(res.remote ?? '(none)')}`);
+        const usedBy = res.worktreesInWorks.length
+          ? res.worktreesInWorks.join(', ')
+          : '(none)';
+        console.log(`  ${dim('used  ')}  ${dim(usedBy)}`);
       }, res);
       return;
     }
@@ -87,7 +100,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
         'which repo? pass -n <name> or run inside a repo (mx repo -n <name> rm)',
       );
       const res = repoRemove(root, name);
-      emit(() => console.log(`removed repo ${res.name}`), res);
+      emit(() => console.log(`${check()} removed repo ${bold(res.name)}`), res);
       return;
     }
     default:
