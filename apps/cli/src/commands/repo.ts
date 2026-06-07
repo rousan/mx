@@ -56,7 +56,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
           const name = r.name.padEnd(nameW);
           const branch = dim(r.branch.padEnd(branchW));
           const remote = dim(r.remote ?? '(no remote)');
-          console.log(`${name}  ${branch}  ${remote}`);
+          console.log(`• ${name}  ${branch}  ${remote}`);
         }
       }, repos);
       return;

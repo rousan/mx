@@ -107,7 +107,7 @@ function renderStatus(data: StatusResult): void {
   console.log();
 
   // --- repos ---------------------------------------------------------------
-  console.log(`  ${bold('repos')}  ${dim(`(${data.repos.length})`)}`);
+  console.log(`  ${bold('repos')}`);
   if (data.repos.length === 0) {
     console.log(`    ${dim('none yet — `mx repo add <git-url>`')}`);
   } else {
@@ -117,7 +117,7 @@ function renderStatus(data: StatusResult): void {
       const name = r.name.padEnd(nameW);
       const branch = dim(r.branch.padEnd(branchW));
       const remote = dim(r.remote ?? '(no remote)');
-      console.log(`    ${name}  ${branch}  ${remote}`);
+      console.log(`    • ${name}  ${branch}  ${remote}`);
     }
   }
   console.log();
@@ -159,9 +159,9 @@ function renderStatus(data: StatusResult): void {
         ? `  ${dim(`[archived ${(w.archived_at ?? '').slice(0, 10)}]`)}`
         : '';
     // Active work names anchor with bold; archived ones recede with dim so
-    // the eye lands on active works first.
+    // the eye lands on active works first. The bullet is the list marker.
     const styledName = w.isArchived === true ? dim(w.name) : bold(w.name);
-    console.log(`    ${styledName}${chip}`);
+    console.log(`    • ${styledName}${chip}`);
 
     if (wts.length === 0) {
       console.log(`        ${dim('(no worktrees)')}`);
