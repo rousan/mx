@@ -21,6 +21,7 @@ import {
   workDestroy,
   listWorksInfo,
   repoAdd,
+  statusRuntime,
 } from '../src/index';
 import { resolveBase } from '../src/git';
 import type { Work } from '../src/types';
@@ -224,6 +225,52 @@ describe('context registry stamping', () => {
     // User data untouched.
     expect(fs.readFileSync(manifestA, 'utf8')).toBe(manifestSnapshot);
     expect(fs.readFileSync(workspaceA, 'utf8')).toBe(workspaceSnapshot);
+  });
+
+  it('statusRuntime surfaces context entry count and per-work session count', () => {
+    const runtime = path.join(tmp(), 'rt');
+    initRuntime(runtime, TEMPLATES_DIR);
+
+    // Seed context entries
+    fs.writeFileSync(
+      path.join(runtime, 'context', 'INDEX.json'),
+      JSON.stringify([
+        { path: 'auth/tokens', description: 'session token semantics' },
+        { path: 'ops/runbook', description: 'how to deploy' },
+        { path: 'infra/cell', description: 'cell topology' },
+      ]),
+    );
+
+    // Two works, one with sessions on disk
+    workNew(runtime, 'feat-a');
+    workNew(runtime, 'feat-b');
+    const sessionsA = path.join(runtime, 'works', 'feat-a', 'sessions');
+    fs.writeFileSync(path.join(sessionsA, '2026-06-07-10-00-x.md'), '');
+    fs.writeFileSync(path.join(sessionsA, '2026-06-07-11-00-y.md'), '');
+    // Non-md file should not be counted
+    fs.writeFileSync(path.join(sessionsA, 'README'), '');
+
+    const status = statusRuntime(runtime);
+    expect(status.context.entries).toBe(3);
+
+    const a = status.works.find((w) => w.name === 'feat-a');
+    const b = status.works.find((w) => w.name === 'feat-b');
+    expect(a?.sessions).toBe(2);
+    expect(b?.sessions).toBe(0);
+  });
+
+  it('statusRuntime returns context.entries=0 when INDEX.json is missing or malformed', () => {
+    const runtime = path.join(tmp(), 'rt');
+    initRuntime(runtime, TEMPLATES_DIR);
+    fs.rmSync(path.join(runtime, 'context', 'INDEX.json'));
+    expect(statusRuntime(runtime).context.entries).toBe(0);
+
+    // Recreate as not-an-array; should still return 0 (best-effort).
+    fs.writeFileSync(
+      path.join(runtime, 'context', 'INDEX.json'),
+      JSON.stringify({ entries: [{ path: 'x', description: 'y' }] }),
+    );
+    expect(statusRuntime(runtime).context.entries).toBe(0);
   });
 
   it('updateRuntime does not re-create per-work sessions/ that already exists', () => {

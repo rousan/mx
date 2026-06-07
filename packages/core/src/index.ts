@@ -79,4 +79,4 @@ export { allocatedPorts, nextFreePort, portSet, portUnset, portList } from './po
 export type { PortSlot, PortResult, PortReleaseResult } from './ports';
 
 export { statusRuntime } from './status';
-export type { StatusResult } from './status';
+export type { StatusResult, StatusContext, StatusWork } from './status';
