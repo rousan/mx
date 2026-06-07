@@ -148,26 +148,31 @@ function renderStatus(data: StatusResult): void {
     return;
   }
 
+  // Render active works first, then archived. Within each group, preserve the
+  // natural alphabetical order. This lets the eye scan top-to-bottom through
+  // actives and stop when the first archived chip appears.
+  const ordered = [...active, ...archived];
+
   // Column widths — computed from plain (un-styled) text so ANSI codes
   // applied later don't throw off padding.
-  const workNameW = Math.max(...data.works.map((w) => w.name.length));
+  const workNameW = Math.max(...ordered.map((w) => w.name.length));
   const wtRepoW = Math.max(
     0,
-    ...data.works.flatMap((w) => (w.worktrees ?? []).map((wt) => wt.repo.length)),
+    ...ordered.flatMap((w) => (w.worktrees ?? []).map((wt) => wt.repo.length)),
   );
   const hasArchived = archived.length > 0;
   const chipPlainW = hasArchived ? 'archived YYYY-MM-DD'.length : 0;
   const wtCountW = Math.max(
-    ...data.works.map((w) =>
+    ...ordered.map((w) =>
       (w.worktrees ?? []).length === 0
         ? 'no worktrees'.length
         : plural((w.worktrees ?? []).length, 'worktree', 'worktrees').length,
     ),
   );
 
-  for (let i = 0; i < data.works.length; i++) {
+  for (let i = 0; i < ordered.length; i++) {
     if (i > 0) console.log(); // breathing room between works
-    const w = data.works[i];
+    const w = ordered[i];
     const wts = w.worktrees ?? [];
     const sessions = w.sessions ?? 0;
 

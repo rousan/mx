@@ -63,7 +63,14 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       onlyArchived: flags.archived,
     });
     emit(() => {
-      for (const w of works) {
+      // Human mode: active works first, then archived. Within each group,
+      // preserve the natural alphabetical order. Porcelain consumers see the
+      // raw order (above) unchanged.
+      const ordered = [
+        ...works.filter((w) => !w.isArchived),
+        ...works.filter((w) => w.isArchived),
+      ];
+      for (const w of ordered) {
         const chip = w.isArchived
           ? `  [archived ${(w.archived_at ?? '').slice(0, 10)}]`
           : '';
