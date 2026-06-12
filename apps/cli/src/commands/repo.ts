@@ -5,10 +5,13 @@ import {
   listReposInfo,
   repoFetch,
   repoInfo,
+  repoHealth,
+  listRepoHealth,
   repoRemove,
   MxError,
 } from '@mx/core';
-import { emit, dim, bold, check } from '../output';
+import type { RepoHealth } from '@mx/core';
+import { emit, dim, bold, check, warn } from '../output';
 import type { Flags } from '../args';
 
 /**
@@ -103,7 +106,141 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
       emit(() => console.log(`${check()} removed repo ${bold(res.name)}`), res);
       return;
     }
+    case 'health': {
+      // No -n → list mode (all repos, ✓/⚠ prefix). With -n (or cwd) → detail mode.
+      const name = flags.name || ctxRepo;
+      if (name) {
+        const h = repoHealth(root, name);
+        emit(() => renderHealthDetail(h), h);
+      } else {
+        const list = listRepoHealth(root);
+        emit(() => renderHealthList(list), list);
+      }
+      return;
+    }
     default:
       throw new MxError(`unknown repo command: ${action ?? '(none)'}`, 'BAD_ARGS');
+  }
+}
+
+/**
+ * Format an ISO timestamp as a coarse "N {units} ago" string suitable for an
+ * at-a-glance health view (e.g. "2 hours ago", "6 days ago"). Returns "never"
+ * when input is null.
+ *
+ * @param iso - ISO-8601 timestamp, or null.
+ * @returns Human relative string.
+ */
+function relativeTime(iso: string | null): string {
+  if (!iso) return 'never';
+  const then = Date.parse(iso);
+  const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'} ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
+  const years = Math.floor(months / 12);
+  return `${years} year${years === 1 ? '' : 's'} ago`;
+}
+
+/**
+ * Render the list-mode `mx repo health` output: one line per repo,
+ * prefixed with ✓ for healthy and ⚠ for any issues.
+ *
+ * @param list - One health snapshot per repo.
+ */
+function renderHealthList(list: RepoHealth[]): void {
+  if (list.length === 0) {
+    console.log(dim('no repos yet — `mx repo add <git-url>`'));
+    return;
+  }
+  const nameW = Math.max(...list.map((h) => h.name.length));
+  for (const h of list) {
+    const marker = h.healthy ? check() : warn();
+    const name = h.name.padEnd(nameW);
+    const detail = h.healthy ? '' : `  ${dim(h.issues.join('; '))}`;
+    console.log(`${marker} ${name}${detail}`);
+  }
+}
+
+/**
+ * Render the detail-mode `mx repo health` output: a structured per-metric
+ * block with ✓/⚠ markers on each row, value column aligned so the markers
+ * sit in a single vertical column.
+ *
+ * @param h - The repo health snapshot.
+ */
+function renderHealthDetail(h: RepoHealth): void {
+  type Row = { label: string; value: string; marker?: string; hint?: string };
+  const rows: Row[] = [];
+  const addRow = (label: string, value: string, ok?: boolean, hint?: string): void => {
+    const marker = ok === undefined ? undefined : ok ? check() : warn();
+    rows.push({ label, value, marker, hint });
+  };
+
+  addRow('default branch', h.defaultBranch ?? '(unknown)');
+
+  const currentBranchText = h.currentBranch ?? '(detached HEAD)';
+  const branchOk = h.currentBranch !== null && h.isOnDefault;
+  addRow(
+    'current branch',
+    currentBranchText,
+    branchOk,
+    branchOk
+      ? undefined
+      : h.currentBranch === null
+        ? 'HEAD is detached'
+        : `should be ${h.defaultBranch ?? '(default)'}`,
+  );
+  addRow(
+    'uncommitted',
+    `${h.uncommittedChanges} change${h.uncommittedChanges === 1 ? '' : 's'}`,
+    h.uncommittedChanges === 0,
+    h.uncommittedChanges === 0 ? undefined : 'commit or discard',
+  );
+  addRow(
+    'untracked',
+    `${h.untrackedFiles} file${h.untrackedFiles === 1 ? '' : 's'}`,
+    h.untrackedFiles === 0,
+  );
+  addRow(
+    'ahead of origin',
+    h.aheadOfOrigin === null
+      ? '(no upstream)'
+      : `${h.aheadOfOrigin} commit${h.aheadOfOrigin === 1 ? '' : 's'}`,
+    h.aheadOfOrigin === null ? undefined : h.aheadOfOrigin === 0,
+  );
+  addRow(
+    'behind of origin',
+    h.behindOfOrigin === null
+      ? '(no upstream)'
+      : `${h.behindOfOrigin} commit${h.behindOfOrigin === 1 ? '' : 's'}`,
+    h.behindOfOrigin === null ? undefined : h.behindOfOrigin === 0,
+    (h.behindOfOrigin ?? 0) > 0 ? `run \`mx repo -n ${h.name} fetch\`` : undefined,
+  );
+  addRow('last fetched', relativeTime(h.lastFetchedAt));
+  const usedByCount = h.worktreesInWorks.length;
+  rows.push({
+    label: 'worktrees in works',
+    value: String(usedByCount),
+    hint: usedByCount ? `used by: ${h.worktreesInWorks.join(', ')}` : undefined,
+  });
+
+  // Align the marker column by padding values to the widest plain length.
+  const labelW = Math.max(...rows.map((r) => r.label.length));
+  const valueW = Math.max(...rows.map((r) => r.value.length));
+
+  console.log(bold(h.name));
+  for (const r of rows) {
+    const label = dim(r.label.padEnd(labelW));
+    const value = r.value.padEnd(valueW);
+    const marker = r.marker ? `  ${r.marker}` : '   ';
+    const hint = r.hint ? `  ${dim(r.hint)}` : '';
+    console.log(`  ${label}  ${value}${marker}${hint}`);
   }
 }

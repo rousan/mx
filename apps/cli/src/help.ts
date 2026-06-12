@@ -14,6 +14,8 @@ Repos (pristine clones):
   mx repo ls [--porcelain]
   mx repo -n <name> fetch                git fetch (+ ff current branch)
   mx repo -n <name> info [--porcelain]
+  mx repo health [--porcelain]           pure-local health summary for every pristine clone
+  mx repo -n <name> health [--porcelain] detailed health for one pristine clone
   mx repo -n <name> rm                   refuses if any work uses it
 
 Works (features):

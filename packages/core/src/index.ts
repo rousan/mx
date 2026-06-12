@@ -38,12 +38,15 @@ export {
   listReposInfo,
   repoFetch,
   repoInfo,
+  repoHealth,
+  listRepoHealth,
   repoRemove,
 } from './repos';
 export type {
   RepoAddResult,
   RepoFetchResult,
   RepoInfoResult,
+  RepoHealth,
   RepoRemoveResult,
 } from './repos';
 

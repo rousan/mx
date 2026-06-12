@@ -21,6 +21,8 @@ import {
   workDestroy,
   listWorksInfo,
   repoAdd,
+  repoHealth,
+  listRepoHealth,
   statusRuntime,
 } from '../src/index';
 import { resolveBase } from '../src/git';
@@ -464,5 +466,116 @@ describe('archive / unarchive / destroy lifecycle', () => {
     expect(onlyArchived.map((w) => w.name)).toEqual(['feat2']);
     expect(onlyArchived[0].isArchived).toBe(true);
     expect(onlyArchived[0].archived_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+});
+
+describe('repoHealth / listRepoHealth', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+  const runGit = (cwd: string, args: string[]) =>
+    execFileSync('git', args, { cwd, stdio: 'ignore' });
+
+  /**
+   * Build a fixture: source repo with one initial commit on main + a feature
+   * branch, plus a runtime with a pristine clone added. Returns the runtime
+   * root, the source repo path, the pristine clone path, and the repo name.
+   */
+  function fixture(): { root: string; src: string; clone: string; name: string } {
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'x');
+    runGit(src, ['add', '-A']);
+    runGit(src, ['commit', '-qm', 'init']);
+    runGit(src, ['branch', 'feature-x']);
+
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, src, 'app');
+    return { root, src, clone: path.join(root, 'repos', 'app'), name: 'app' };
+  }
+
+  it('a freshly cloned pristine repo is healthy', () => {
+    const { root, name } = fixture();
+    const h = repoHealth(root, name);
+    expect(h.healthy).toBe(true);
+    expect(h.issues).toEqual([]);
+    expect(h.currentBranch).toBe('main');
+    expect(h.defaultBranch).toBe('main');
+    expect(h.isOnDefault).toBe(true);
+    expect(h.uncommittedChanges).toBe(0);
+    expect(h.untrackedFiles).toBe(0);
+    expect(h.aheadOfOrigin).toBe(0);
+    expect(h.behindOfOrigin).toBe(0);
+    expect(h.worktreesInWorks).toEqual([]);
+  });
+
+  it('flags uncommitted changes and untracked files', () => {
+    const { root, clone, name } = fixture();
+    // Modify the tracked file → uncommitted change.
+    fs.writeFileSync(path.join(clone, 'f.txt'), 'modified');
+    // Add a new untracked file.
+    fs.writeFileSync(path.join(clone, 'new-untracked.txt'), 'x');
+    const h = repoHealth(root, name);
+    expect(h.healthy).toBe(false);
+    expect(h.uncommittedChanges).toBe(1);
+    expect(h.untrackedFiles).toBe(1);
+    expect(h.issues.some((i) => i.includes('uncommitted'))).toBe(true);
+    expect(h.issues.some((i) => i.includes('untracked'))).toBe(true);
+  });
+
+  it('flags being off the default branch', () => {
+    const { root, clone, name } = fixture();
+    // The pristine also has a `feature-x` branch since clone pulled it.
+    runGit(clone, ['checkout', '-q', 'feature-x']);
+    const h = repoHealth(root, name);
+    expect(h.healthy).toBe(false);
+    expect(h.currentBranch).toBe('feature-x');
+    expect(h.defaultBranch).toBe('main');
+    expect(h.isOnDefault).toBe(false);
+    expect(h.issues.some((i) => i.includes('on feature-x') && i.includes('default: main'))).toBe(
+      true,
+    );
+  });
+
+  it('flags commits behind origin after the source repo advances', () => {
+    const { root, src, clone, name } = fixture();
+    // Advance the source repo on main, then fetch into the clone — the clone
+    // now lags by one commit.
+    fs.writeFileSync(path.join(src, 'g.txt'), 'y');
+    runGit(src, ['add', '-A']);
+    runGit(src, ['commit', '-qm', 'second']);
+    runGit(clone, ['fetch', '-q', 'origin']);
+    const h = repoHealth(root, name);
+    expect(h.healthy).toBe(false);
+    expect(h.behindOfOrigin).toBe(1);
+    expect(h.aheadOfOrigin).toBe(0);
+    expect(h.issues.some((i) => i.includes('1 commit behind'))).toBe(true);
+    expect(h.lastFetchedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it('populates worktreesInWorks when a work uses the repo', () => {
+    const { root, name } = fixture();
+    workNew(root, 'feat');
+    worktreeAdd(root, 'feat', name, { branch: 'feat' });
+    const h = repoHealth(root, name);
+    expect(h.worktreesInWorks).toEqual(['feat']);
+  });
+
+  it('listRepoHealth returns one snapshot per pristine clone', () => {
+    const { root } = fixture();
+    // Add a second repo to the same runtime.
+    const src2 = path.join(tmp(), 'src2');
+    fs.mkdirSync(src2, { recursive: true });
+    runGit(src2, ['init', '-q', '-b', 'main']);
+    runGit(src2, ['config', 'user.email', 't@t.t']);
+    runGit(src2, ['config', 'user.name', 't']);
+    runGit(src2, ['commit', '-qm', 'init', '--allow-empty']);
+    repoAdd(root, src2, 'worker');
+
+    const list = listRepoHealth(root);
+    expect(list.map((h) => h.name).sort()).toEqual(['app', 'worker']);
+    expect(list.every((h) => h.healthy)).toBe(true);
   });
 });
