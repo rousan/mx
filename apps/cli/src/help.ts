@@ -5,7 +5,7 @@ export const HELP = `mx — control panel for the mx runtime
 
 Global:
   mx init [path]                         scaffold/adopt a runtime (default ~/mx)
-  mx status [--porcelain]                show runtime, repos, works, ports  (aliases: mx s, mx st)
+  mx status [--all] [--porcelain]        show runtime, repos, works, ports (active only by default; --all to include archived; aliases: mx s, mx st)
   mx update                              re-sync runtime from current templates + backfill structural scaffolding
   mx help | version
 
@@ -20,7 +20,7 @@ Repos (pristine clones):
 
 Works (features):
   mx work new <name> [--description <t>]                creates folder + empty work.json + sessions/
-  mx work ls [--archived] [--porcelain]                 default: all works (archived marked); --archived filters to archived only
+  mx work ls [--all|--archived] [--porcelain]           default: active only; --all includes archived; --archived shows archived only
   mx work -n <name> info [--porcelain]
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
   mx work -n <name> describe <text>

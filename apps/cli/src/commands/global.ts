@@ -64,7 +64,8 @@ export function runGlobal(positionals: string[], flags: Flags): void {
     }
     case 'status': {
       const root = requireRuntime({ runtime: flags.runtime });
-      const data = statusRuntime(root);
+      // Default: active works only. --all expands the works section.
+      const data = statusRuntime(root, { includeArchived: flags.all });
       emit(() => renderStatus(data), data);
       return;
     }
@@ -123,16 +124,24 @@ function renderStatus(data: StatusResult): void {
   console.log();
 
   // --- works ---------------------------------------------------------------
-  const active = data.works.filter((w) => w.isArchived !== true);
-  const archived = data.works.filter((w) => w.isArchived === true);
+  // `data.works` reflects the caller's filter; `archivedWorksCount` is the
+  // true count of archived works on disk, so the header can still tell the
+  // user how many exist even when they're not being rendered.
+  const visibleArchived = data.works.filter((w) => w.isArchived === true);
+  const visibleActive = data.works.filter((w) => w.isArchived !== true);
+  const hiddenArchived = data.archivedWorksCount - visibleArchived.length;
   const worksCount =
-    archived.length > 0
-      ? dim(`(${active.length} active, ${archived.length} archived)`)
+    data.archivedWorksCount > 0
+      ? dim(`(${visibleActive.length} active, ${data.archivedWorksCount} archived${hiddenArchived > 0 ? ` — pass --all to show` : ''})`)
       : dim(`(${data.works.length})`);
   console.log(`  ${bold('works')}  ${worksCount}`);
 
   if (data.works.length === 0) {
-    console.log(`    ${dim('none yet — `mx work new <name>`')}`);
+    const empty =
+      hiddenArchived > 0
+        ? `${hiddenArchived} archived hidden — pass --all to show`
+        : 'none yet — `mx work new <name>`';
+    console.log(`    ${dim(empty)}`);
     console.log();
     return;
   }
@@ -140,7 +149,7 @@ function renderStatus(data: StatusResult): void {
   // Render active works first, then archived. Within each group, preserve the
   // natural alphabetical order. This lets the eye scan top-to-bottom through
   // actives and stop when the first archived chip appears.
-  const ordered = [...active, ...archived];
+  const ordered = [...visibleActive, ...visibleArchived];
 
   // Column widths — computed from plain (un-styled) text so ANSI codes
   // applied later don't throw off padding.

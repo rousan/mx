@@ -13,6 +13,8 @@ export interface Flags {
   version: boolean;
   /** Bypass safety gates (currently: `mx work destroy --force`). */
   force: boolean;
+  /** Include archived items alongside active ones (currently: `mx status --all`, `mx work ls --all`). */
+  all: boolean;
   /** Restrict to archived items only (currently: `mx work ls --archived`). */
   archived: boolean;
   /** Explicit runtime path from `--runtime`. */
@@ -66,6 +68,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     help: false,
     version: false,
     force: false,
+    all: false,
     archived: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -78,6 +81,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       flags.version = true;
     } else if (a === '--force') {
       flags.force = true;
+    } else if (a === '--all') {
+      flags.all = true;
     } else if (a === '--archived') {
       flags.archived = true;
     } else if (a.startsWith('--') && a.includes('=')) {

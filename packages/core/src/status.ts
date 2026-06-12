@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import { listReposInfo } from './repos';
 import { listWorksInfo } from './works';
+import type { ListWorksOpts } from './works';
 import { exists } from './fsutil';
 import { readJson } from './json';
 import type { RepoSummary } from './types';
@@ -33,8 +34,17 @@ export interface StatusResult {
   context: StatusContext;
   /** Summaries of pristine clones. */
   repos: RepoSummary[];
-  /** Full manifests of all works, each annotated with its session count. */
+  /**
+   * Works visible under the current filter (active-only by default;
+   * `{ includeArchived: true }` to include archived; `{ onlyArchived: true }`
+   * to restrict to archived).
+   */
   works: StatusWork[];
+  /**
+   * Total archived works on disk, regardless of filter — lets callers render
+   * a count even when the filter hides them.
+   */
+  archivedWorksCount: number;
 }
 
 /**
@@ -58,15 +68,33 @@ function countContextEntries(root: string): number {
 /**
  * Assemble a runtime status snapshot.
  *
+ * By default, `works` includes only **active** works; pass
+ * `{ includeArchived: true }` to include archived ones, or
+ * `{ onlyArchived: true }` to restrict to archived ones.
+ * `archivedWorksCount` always reflects the true count on disk regardless of
+ * the filter — so callers (CLI human-mode header, dashboards) can show
+ * "(N active, M archived)" even when only N are returned.
+ *
  * @param root - Runtime root.
- * @returns Runtime path, context summary, repo summaries, and work manifests
- *   annotated with session counts.
+ * @param opts - Filter for the `works` array.
+ * @returns Runtime path, context summary, repo summaries, filtered works,
+ *   and an unfiltered archived count.
  */
-export function statusRuntime(root: string): StatusResult {
+export function statusRuntime(root: string, opts: ListWorksOpts = {}): StatusResult {
+  // Compute archived count from the unfiltered list so it survives any
+  // caller-supplied filter.
+  const all = listWorksInfo(root, { includeArchived: true });
+  const archivedWorksCount = all.filter((w) => w.isArchived === true).length;
+  const works = opts.onlyArchived
+    ? all.filter((w) => w.isArchived === true)
+    : opts.includeArchived
+      ? all
+      : all.filter((w) => w.isArchived !== true);
   return {
     runtime: root,
     context: { entries: countContextEntries(root) },
     repos: listReposInfo(root),
-    works: listWorksInfo(root, { includeArchived: true }),
+    works,
+    archivedWorksCount,
   };
 }

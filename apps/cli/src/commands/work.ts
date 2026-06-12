@@ -55,11 +55,10 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
 
   if (action === 'ls') {
     const root = requireRuntime({ runtime: flags.runtime });
-    // Default: every work, with the archived ones marked. --archived narrows
-    // the listing to archived works only (handy when you want to see what's
-    // recoverable without scrolling past the active set).
+    // Default: active works only. --all expands to include archived;
+    // --archived narrows to archived-only.
     const works = listWorksInfo(root, {
-      includeArchived: true,
+      includeArchived: flags.all,
       onlyArchived: flags.archived,
     });
     emit(() => {

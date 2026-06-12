@@ -261,6 +261,40 @@ describe('context registry stamping', () => {
     expect(b?.sessions).toBe(0);
   });
 
+  it('statusRuntime defaults to active-only works but always exposes archivedWorksCount', () => {
+    const runtime = path.join(tmp(), 'rt');
+    initRuntime(runtime, TEMPLATES_DIR);
+
+    workNew(runtime, 'feat-a');
+    workNew(runtime, 'feat-b');
+    workNew(runtime, 'feat-archived');
+    // Cheap mark-as-archived directly on the manifest — no worktrees to remove.
+    const archivedManifest = path.join(runtime, 'works', 'feat-archived', 'work.json');
+    const m = JSON.parse(fs.readFileSync(archivedManifest, 'utf8'));
+    m.isArchived = true;
+    m.archived_at = '2026-06-01T00:00:00Z';
+    fs.writeFileSync(archivedManifest, JSON.stringify(m));
+
+    // Default: archived is hidden in the works array.
+    const defaultStatus = statusRuntime(runtime);
+    expect(defaultStatus.works.map((w) => w.name).sort()).toEqual(['feat-a', 'feat-b']);
+    expect(defaultStatus.archivedWorksCount).toBe(1);
+
+    // includeArchived: true → archived appears alongside active.
+    const expanded = statusRuntime(runtime, { includeArchived: true });
+    expect(expanded.works.map((w) => w.name).sort()).toEqual([
+      'feat-a',
+      'feat-archived',
+      'feat-b',
+    ]);
+    expect(expanded.archivedWorksCount).toBe(1);
+
+    // onlyArchived: true → only archived.
+    const onlyArch = statusRuntime(runtime, { onlyArchived: true });
+    expect(onlyArch.works.map((w) => w.name)).toEqual(['feat-archived']);
+    expect(onlyArch.archivedWorksCount).toBe(1);
+  });
+
   it('statusRuntime returns context.entries=0 when INDEX.json is missing or malformed', () => {
     const runtime = path.join(tmp(), 'rt');
     initRuntime(runtime, TEMPLATES_DIR);

@@ -87,13 +87,13 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 | command | does |
 |---|---|
 | `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `CLAUDE.md`, `context/INDEX.json`) |
-| `mx status [--porcelain]` | list repos, works, worktrees, and ports |
+| `mx status [--all] [--porcelain]` | list repos, works, worktrees, and ports (active works only by default; `--all` includes archived) |
 | `mx update` | re-sync runtime with current mx version: re-stamp `CLAUDE.md`, create `context/INDEX.json` + per-work `sessions/` if missing. Non-destructive — never modifies user data. |
 | `mx repo add <git-url> [--name <n>]` | clone a pristine repo |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
 | `mx repo health` / `mx repo -n <name> health` | local-only health check (on default branch? clean? in sync with origin?) |
 | `mx work new <name> [--description <t>]` | create a work (prints its folder path) |
-| `mx work ls [--archived]` / `mx work -n <name> info\|describe\|path` | manage works (ls shows all by default, marking archived; `--archived` filters to archived only) |
+| `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works (ls shows active only by default; `--all` includes archived; `--archived` shows archived only) |
 | `mx work -n <name> worktree add\|ls\|rm <repo>` | manage a work's worktrees |
 | `mx work -n <name> port set\|unset\|ls <repo> <service> [<port>]` | allocate/release ports |
 | `mx work -n <name> archive` | remove worktrees; keep folder + work.json + sessions/ + branches (recoverable) |
