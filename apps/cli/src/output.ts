@@ -1,4 +1,4 @@
-import * as fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { MxError } from '@mx/core';
 
 /**
@@ -71,21 +71,26 @@ export function warn(): string {
  * an explicit `y`/`yes` (case-insensitive). Anything else — including empty,
  * EOF, an interrupted read, or a non-TTY stdin — counts as no.
  *
+ * Implementation: delegates to `/bin/sh -c 'read REPLY'` because Node's
+ * `fs.readSync(0, …)` returns EAGAIN immediately on macOS when stdin is in
+ * non-blocking mode (a long-standing libuv quirk), and `readline/promises`
+ * is async. The shell `read` builtin handles TTY-blocking reliably across
+ * macOS and Linux.
+ *
  * @param prompt - Text to print before reading the answer (e.g. `"Proceed? (y/N) "`).
  * @returns True for an affirmative answer, false otherwise.
  */
 export function confirmYesNo(prompt: string): boolean {
   if (!process.stdin.isTTY) return false;
   process.stdout.write(prompt);
-  const buf = Buffer.alloc(1024);
-  try {
-    const n = fs.readSync(0, buf, 0, buf.length, null);
-    if (n <= 0) return false;
-    const answer = buf.subarray(0, n).toString('utf8').trim().toLowerCase();
-    return answer === 'y' || answer === 'yes';
-  } catch {
-    return false;
-  }
+  const result = spawnSync(
+    '/bin/sh',
+    ['-c', "IFS= read -r REPLY && printf '%s' \"$REPLY\""],
+    { stdio: ['inherit', 'pipe', 'inherit'], encoding: 'utf8' },
+  );
+  if (result.status !== 0 || result.signal) return false;
+  const answer = (result.stdout ?? '').trim().toLowerCase();
+  return answer === 'y' || answer === 'yes';
 }
 
 /**
