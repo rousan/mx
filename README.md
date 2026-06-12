@@ -96,7 +96,7 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 | `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works (ls shows active only by default; `--all` includes archived; `--archived` shows archived only) |
 | `mx work -n <name> worktree add\|ls\|rm <repo>` | manage a work's worktrees |
 | `mx work -n <name> port set\|unset\|ls <repo> <service> [<port>]` | allocate/release ports |
-| `mx work -n <name> archive` | remove worktrees; keep folder + work.json + sessions/ + branches (recoverable) |
+| `mx work -n <name> archive [--yes\|-y]` | remove worktrees; keep folder + work.json + sessions/ + branches (recoverable). Prompts for confirmation; `--yes` skips the prompt (required for `--porcelain` and non-TTY callers) |
 | `mx work -n <name> unarchive [<repo>=<branch>...]` | re-create worktrees; positional overrides if recorded branches are missing |
 | `mx work -n <name> destroy --force` | **permanent**: delete the work folder (incl. sessions); branches kept. Prefer archive. |
 

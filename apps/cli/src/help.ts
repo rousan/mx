@@ -30,7 +30,7 @@ Works (features):
   mx work -n <name> port set <repo> <service> [<port>]  auto-picks a free port if omitted
   mx work -n <name> port unset <repo> <service>
   mx work -n <name> port ls [--porcelain]
-  mx work -n <name> archive                             removes worktrees; keeps folder + work.json + sessions; recoverable
+  mx work -n <name> archive [--yes|-y]                  removes worktrees; keeps folder + work.json + sessions; prompts for confirmation (use --yes to skip)
   mx work -n <name> unarchive [<repo>=<branch>...]      re-creates worktrees from work.json; override per-repo branch if recorded one is missing
   mx work -n <name> destroy --force                     PERMANENT: deletes the work folder including session summaries (branches kept). Prefer archive.
 

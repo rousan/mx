@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import { MxError } from '@mx/core';
 
 /**
@@ -63,6 +64,28 @@ export function check(): string {
 /** Plain `⚠` glyph — "heads up before proceeding". Shape carries the semantic. */
 export function warn(): string {
   return '⚠';
+}
+
+/**
+ * Synchronously prompt the user with a yes/no question. Returns true only on
+ * an explicit `y`/`yes` (case-insensitive). Anything else — including empty,
+ * EOF, an interrupted read, or a non-TTY stdin — counts as no.
+ *
+ * @param prompt - Text to print before reading the answer (e.g. `"Proceed? (y/N) "`).
+ * @returns True for an affirmative answer, false otherwise.
+ */
+export function confirmYesNo(prompt: string): boolean {
+  if (!process.stdin.isTTY) return false;
+  process.stdout.write(prompt);
+  const buf = Buffer.alloc(1024);
+  try {
+    const n = fs.readSync(0, buf, 0, buf.length, null);
+    if (n <= 0) return false;
+    const answer = buf.subarray(0, n).toString('utf8').trim().toLowerCase();
+    return answer === 'y' || answer === 'yes';
+  } catch {
+    return false;
+  }
 }
 
 /**

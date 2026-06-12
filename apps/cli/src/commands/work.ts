@@ -17,7 +17,7 @@ import {
   portList,
   MxError,
 } from '@mx/core';
-import { emit, dim, bold, check, warn } from '../output';
+import { emit, dim, bold, check, warn, confirmYesNo } from '../output';
 import type { Flags } from '../args';
 
 /**
@@ -176,10 +176,27 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       return;
     }
     case 'archive': {
-      if (!flags.porcelain) {
+      // Confirm first — before any real work. The user can pre-confirm with
+      // --yes (required when stdin isn't a TTY or in --porcelain mode).
+      if (!flags.yes) {
+        if (flags.porcelain || !process.stdin.isTTY) {
+          throw new MxError(
+            `archive requires confirmation — pass --yes when running non-interactively or with --porcelain`,
+            'NEED_CONFIRMATION',
+          );
+        }
+        process.stderr.write(`${warn()} About to archive work ${bold(name)}.\n`);
         process.stderr.write(
-          `${warn()} ${dim(`Reminder: write any pending session summary into works/${name}/sessions/ before archiving.`)}\n`,
+          `${dim(`  Worktrees will be removed; folder, work.json, branches, and sessions/ are preserved.`)}\n`,
         );
+        process.stderr.write(
+          `${dim(`  Make sure any pending session summary is written into works/${name}/sessions/ first.`)}\n`,
+        );
+        process.stderr.write('\n');
+        if (!confirmYesNo('Proceed? (y/N) ')) {
+          process.stderr.write(`${dim('Aborted.')}\n`);
+          return;
+        }
       }
       const res = archiveWork(root, name);
       emit(() => {
