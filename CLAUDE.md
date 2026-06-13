@@ -18,6 +18,21 @@ A TypeScript pnpm monorepo. **Source code and publishable npm package live in se
 
 New behavior is normally a core function plus thin CLI wiring.
 
+## Detailed docs
+
+This CLAUDE.md is the entry point. For deeper material on any topic, see `/docs/`:
+
+- [docs/overview.md](docs/overview.md) — what mx is, the core mental model
+- [docs/architecture.md](docs/architecture.md) — monorepo layout, build flow, dependency graph
+- [docs/runtime-model.md](docs/runtime-model.md) — runtime layout, `work.json` schema, `INDEX.json` schema, session protocol
+- [docs/commands.md](docs/commands.md) — every CLI command, flags, error codes
+- [docs/development.md](docs/development.md) — dev setup, testing patterns, the `.mx/` sandbox convention
+- [docs/self-hosting.md](docs/self-hosting.md) — using mx to develop mx (the dogfooding pattern)
+- [docs/release.md](docs/release.md) — release runbook + every gotcha caught the hard way
+- [docs/history.md](docs/history.md) — version timeline, what each release brought
+
+When working on a specific area (release flow, command behaviour, etc.), open the matching doc — they have detail that didn't fit in this CLAUDE.md.
+
 ## Running the CLI (dev vs global)
 
 There is **no global PATH coupling to this repo**. The global `mx` exists only when you install a build: `npm i -g @roulabs/mx` (npm owns that bin).
