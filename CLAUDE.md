@@ -18,6 +18,21 @@ A TypeScript pnpm monorepo. **Source code and publishable npm package live in se
 
 New behavior is normally a core function plus thin CLI wiring.
 
+## Detailed docs
+
+This CLAUDE.md is the entry point. For deeper material on any topic, see `/docs/`:
+
+- [docs/overview.md](docs/overview.md) — what mx is, the core mental model
+- [docs/architecture.md](docs/architecture.md) — monorepo layout, build flow, dependency graph
+- [docs/runtime-model.md](docs/runtime-model.md) — runtime layout, `work.json` schema, `INDEX.json` schema, session protocol
+- [docs/commands.md](docs/commands.md) — every CLI command, flags, error codes
+- [docs/development.md](docs/development.md) — dev setup, testing patterns, the `.mx/` sandbox convention
+- [docs/self-hosting.md](docs/self-hosting.md) — using mx to develop mx (the dogfooding pattern)
+- [docs/release.md](docs/release.md) — release runbook + every gotcha caught the hard way
+- [docs/history.md](docs/history.md) — version timeline, what each release brought
+
+When working on a specific area (release flow, command behaviour, etc.), open the matching doc — they have detail that didn't fit in this CLAUDE.md.
+
 ## Running the CLI (dev vs global)
 
 There is **no global PATH coupling to this repo**. The global `mx` exists only when you install a build: `npm i -g @roulabs/mx` (npm owns that bin).
@@ -65,7 +80,7 @@ It does **not** modify `work.json` contents, `.code-workspace` files, worktree c
 
 ## Testing against a runtime (hard rule)
 
-**Never test the CLI against a real/production runtime.** Point `$MX_RUNTIME` at a throwaway `/tmp` runtime (or this repo's `.mx/`) and test there:
+**Never test the locally-built CLI against a real/production runtime.** Point `$MX_RUNTIME` at a throwaway `/tmp` runtime (or this repo's `.mx/`) and test there:
 
 ```bash
 export MX_RUNTIME=/tmp/mx-sbx
@@ -73,6 +88,53 @@ node npm/bin/mx.js init              # or: pnpm mx init
 ```
 
 Use locally-created throwaway git repos as clone sources (`git init` in `/tmp/...`) so tests need no network. Since the runtime location is env-only (no pointer file), sandbox runs can't corrupt a real runtime — but still target `/tmp`. `MX_TEMPLATES_DIR` is available as an override for tests that want a fixture templates dir.
+
+This rule is **load-bearing under self-hosting** (next section): when this very source repo is checked out as a worktree inside an mx runtime, the "real runtime" is literally the one hosting your code. Running `pnpm mx update` (or any locally-built `mx`) without `$MX_RUNTIME` set elsewhere would re-stamp the host runtime's `CLAUDE.md` with your work-in-progress template, possibly with a broken or unreleased shape. Always set `$MX_RUNTIME` to a sandbox first.
+
+## Self-hosting: working on mx as a work inside an mx runtime
+
+You may dogfood mx by treating its source as just another repo in an mx runtime — running several parallel feature branches of mx itself the same way you'd run parallel features of any product:
+
+```bash
+# One-time, on your productive runtime:
+mx repo add git@github.com:roulabs/mx.git
+
+# Per feature (repeatable for as many parallel mx features as you want):
+mx work new improve-mx-status-ui
+mx work -n improve-mx-status-ui worktree add mx --branch improve-mx-status-ui
+cd $(mx work -n improve-mx-status-ui path)/mx
+```
+
+Each feature lives at `<runtime>/works/<feature-name>/mx/` as its own worktree on its own branch. You can have any number of them open at once; each is independent.
+
+### The strict rule under self-hosting
+
+There are two `mx` binaries available inside a self-hosted worktree, and they must be used for different things:
+
+| binary | what it runs | use for |
+|---|---|---|
+| `mx` (on `$PATH`) | the **globally installed** `@roulabs/mx` — published version | productive runtime operations: `mx s`, `mx work archive feat`, etc. **Safe** against the productive runtime. |
+| `pnpm mx ...` or `node npm/bin/mx.js ...` | the **locally-built** CLI from your in-progress code | **testing only** — must always be pointed at a sandbox runtime, never the productive one. |
+
+The hard rule: **the locally-built CLI never sees the productive runtime.** Before any test, set `$MX_RUNTIME` to a sandbox:
+
+```bash
+export MX_RUNTIME="$PWD/.mx"           # gitignored, per-worktree sandbox (recommended)
+# or, for a fully throwaway one:
+export MX_RUNTIME=/tmp/mx-sbx-$(date +%s)
+```
+
+A useful trick: `direnv` (or a shell function on `cd`) can auto-set `MX_RUNTIME=$PWD/.mx` whenever you're inside one of these worktrees, so reflex-correct behaviour comes free. Outside the worktree, `MX_RUNTIME` stays at your productive runtime; inside, it's the sandbox.
+
+### Multiple parallel mx-feature works
+
+Each `works/<feature>/mx/` is fully independent: its own branch, its own `.mx/` sandbox if testing, its own commits, its own pushes. Switch between them by `cd` — no mode or state to remember. The Vitest suite isolates itself in `/tmp/...` regardless, so unit tests work the same in every feature work.
+
+### Caveats
+
+- **Don't archive the work you're sitting in.** `mx work -n improve-mx archive` deletes the worktree directory; your shell ends up in a deleted path. `cd` out first.
+- **The work's outer runtime CLAUDE.md and this source repo's CLAUDE.md both load** inside a worktree. They describe different layers (runtime conventions vs mx developer rules) and don't conflict — but be aware Claude sees both.
+- **Releases work as normal:** `pnpm release` reads `npm/package.json`, builds, publishes from `npm/`. It doesn't care that the source is hosted inside an mx runtime.
 
 ## Layout
 
