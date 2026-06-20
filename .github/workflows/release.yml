@@ -1,0 +1,79 @@
+name: Release
+
+# Every push to main (i.e. every merged PR) must produce a new release.
+# The release version is whatever sits in npm/package.json — the PR is
+# responsible for bumping it. If that version was already released (its
+# vX.Y.Z tag already exists), the workflow FAILS, prompting a version bump,
+# because a merge to main without a version bump is a mistake under this
+# contract.
+
+on:
+  push:
+    branches: [main]
+
+# Never run two releases at once; let an in-flight one finish.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # push the vX.Y.Z tag and create the GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history + tags so the version guard can see existing tags
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org # writes an .npmrc wired to NODE_AUTH_TOKEN
+
+      - run: pnpm install
+
+      - name: Resolve version and guard against a stale (already-released) version
+        id: ver
+        run: |
+          version=$(node -p "require('./npm/package.json').version")
+          tag="v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          git fetch --quiet --tags origin
+          if git rev-parse --verify "refs/tags/$tag" >/dev/null 2>&1 \
+             || git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::Version $version is already released (tag $tag exists). Bump \"version\" in npm/package.json before merging to main."
+            exit 1
+          fi
+          echo "Releasing $version (tag $tag)"
+
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build
+
+      - name: Publish to npm
+        run: npm publish
+        working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Tag the release commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.ver.outputs.tag }}" -m "${{ steps.ver.outputs.tag }}"
+          git push origin "${{ steps.ver.outputs.tag }}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.ver.outputs.tag }}" \
+            --title "${{ steps.ver.outputs.tag }}" \
+            --generate-notes
