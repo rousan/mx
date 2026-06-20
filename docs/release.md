@@ -2,15 +2,47 @@
 
 How to ship a new version of `@roulabs/mx`, and the gotchas caught the hard way that aren't obvious from code.
 
-## The flow
+## The flow (automated — primary)
 
-Releases are **local-driven**, no CI tokens involved. One-time on the publisher's machine:
+Releases are **CI-driven**: every push to `main` (i.e. every merged PR) runs `.github/workflows/release.yml`, which publishes whatever version sits in `npm/package.json`.
+
+The contract: **every merge to `main` must produce a new release.** The PR is responsible for bumping `npm/package.json`'s `"version"`. The workflow guards on this — if the version still matches an existing `vX.Y.Z` tag, the run **fails** with an error telling you to bump the version. So:
+
+```bash
+# in your PR branch, before merging:
+$EDITOR npm/package.json          # bump "version"
+git commit -am "release vX.Y.Z"
+# open PR → merge to main → CI releases automatically
+```
+
+What the workflow does on each push to `main`:
+
+1. Checkout with full history + tags.
+2. Resolve `version` from `npm/package.json`; **fail** if `vX.Y.Z` already exists as a tag (locally or on origin) — bump the version and re-merge.
+3. `pnpm install --frozen-lockfile`, then `pnpm typecheck && pnpm lint && pnpm test && pnpm build`.
+4. `npm publish` from `npm/`, authenticated via the `NPM_TOKEN` secret (`NODE_AUTH_TOKEN`).
+5. Create + push the annotated `vX.Y.Z` tag.
+6. Create a GitHub Release for the tag with auto-generated notes.
+
+### One-time setup: the `NPM_TOKEN` secret
+
+CI cannot use the interactive `--auth-type=web` browser flow. It needs an **npm automation token** (automation tokens bypass 2FA at publish time):
+
+1. Sign in at <https://www.npmjs.com> as a user with publish rights on the `@roulabs` org.
+2. Avatar → **Access Tokens** → **Generate New Token** → **Classic Token** → type **Automation** (or a **Granular Access Token** scoped to publish `@roulabs/mx`). Copy it — it's shown once.
+3. In GitHub: repo **Settings → Secrets and variables → Actions → New repository secret**. Name it `NPM_TOKEN`, paste the value.
+
+`GITHUB_TOKEN` (used to push the tag and create the Release) is provided automatically by Actions; the workflow requests `contents: write` permission for it. No other secret is needed.
+
+## The fallback flow (local, manual)
+
+`scripts/release.sh` (`pnpm release`) still works for local/emergency publishing when CI is unavailable. It is **superseded by the workflow** for normal releases — prefer merging to `main`. One-time on the publisher's machine:
 
 ```bash
 npm login
 ```
 
-To cut a release:
+To cut a release manually:
 
 ```bash
 $EDITOR npm/package.json          # bump "version"
