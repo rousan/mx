@@ -21,6 +21,7 @@ import {
   workDestroy,
   listWorksInfo,
   repoAdd,
+  repoFetch,
   repoHealth,
   listRepoHealth,
   statusRuntime,
@@ -500,6 +501,62 @@ describe('archive / unarchive / destroy lifecycle', () => {
     expect(onlyArchived.map((w) => w.name)).toEqual(['feat2']);
     expect(onlyArchived[0].isArchived).toBe(true);
     expect(onlyArchived[0].archived_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+});
+
+describe('repoFetch', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+  const runGit = (cwd: string, args: string[]) =>
+    execFileSync('git', args, { cwd, stdio: 'ignore' });
+  const sha = (cwd: string, ref: string) =>
+    execFileSync('git', ['-C', cwd, 'rev-parse', ref], { encoding: 'utf8' }).trim();
+
+  /** Source repo on `main` with one commit; pristine clone added to a runtime. */
+  function fixture(): { root: string; src: string; clone: string; name: string } {
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'x');
+    runGit(src, ['add', '-A']);
+    runGit(src, ['commit', '-qm', 'init']);
+
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, src, 'app');
+    return { root, src, clone: path.join(root, 'repos', 'app'), name: 'app' };
+  }
+
+  /** Advance origin/main by one commit on the source repo. */
+  function advanceSrc(src: string): void {
+    fs.writeFileSync(path.join(src, 'g.txt'), 'y');
+    runGit(src, ['add', '-A']);
+    runGit(src, ['commit', '-qm', 'second']);
+  }
+
+  it('fast-forwards the currently checked-out branch to origin', () => {
+    const { root, src, clone, name } = fixture();
+    advanceSrc(src);
+    repoFetch(root, name);
+    // Pristine is on main (its current branch), so main matches origin/main.
+    expect(sha(clone, 'main')).toBe(sha(clone, 'refs/remotes/origin/main'));
+    expect(sha(clone, 'main')).toBe(sha(src, 'main'));
+  });
+
+  it('does not fast-forward a non-current branch — only the checked-out one', () => {
+    const { root, src, clone, name } = fixture();
+    const mainBefore = sha(clone, 'main');
+    // Move the pristine clone off main onto a branch with no upstream.
+    runGit(clone, ['checkout', '-q', '-b', 'wip']);
+    advanceSrc(src); // origin/main advances
+
+    repoFetch(root, name);
+
+    // The fetch updates origin/main, but local main (not checked out) is left
+    // exactly where it was — only the current branch is fast-forwarded.
+    expect(sha(clone, 'main')).toBe(mainBefore);
+    expect(sha(clone, 'main')).not.toBe(sha(clone, 'refs/remotes/origin/main'));
   });
 });
 

@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import * as os from 'node:os';
 import { MxError } from '@mx/core';
 
 /**
@@ -64,6 +65,20 @@ export function check(): string {
 /** Plain `⚠` glyph — "heads up before proceeding". Shape carries the semantic. */
 export function warn(): string {
   return '⚠';
+}
+
+/**
+ * Collapse the user's home directory prefix to `~` for friendlier human-mode
+ * paths (e.g. `/Users/x/mx/works/feat` → `~/mx/works/feat`). Porcelain output
+ * keeps absolute paths — this is presentation only.
+ *
+ * @param p - Absolute path.
+ * @returns Path with `$HOME` collapsed to `~`, or `p` unchanged if not under home.
+ */
+export function tildify(p: string): string {
+  const home = os.homedir();
+  if (p === home) return '~';
+  return p.startsWith(home + '/') ? '~' + p.slice(home.length) : p;
 }
 
 /**

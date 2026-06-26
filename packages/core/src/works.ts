@@ -112,6 +112,8 @@ export function workNew(root: string, name: string, description = ''): WorkNewRe
  * `worktrees.length`.
  */
 export type WorkSummary = Work & {
+  /** Absolute path to the work folder under `works/`. */
+  path: string;
   /** Number of `.md` files in `<work>/sessions/`. */
   sessions: number;
 };
@@ -141,6 +143,7 @@ export function listWorksInfo(root: string, opts: ListWorksOpts = {}): WorkSumma
   return listWorkNames(root)
     .map((name) => ({
       ...readWork(root, name),
+      path: workDir(root, name),
       sessions: countSessions(root, name),
     }))
     .filter((w) => {

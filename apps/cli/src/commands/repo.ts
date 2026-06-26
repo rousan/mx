@@ -11,7 +11,7 @@ import {
   MxError,
 } from '@mx/core';
 import type { RepoHealth } from '@mx/core';
-import { emit, dim, bold, check, warn } from '../output';
+import { emit, dim, bold, check, warn, tildify } from '../output';
 import type { Flags } from '../args';
 
 /**
@@ -60,6 +60,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
           const branch = dim(r.branch.padEnd(branchW));
           const remote = dim(r.remote ?? '(no remote)');
           console.log(`• ${name}  ${branch}  ${remote}`);
+          console.log(`  ${dim(tildify(r.path))}`);
         }
       }, repos);
       return;

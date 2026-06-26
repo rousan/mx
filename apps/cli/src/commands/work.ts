@@ -6,6 +6,7 @@ import {
   workInfo,
   workDescribe,
   workPath,
+  workspaceFile,
   worktreeAdd,
   worktreeList,
   worktreeRemove,
@@ -17,7 +18,8 @@ import {
   portList,
   MxError,
 } from '@mx/core';
-import { emit, dim, bold, check, warn, confirmYesNo } from '../output';
+import { emit, dim, bold, check, warn, confirmYesNo, tildify } from '../output';
+import { openWorkLayout } from '../open';
 import type { Flags } from '../args';
 
 /**
@@ -44,12 +46,22 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
 
   if (action === 'new') {
     const root = requireRuntime({ runtime: flags.runtime });
-    const name = need(positionals[2], 'usage: mx work new <name> [--description <text>]');
+    const name = need(positionals[2], 'usage: mx work new <name> [--description <text>] [-o|--open]');
     const res = workNew(root, name, flags.description ?? '');
     emit(() => {
       console.log(`${check()} created work ${bold(res.name)}`);
       console.log(`  ${dim(res.path)}`);
     }, res);
+    if (flags.open) {
+      // Best-effort: the work is already created, so a window-management
+      // failure (or a non-macOS host) is a warning, never a hard error.
+      try {
+        openWorkLayout(res.path, workspaceFile(root, res.name));
+      } catch (e) {
+        const msg = e instanceof MxError ? e.message : String(e);
+        process.stderr.write(`${warn()} ${dim(`could not open layout: ${msg}`)}\n`);
+      }
+    }
     return;
   }
 
@@ -87,6 +99,7 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         // marker.
         const styledName = w.isArchived === true ? dim(w.name) : bold(w.name);
         console.log(`• ${styledName}${chip}`);
+        console.log(`  ${dim(tildify(w.path))}`);
 
         if (w.description) {
           console.log(`  ${dim(`— ${w.description}`)}`);

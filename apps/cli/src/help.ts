@@ -19,7 +19,7 @@ Repos (pristine clones):
   mx repo -n <name> rm                   refuses if any work uses it
 
 Works (features):
-  mx work new <name> [--description <t>]                creates folder + empty work.json + sessions/
+  mx work new <name> [--description <t>] [-o|--open]    creates folder + empty work.json + sessions/; -o opens a fullscreen Terminal (cd'd in) + editor on the workspace (macOS)
   mx work ls [--all|--archived] [--porcelain]           default: active only; --all includes archived; --archived shows archived only
   mx work -n <name> info [--porcelain]
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")

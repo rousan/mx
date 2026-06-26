@@ -56,6 +56,7 @@ export function repoAdd(root: string, url: string, name0?: string): RepoAddResul
 export function listReposInfo(root: string): RepoSummary[] {
   return listRepoNames(root).map((name) => ({
     name,
+    path: repoPath(root, name),
     branch: currentBranch(repoPath(root, name)),
     remote: remoteUrl(repoPath(root, name)),
   }));
@@ -75,7 +76,13 @@ export interface RepoFetchResult {
 
 /**
  * Fetch all branches/tags from origin, prune deleted ones, and best-effort
- * fast-forward the checked-out branch.
+ * fast-forward the pristine clone's **currently checked-out branch** to its
+ * upstream.
+ *
+ * Only the current branch is fast-forwarded — not the base/default branch, nor
+ * any other local branch — and only when it's a clean fast-forward with an
+ * upstream, so divergent or upstream-less branches are left untouched (no
+ * working-tree churn).
  *
  * @param root - Runtime root.
  * @param name - Repo name.

@@ -19,6 +19,8 @@ export interface Flags {
   all: boolean;
   /** Restrict to archived items only (currently: `mx work ls --archived`). */
   archived: boolean;
+  /** Open the work's dev layout after creating it (currently: `mx work new -o`, macOS). */
+  open: boolean;
   /** Explicit runtime path from `--runtime`. */
   runtime?: string;
   /** Target name from `-n`/`--name`. */
@@ -73,6 +75,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     yes: false,
     all: false,
     archived: false,
+    open: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -90,6 +93,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       flags.all = true;
     } else if (a === '--archived') {
       flags.archived = true;
+    } else if (a === '--open' || a === '-o') {
+      flags.open = true;
     } else if (a.startsWith('--') && a.includes('=')) {
       const eq = a.indexOf('=');
       const key = VALUE_FLAGS[a.slice(0, eq)];

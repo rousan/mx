@@ -39,6 +39,8 @@ export interface Work {
 export interface RepoSummary {
   /** Repo directory name under `repos/`. */
   name: string;
+  /** Absolute path to the pristine clone under `repos/`. */
+  path: string;
   /** Current checked-out branch of the pristine clone. */
   branch: string;
   /** Origin remote URL, or null when none is configured. */
