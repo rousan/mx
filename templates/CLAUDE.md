@@ -1,5 +1,5 @@
 <!-- Installed by the mx CLI. Don't hand-edit this file in the runtime —
-     edit templates/CLAUDE.md in the mx source repo and run `mx update`. -->
+     edit templates/CLAUDE.md in the mx source repo and run `mx sync`. -->
 
 # mx — multiplexed parallel work across repos
 
@@ -16,6 +16,15 @@ to read or change the work — its repos, branches, ports — you call an `mx` c
 `work.json` as read-only build output: look at it for orientation, but mutate it through `mx`.
 
 Every read command takes `--porcelain` for stable JSON; parse that instead of scraping text.
+
+## Runtime version gate
+
+This runtime carries a layout version in `<runtime>/VERSION` (an integer). The `mx` CLI supports exactly
+one runtime version (CLI major ⇄ runtime version). If the CLI and runtime versions don't match, **every
+runtime command refuses** with error `RUNTIME_VERSION_MISMATCH` — only `mx migrate`, `mx update`,
+`mx help`, and `mx version` are allowed. If you hit that error, **stop and tell the user**: run
+`mx migrate` to upgrade an older runtime, or `mx update` (then a new-major install) to upgrade the CLI for
+a newer runtime. Don't try to work around the gate by editing files by hand.
 
 ## What this runtime is for
 
@@ -41,25 +50,31 @@ Every read command takes `--porcelain` for stable JSON; parse that instead of sc
 
 ```
 mx/
-├── CLAUDE.md               # this file (installed by the mx CLI)
 ├── .mx-root                # empty marker: "this is the mx root"
+├── VERSION                 # runtime layout version, e.g. "2"
+├── CLAUDE.md               # this file (installed by the mx CLI)
 ├── context/                # shared memory across all features (see § Context registry)
 │   ├── INDEX.json          # single source of truth — metadata for every entry
 │   └── <path>.md           # body-only entries; nested folders allowed
-├── repos/                  # PRISTINE reference clones, each on its default branch
-│   ├── repo-a/
-│   └── repo-b/
+├── repos/<repo>/           # per-repo container
+│   ├── git/                # the PRISTINE clone (read-only reference)
+│   ├── setup.sh            # runs after worktree add (customizable)
+│   └── health.sh           # augments `mx repo health` (customizable)
 └── works/                  # one folder per feature/work
     └── feature-a/
         ├── work.json       # manifest — owned by `mx`, do not hand-edit
         ├── feature-a.code-workspace
+        ├── .claude/settings.json   # SessionStart hook → loads context/INDEX.json
         ├── sessions/       # session summaries (see § Session summaries)
         ├── repo-a/         # worktree of repo-a on this feature's branch
         └── repo-b/         # worktree of repo-b on this feature's branch
 ```
 
-- `repos/<repo>` are **source-of-truth clones** — read-only reference. Worktrees fork from them
+- `repos/<repo>/git` are **source-of-truth clones** — read-only reference. Worktrees fork from them
   and share their `.git` object store. Never edit, commit, or run dev servers in `repos/`.
+- `repos/<repo>/setup.sh` and `repos/<repo>/health.sh` are mx-owned per-repo hooks you may customize:
+  `setup.sh` runs automatically after `mx work … worktree add <repo>` (cwd = the new worktree); `health.sh`
+  augments `mx repo health`. Edit their bodies if a repo needs custom worktree setup or health output.
 - `works/<feature>/<repo>` are **worktrees**, each on its own feature branch. All work happens here.
 
 ## work.json (per-work manifest, owned by mx)
@@ -127,7 +142,7 @@ Example entry:
 
 Primary path:
 
-1. **Read `<runtime>/context/INDEX.json` on every task** — trivial or not, small or large. Skimming a metadata index is cheap; the cost of missing a relevant entry is high. This is a hard rule, not a heuristic.
+1. **Read `<runtime>/context/INDEX.json` on every task** — trivial or not, small or large. Skimming a metadata index is cheap; the cost of missing a relevant entry is high. This is a hard rule, not a heuristic. (Each work also carries a `.claude/settings.json` `SessionStart` hook that prints this INDEX into the session at launch, so you usually start with it already in context — but re-read it when in doubt.)
 2. Open files at `<runtime>/context/<path>.md` for entries whose metadata matches the current task.
 
 When INDEX descriptions don't surface what you need — and often they won't — fall back to anything that works:
@@ -211,6 +226,9 @@ clarity; dropping it works while you're inside the work.
     `migration-to-mt-service-from-cf`) resolves to that local branch or, failing that, `origin/<name>`.
     Run `mx repo -n <repo> fetch` first if you want the base at its latest upstream commit. Omit
     `--base` to fork from the pristine clone's current HEAD.
+  - After the worktree is created, the repo's `repos/<repo>/setup.sh` runs automatically with the new
+    worktree as the working directory (copy a `.env`, install deps, etc.). Pass `--no-setup` to skip it,
+    or re-run it later with `mx work -n <feature> worktree setup <repo>`.
 - **Allocate a port:** `mx work -n <feature> port set <repo> <service>` returns a free port (unique
   across all works). This only records the port in `work.json` — **you** must then wire that port
   into the repo's own env/config (`.env`, `PORT=`, etc.) and remap any outbound URL to a sibling

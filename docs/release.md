@@ -106,24 +106,24 @@ The release script doesn't yet enforce "release from main only" — that's an op
 
 The publishable package layout is `npm/` (committed: `package.json`, `README.md`; built: `bin/`, `templates/`, `LICENSE`). Anything outside `npm/` is invisible to the npm registry — including the source code at `packages/` and `apps/`. If you add new runtime templates, ensure tsup's `onSuccess` copy step picks them up (`apps/cli/tsup.config.ts`). The `npm/templates/` directory is gitignored — it's regenerated on every build.
 
-### 7. The runtime CLAUDE.md template change only propagates after `mx update`
+### 7. The runtime CLAUDE.md template change only propagates after `mx sync`
 
 If a release changes `templates/CLAUDE.md`, existing runtimes won't see it until the user runs:
 
 ```bash
 npm i -g @roulabs/mx@latest
-mx update
+mx sync
 ```
 
-`mx update` is non-destructive — never modifies `work.json`, body files, or anything the user owns. But it does re-stamp `<runtime>/CLAUDE.md` from the new template.
+`mx sync` (the re-stamp command, formerly `mx update`) is non-destructive — never modifies `work.json`, body files, or anything the user owns. But it does re-stamp `<runtime>/CLAUDE.md` from the new template. (`mx update` is now the CLI self-update command.)
 
 ## Version conventions
 
-Semver, loosely interpreted (mx is at 1.x, internal-use):
+Semver, loosely interpreted (mx is at 2.x, internal-use):
 
 - **Patch (`X.Y.Z+1`)** — bug fixes, doc-only changes, presentation tweaks, behaviour clarifications that don't change CLI surface or schema.
-- **Minor (`X.Y+1.0`)** — new commands, new flags, additive porcelain fields, runtime CLAUDE.md template changes (since they're a deliberate contract update requiring `mx update`).
-- **Major (`X+1.0.0`)** — reserved. We've taken a few breaking changes on minor bumps (e.g. `--all` semantics flipping in 1.9.0) because mx is internal-use; document them clearly in the commit message. A future user-base would warrant stricter major-bump discipline.
+- **Minor (`X.Y+1.0`)** — new commands, new flags, additive porcelain fields, runtime CLAUDE.md template changes (since they're a deliberate contract update requiring `mx sync`).
+- **Major (`X+1.0.0`)** — a change to the **runtime layout version**. The CLI major maps 1:1 to the runtime version it supports (CLI 2.x ⇄ runtime v2), so a layout migration is a major bump and ships a registered `mx migrate` step. 2.0.0 was the first major (container repo layout + `VERSION` gate). Smaller breaking tweaks have historically ridden minor bumps (e.g. `--all` semantics flipping in 1.9.0) since mx is internal-use; document them clearly in the commit message.
 
 ## Where to look when something is wrong
 

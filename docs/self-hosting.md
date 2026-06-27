@@ -41,7 +41,7 @@ export MX_RUNTIME="$PWD/.mx"           # gitignored, per-worktree sandbox (recom
 export MX_RUNTIME=/tmp/mx-sbx-$(date +%s)
 ```
 
-If you forget and run `pnpm mx update` (or any locally-built mx) without `$MX_RUNTIME` pointing at a sandbox, it would re-stamp the productive runtime's `CLAUDE.md` with whatever template version is currently in your branch — possibly a broken WIP one. **Always set `$MX_RUNTIME` first.**
+If you forget and run `pnpm mx sync` (or any locally-built mx) without `$MX_RUNTIME` pointing at a sandbox, it would re-stamp the productive runtime's `CLAUDE.md` with whatever template version is currently in your branch — possibly a broken WIP one. **Always set `$MX_RUNTIME` first.**
 
 ## direnv (or shell function) for reflex-correct behaviour
 

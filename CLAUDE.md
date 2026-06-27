@@ -63,20 +63,29 @@ No pointer file is written anywhere. A consumer (or you, on any machine) sets `$
 
 The runtime's `CLAUDE.md` is an **installed copy** of `templates/CLAUDE.md` (at the repo root). The per-work `work.json` and `.code-workspace` are **generated programmatically** by the CLI (not text-substituted); `templates/{work.json,workspace.code-workspace}` hold their reference shapes.
 
-- To change runtime guidance, edit `templates/CLAUDE.md`, run `pnpm build` (which copies the templates into `npm/templates/`), then run `mx update`.
+- To change runtime guidance, edit `templates/CLAUDE.md`, run `pnpm build` (which copies the templates into `npm/templates/`), then run `mx sync`.
 - Templates are resolved relative to the installed bin (`<pkg>/bin/mx.js` → `<pkg>/templates/`), so the CLI works the same in dev (`npm/bin/mx.js` → `npm/templates/`) and once installed from npm.
 - Never hand-edit a runtime's installed `CLAUDE.md`; the runtime carries **only** a `CLAUDE.md` (no runtime README).
 
-## `mx update`
+## `mx sync` / `mx update` / `mx migrate`
 
-`mx update` re-syncs a runtime with the current mx version. Its contract is strictly **non-destructive — user data is never touched.** It:
+These three are distinct in v2 — don't confuse them:
+
+**`mx sync`** re-syncs a runtime with the current mx version (this is the command formerly called `mx update`). Its contract is strictly **non-destructive — user data is never touched.** It's same-major and subject to the version gate. It:
 
 - re-stamps the runtime `CLAUDE.md` from `templates/CLAUDE.md` (mx-owned generated content; always regenerated);
 - stamps `context/INDEX.json` **only if missing** (existing index content is preserved);
 - **backfills mx-owned structural directories across every work** — currently `<work>/sessions/` for any work that pre-dates that scaffolding. Future per-work or per-repo additions slot into `ensureWorkScaffolding` in `@mx/core` and propagate the same way.
+- backfills per-repo `setup.sh` / `health.sh` and per-work `.claude/settings.json` (all stamp-if-missing);
 - removes a stale runtime `README.md` if one lingers (legacy cleanup).
 
-It does **not** modify `work.json` contents, `.code-workspace` files, worktree code, session body files, context body files, or anything under `repos/`. Every output path it reports in `updated` is either a re-stamped template or a newly-created empty directory.
+It does **not** modify `work.json` contents, `.code-workspace` files, worktree code, session body files, context body files, user-edited hook bodies, or anything under `repos/<repo>/git/`. Its output header is "Synced runtime at …"; every reported path is either a re-stamped template or a newly-created empty directory.
+
+**`mx update`** is now a *different* command: it **self-updates the CLI** within its current major (`npm i -g @roulabs/mx@^<major>`), detects whether a newer major exists and suggests the deliberate upgrade (`npm i -g @roulabs/mx@<N>` then `mx migrate`), and is **not** version-gated. It falls back to printing the manual command if npm is missing or the install fails.
+
+**`mx migrate`** upgrades an older-version runtime up to the version this CLI supports — the only runtime command allowed on a version mismatch. It validates the full migration chain before mutating (`NO_MIGRATION` on a gap, `CLI_TOO_OLD` if the runtime is newer). The v1 → v2 step moves each clone into `repos/<repo>/git/` and runs `git worktree repair`.
+
+The CLI gates runtime commands on the runtime's `VERSION` (CLI major ⇄ runtime version); on a mismatch it refuses with `RUNTIME_VERSION_MISMATCH`, allowing only `mx migrate`, `mx update`, `mx help`, `mx version`.
 
 ## Testing against a runtime (hard rule)
 
@@ -89,7 +98,7 @@ node npm/bin/mx.js init              # or: pnpm mx init
 
 Use locally-created throwaway git repos as clone sources (`git init` in `/tmp/...`) so tests need no network. Since the runtime location is env-only (no pointer file), sandbox runs can't corrupt a real runtime — but still target `/tmp`. `MX_TEMPLATES_DIR` is available as an override for tests that want a fixture templates dir.
 
-This rule is **load-bearing under self-hosting** (next section): when this very source repo is checked out as a worktree inside an mx runtime, the "real runtime" is literally the one hosting your code. Running `pnpm mx update` (or any locally-built `mx`) without `$MX_RUNTIME` set elsewhere would re-stamp the host runtime's `CLAUDE.md` with your work-in-progress template, possibly with a broken or unreleased shape. Always set `$MX_RUNTIME` to a sandbox first.
+This rule is **load-bearing under self-hosting** (next section): when this very source repo is checked out as a worktree inside an mx runtime, the "real runtime" is literally the one hosting your code. Running `pnpm mx sync` (or any locally-built `mx`) without `$MX_RUNTIME` set elsewhere would re-stamp the host runtime's `CLAUDE.md` with your work-in-progress template, possibly with a broken or unreleased shape. Always set `$MX_RUNTIME` to a sandbox first.
 
 ## Self-hosting: working on mx as a work inside an mx runtime
 
@@ -150,14 +159,15 @@ mx/                                  # pnpm workspace (TypeScript); repo = githu
 ├── packages/
 │   └── core/                        # @mx/core — pure, typed, unit-tested domain logic
 │       └── src/                     #   errors, types, fsutil, json, git, templates,
-│                                    #   runtime, ports, repos, works, status, index
+│                                    #   runtime, migrations, ports, repos, works, status, index
 ├── templates/                       # source-of-truth runtime assets (no code; copied to npm/templates at build)
 │   ├── CLAUDE.md                    # feature-session rules
 │   ├── work.json                    # reference shape
 │   └── workspace.code-workspace
 ├── apps/
 │   └── cli/                         # @mx/cli (private) — CLI source
-│       ├── src/                     # args, output, help, paths, main, commands/{global,repo,work}
+│       ├── src/                     # args, output, help, paths, selfupdate, setup, main,
+│       │                            #   commands/{global,repo,work}
 │       └── tsup.config.ts           # bundles src/bin/mx.ts -> ../../npm/bin/mx.js, copies assets
 └── npm/                             # @roulabs/mx — publishable package
     ├── package.json                 # committed (public metadata)
@@ -172,17 +182,25 @@ mx/                                  # pnpm workspace (TypeScript); repo = githu
 ```
 mx/ (a runtime, e.g. ~/mx or ./.mx)
 ├── .mx-root            # marker file
+├── VERSION             # runtime layout version, e.g. "2" (absent = legacy v1)
 ├── CLAUDE.md           # from /templates/CLAUDE.md
 ├── context/            # shared memory across all features (see runtime CLAUDE.md § Context registry)
 │   ├── INDEX.json      # source of truth for entry metadata; stamped by mx init (only if missing)
 │   └── <path>.md       # body-only entries; agent owns content and nesting
-├── repos/<repo>/       # pristine clones — read-only reference
+├── repos/<repo>/       # per-repo container
+│   ├── git/            # the pristine clone — read-only reference
+│   ├── setup.sh        # runs after worktree add (customizable; stamp-if-missing)
+│   └── health.sh       # augments `mx repo health` (customizable; stamp-if-missing)
 └── works/<feature>/    # one folder per feature
     ├── work.json       # manifest, owned by mx; carries isArchived + archived_at when archived
     ├── <feature>.code-workspace
+    ├── .claude/settings.json  # SessionStart hook → loads context/INDEX.json (stamp-if-missing)
     ├── sessions/       # one md per session, written when the user asks at end-of-session
     └── <repo>/         # git worktree on the feature branch (absent while archived)
 ```
+
+The runtime carries a layout `VERSION`; the CLI supports one version (CLI major ⇄ runtime version) and
+gates every runtime command on a match — see § `mx sync` / `mx update` / `mx migrate` below.
 
 `templates/CLAUDE.md` is the **authoritative description** of how feature sessions behave (never edit `repos/`, never hand-edit `work.json`, never raw-`git` worktrees, ask before adding a worktree, keep branches on teardown, per-service free-port allocation). Keep it consistent with the CLI.
 
@@ -191,16 +209,18 @@ mx/ (a runtime, e.g. ~/mx or ./.mx)
 Implemented in `apps/cli` over `@mx/core`. Each command resolves the runtime via the discovery order above. Reads accept `--porcelain` (stable JSON); mutations echo the resulting object; errors are `{"error","code"}` with a non-zero exit. `-n <name>` may be omitted when the cwd implies it (inside `works/<work>/…` infers the work and, in a worktree, the repo; inside `repos/<repo>/…` infers the repo).
 
 **Global**
-- **`mx init [path]`** — scaffold/adopt a runtime (target = path arg, else `$MX_RUNTIME`, else `~/mx`): create `repos/`, `works/`, `.mx-root`; stamp `CLAUDE.md`; stamp `context/INDEX.json` (only if missing — context is user data). Idempotent; no clone; no pointer written.
+- **`mx init [path]`** — scaffold/adopt a runtime (target = path arg, else `$MX_RUNTIME`, else `~/mx`): create `repos/`, `works/`, `.mx-root`; stamp `VERSION`, `CLAUDE.md`; stamp `context/INDEX.json` (only if missing — context is user data). Refuses to adopt a runtime whose `VERSION` differs (→ `mx migrate`, or upgrade the CLI). Idempotent; no clone; no pointer written.
 - **`mx status [--all] [--porcelain]`** — runtime path, repos + branches, works + worktrees + ports. Active works only by default; `--all` includes archived. Aliases: `mx s`, `mx st`.
-- **`mx update`** — re-stamp the runtime `CLAUDE.md`; stamp `context/INDEX.json` only if missing; backfill `<work>/sessions/` for every work that lacks it. Never modifies user data.
+- **`mx sync`** — (formerly `mx update`) re-stamp the runtime `CLAUDE.md`; stamp `context/INDEX.json` only if missing; backfill `<work>/sessions/`, per-repo `setup.sh`/`health.sh`, and per-work `.claude/settings.json` (stamp-if-missing). Never modifies user data. Version-gated.
+- **`mx update`** — self-update the CLI within its major (`npm i -g @roulabs/mx@^<major>`); suggests a deliberate major upgrade if one exists. Not version-gated.
+- **`mx migrate`** — upgrade an older runtime to the supported version (the only runtime command allowed on a version mismatch); validates the chain first (`NO_MIGRATION` / `CLI_TOO_OLD`). v1→v2 moves clones into `git/` + `git worktree repair`.
 - **`mx help` / `mx version`**.
 
-**Repos** — `mx repo`: `add <git-url> [--name <n>]` (only command that clones) · `ls` · `-n <name> fetch` · `-n <name> info` · `health` (all repos, ✓/⚠ one-liner each) / `-n <name> health` (detail block: default branch, current branch, uncommitted, untracked, ahead/behind, last fetched, worktrees-in-works) · `-n <name> rm` (refuses if any work uses it). Health checks are purely local — they don't fetch; run `mx repo -n <name> fetch` first if you want a fresh comparison against origin.
+The version gate: every runtime-touching command first checks the runtime `VERSION` against the version the CLI supports (CLI major ⇄ runtime version); a mismatch refuses with `RUNTIME_VERSION_MISMATCH`, allowing only `mx migrate`, `mx update`, `mx help`, `mx version`.
 
-**Works** — `mx work`: `new <name> [--description <t>]` (creates folder, empty `work.json`, empty `sessions/`; prints path) · `ls [--all|--archived]` (default: active only; `--all` includes archived; `--archived` shows archived only) · `-n <name> info` · `describe <t>` · `path` · `worktree add <repo> [--branch <b>] [--base <ref>]` / `ls` / `rm <repo>` · `port set <repo> <service> [<port>]` / `unset` / `ls` · `archive` (removes worktrees, keeps folder + manifest + sessions + branches; recoverable via `unarchive`; prompts for confirmation — pass `--yes`/`-y` to skip; required for `--porcelain` and non-TTY callers) · `unarchive [<repo>=<branch>...]` (re-creates worktrees from `work.json`; positional `repo=branch` overrides per-repo when a recorded branch is missing) · `destroy --force` (PERMANENT: deletes the work folder including session summaries; branches still kept). `--base` resolves to a commit SHA (trying the ref, then `origin/<ref>`) so a bare branch name forks correctly; `worktree rm` / `archive` / `destroy` refuse on uncommitted changes; ports are unique across **all** works (no blocks). `archive` flips `isArchived: true` and stamps `archived_at` in `work.json`; `unarchive` clears them.
+**Repos** (clones live at `repos/<repo>/git/`, inside a per-repo container) — `mx repo`: `add <git-url> [--name <n>]` (only command that clones; also stamps `setup.sh`/`health.sh`) · `ls` (shows container path; porcelain `path`) · `-n <name> fetch` (fast-forwards only the checked-out branch) · `-n <name> info` · `health` (all repos, ✓/⚠ one-liner each) / `-n <name> health` (detail block: default branch, current branch, uncommitted, untracked, ahead/behind, last fetched, worktrees-in-works, plus captured `health.sh` `extra`) · `-n <name> rm` (refuses if any work uses it). Health checks are purely local — they don't fetch; run `mx repo -n <name> fetch` first if you want a fresh comparison against origin.
 
-Deferred: `mx open` (terminal/editor layout).
+**Works** — `mx work`: `new <name> [--description <t>] [--open|-o]` (creates folder, empty `work.json`, `sessions/`, `.claude/settings.json` context-index hook; prints path; `-o` opens Terminal+editor on macOS) · `ls [--all|--archived]` (default: active only; shows folder path / porcelain `path`) · `-n <name> info` · `describe <t>` · `path` · `worktree add <repo> [--branch <b>] [--base <ref>] [--no-setup]` (runs the repo's `setup.sh` after add unless `--no-setup`) / `ls` / `rm <repo>` / `setup <repo>` (re-run `setup.sh`; `SETUP_FAILED` on non-zero) · `port set <repo> <service> [<port>]` / `unset` / `ls` · `archive` (removes worktrees, keeps folder + manifest + sessions + branches; recoverable via `unarchive`; prompts for confirmation — pass `--yes`/`-y` to skip; required for `--porcelain` and non-TTY callers) · `unarchive [<repo>=<branch>...]` (re-creates worktrees from `work.json`; positional `repo=branch` overrides per-repo when a recorded branch is missing) · `destroy --force` (PERMANENT: deletes the work folder including session summaries; branches still kept). `--base` resolves to a commit SHA (trying the ref, then `origin/<ref>`) so a bare branch name forks correctly; `worktree rm` / `archive` / `destroy` refuse on uncommitted changes; ports are unique across **all** works (no blocks). `archive` flips `isArchived: true` and stamps `archived_at` in `work.json`; `unarchive` clears them.
 
 ## Conventions
 
@@ -208,15 +228,15 @@ Deferred: `mx open` (terminal/editor layout).
 - **Workflow:** `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm build` (and `pnpm dev` to watch). Add a Vitest test in `packages/core/test` for new core logic.
 - **Runtime is env-addressed** (`$MX_RUNTIME` / `--runtime` / `~/mx`); never persist a runtime path in this repo. Dev uses the gitignored `.mx/` runtime.
 - **Release:** CI-driven via `.github/workflows/release.yml`. **Every merge to `main` must produce a new release** — the PR bumps `"version"` in `npm/package.json`, and on push to `main` the workflow runs typecheck/lint/test/build, `npm publish`es from `npm/` (auth via the `NPM_TOKEN` automation-token secret), tags `vX.Y.Z`, and creates a GitHub Release. If the version still matches an existing tag, the run **fails** demanding a bump (a merge without a bump is treated as a mistake). One-time setup: add an npm automation token as the `NPM_TOKEN` repo secret (see `docs/release.md`). The local `pnpm release` (`scripts/release.sh`) remains as a **manual fallback** — it verifies npm auth + clean tree + fresh tag + unpublished version, prompts to confirm, then `npm publish --auth-type=web` (browser confirm for 2FA) and pushes the tag. **Gotchas** (npm name similarity rejection on unscoped names; CDN propagation lag on first publish of a new scope; npm has no `org create` CLI command — orgs must be created at https://www.npmjs.com/org/create) are documented in `README.md` § Release.
-- Keep `templates/CLAUDE.md` and the CLI's behavior consistent — they're the contract feature sessions rely on. A runtime only sees template changes after `pnpm build` (which copies them into `npm/templates/`) and `mx update`.
+- Keep `templates/CLAUDE.md` and the CLI's behavior consistent — they're the contract feature sessions rely on. A runtime only sees template changes after `pnpm build` (which copies them into `npm/templates/`) and `mx sync`.
 
 ## Status & where to pick up
 
 For a fresh session / new machine:
 
-- **Done and verified:** the full TS pnpm monorepo (`@mx/core` source + `@mx/cli` source + `npm/` publishable package), all commands (`init`, `status`, `update`, `repo`, `work` incl. `worktree`/`port`/`path`), env-based runtime discovery, templates copied into `npm/templates/` at build time, CI workflow for PR checks, `scripts/release.sh` for local publishing, MIT license, and a consumer README at `npm/README.md`. `pnpm typecheck/lint/test/build` are green; the packed tarball installs via `npm i -g` and runs self-contained from outside the repo. Hosted at `github.com/roulabs/mx`, branch `main`.
+- **Done and verified:** the full TS pnpm monorepo (`@mx/core` source + `@mx/cli` source + `npm/` publishable package), all commands (`init`, `status`, `sync`, `update`, `migrate`, `repo`, `work` incl. `worktree`/`port`/`path`), runtime versioning + container repo layout (v2), env-based runtime discovery, templates copied into `npm/templates/` at build time, CI workflow for PR checks, `scripts/release.sh` for local publishing, MIT license, and a consumer README at `npm/README.md`. `pnpm typecheck/lint/test/build` are green; the packed tarball installs via `npm i -g` and runs self-contained from outside the repo. Hosted at `github.com/roulabs/mx`, branch `main`.
 - **Shipped:** `@roulabs/mx` is live on npm at https://www.npmjs.com/package/@roulabs/mx (first release `v1.0.0` on 2026-06-04). For the currently-published version, run `git describe --tags --abbrev=0` or check the npm page. End-user install: `npm i -g @roulabs/mx` → `mx` command.
 - **Start working:** `pnpm install && pnpm build`, then `export MX_RUNTIME="$PWD/.mx"` and `pnpm mx init`. Iterate with `pnpm dev` (watch) + `pnpm mx ...`; run `pnpm typecheck && pnpm lint && pnpm test` before committing.
 - **Next release:** bump `npm/package.json` version in your PR, then merge to `main` — `.github/workflows/release.yml` publishes, tags, and creates the GitHub Release automatically (auth via the `NPM_TOKEN` secret). Forgetting the bump fails the run. `pnpm release` remains a local fallback.
-- **Not done yet:** `mx open` (terminal/editor layout). Optional next idea: isolated per-env state (separate DB schema / container) for safe parallel runs.
+- **Not done yet:** per-runtime support for non-Claude agents (`AGENTS.md` for Codex, `.cursorrules` for Cursor). Optional next idea: isolated per-env state (separate DB schema / container) for safe parallel runs. (`mx open`-style terminal/editor layout shipped in 2.0.0 as `mx work new -o`.)
 - **Gotchas already handled in code (keep them):** never run mx against a real runtime — use `/tmp` or `.mx`; the first `pnpm install` on a corp npm mirror is slow, not stuck; `--base` is resolved to a commit SHA with an `origin/<ref>` fallback to avoid git's DWIM overriding `-b`; `inferContext` realpaths both sides so symlinked roots (e.g. macOS `/tmp`) match.

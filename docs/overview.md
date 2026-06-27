@@ -17,27 +17,34 @@ mx manages a **runtime**: a single folder somewhere on disk (default `~/mx`, ove
 ```
 <runtime>/
 ├── .mx-root                     # marker
+├── VERSION                      # runtime layout version, e.g. "2"
 ├── CLAUDE.md                    # feature-session rules (stamped from templates/)
 ├── context/                     # shared memory across features
 │   ├── INDEX.json               # single source of truth for entry metadata
 │   └── <path>.md                # body-only entries (nested folders allowed)
-├── repos/<repo>/                # pristine clones, kept on default branch; READ-ONLY base
+├── repos/<repo>/                # per-repo container
+│   ├── git/                     # the pristine clone, kept on default branch; READ-ONLY base
+│   ├── setup.sh                 # runs after worktree add (customizable)
+│   └── health.sh                # augments `mx repo health` (customizable)
 └── works/<feature>/             # one folder per parallel feature
     ├── work.json                # manifest (owned by mx)
     ├── <feature>.code-workspace # VS Code workspace (owned by mx)
+    ├── .claude/settings.json    # SessionStart hook → loads context/INDEX.json
     ├── sessions/                # per-session summaries (one .md each)
     └── <repo>/                  # git worktree on the feature branch
 ```
 
 Two things to internalize:
 
-1. **`repos/` is read-only reference.** You never edit, commit, or run dev servers inside `<runtime>/repos/<repo>/`. Worktrees fork from these pristine clones and share their `.git` object store.
+1. **`repos/<repo>/git/` is read-only reference.** You never edit, commit, or run dev servers inside the clone. Worktrees fork from it and share its `.git` object store. The container around it (`repos/<repo>/`) also holds mx-owned per-repo scripts (`setup.sh`, `health.sh`).
 2. **`mx` owns its state.** `work.json` and `.code-workspace` are written only through `mx` commands. Feature sessions never hand-edit them.
+
+The runtime is **versioned**: `VERSION` records the on-disk layout version (CLI major ⇄ runtime version). mx refuses to operate on a runtime whose version it doesn't support and points you at `mx migrate` (upgrade the runtime) or `mx update` (upgrade the CLI). See [runtime-model](runtime-model.md#runtime-versioning).
 
 ## Two surfaces
 
 - **The CLI** — `mx init`, `mx work new`, `mx repo add`, `mx status`, etc. Every read takes `--porcelain` for stable JSON; mutations echo the resulting object; errors are `{"error","code"}` with a non-zero exit. See [commands](commands.md).
-- **The runtime CLAUDE.md** — stamped into the runtime by `mx init` (re-stamped by `mx update`). Tells the agent (Claude or otherwise) the rules for working inside this runtime: never edit `repos/`, never hand-edit `work.json`, etc. The contract feature sessions rely on.
+- **The runtime CLAUDE.md** — stamped into the runtime by `mx init` (re-stamped by `mx sync`). Tells the agent (Claude or otherwise) the rules for working inside this runtime: never edit `repos/`, never hand-edit `work.json`, etc. The contract feature sessions rely on.
 
 ## Who uses mx
 
