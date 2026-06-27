@@ -66,7 +66,7 @@ export function stampContextIndex(targetDir: string, templatesDir: string): stri
  * (`repos/<name>/`) from `<templatesDir>/repo/<file>`. User-customizable once
  * stamped, so each is written only when missing.
  */
-const REPO_SCRIPTS = ['setup.sh'] as const;
+const REPO_SCRIPTS = ['setup.sh', 'health.sh'] as const;
 
 /**
  * Stamp mx-owned per-repo scripts (e.g. `setup.sh`) into a repo container,

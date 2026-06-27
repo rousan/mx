@@ -14,6 +14,7 @@ export {
   repoPath,
   repoGitDir,
   repoSetupScript,
+  repoHealthScript,
   workDir,
   workManifest,
   workspaceFile,

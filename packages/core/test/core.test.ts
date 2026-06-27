@@ -539,15 +539,29 @@ describe('per-repo setup script', () => {
     expect(stampRepoScripts(dir, TEMPLATES_DIR)).toEqual([]);
   });
 
-  it('syncRuntime backfills setup.sh for existing repos', () => {
+  it('syncRuntime backfills setup.sh + health.sh for existing repos', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
-    repoAdd(root, srcRepo(), 'app'); // core repoAdd clones only — no script yet
-    const dest = path.join(root, 'repos', 'app', 'setup.sh');
-    expect(fs.existsSync(dest)).toBe(false);
+    repoAdd(root, srcRepo(), 'app'); // core repoAdd clones only — no scripts yet
+    const setup = path.join(root, 'repos', 'app', 'setup.sh');
+    const health = path.join(root, 'repos', 'app', 'health.sh');
+    expect(fs.existsSync(setup)).toBe(false);
     const res = syncRuntime(root, TEMPLATES_DIR);
-    expect(res.updated).toContain(dest);
-    expect(fs.existsSync(dest)).toBe(true);
+    expect(res.updated).toContain(setup);
+    expect(res.updated).toContain(health);
+    expect(fs.existsSync(setup)).toBe(true);
+    expect(fs.existsSync(health)).toBe(true);
+  });
+
+  it('repoHealth.extra captures health.sh stdout (null when absent)', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, srcRepo(), 'app');
+    expect(repoHealth(root, 'app').extra).toBeNull(); // no health.sh yet
+    const hs = path.join(root, 'repos', 'app', 'health.sh');
+    fs.writeFileSync(hs, '#!/usr/bin/env bash\necho "node_modules: present"\n');
+    fs.chmodSync(hs, 0o755);
+    expect(repoHealth(root, 'app').extra).toBe('node_modules: present');
   });
 });
 

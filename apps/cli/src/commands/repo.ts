@@ -249,4 +249,11 @@ function renderHealthDetail(h: RepoHealth): void {
     const hint = r.hint ? `  ${dim(r.hint)}` : '';
     console.log(`  ${label}  ${value}${marker}${hint}`);
   }
+
+  // Repo-specific augmentation from the repo's health.sh, if any.
+  if (h.extra) {
+    console.log();
+    console.log(`  ${dim('health.sh')}`);
+    for (const line of h.extra.split('\n')) console.log(`    ${dim(line)}`);
+  }
 }

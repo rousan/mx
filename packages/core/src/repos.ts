@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { MxError } from './errors';
@@ -6,6 +7,7 @@ import { git, gitQuiet, currentBranch, remoteUrl, remoteBranchList } from './git
 import {
   repoPath,
   repoGitDir,
+  repoHealthScript,
   listRepoNames,
   listWorkNames,
   readWork,
@@ -178,6 +180,12 @@ export interface RepoHealth {
   healthy: boolean;
   /** Human-readable description of each issue; empty when `healthy`. */
   issues: string[];
+  /**
+   * Captured stdout of the repo's `health.sh` augmentation hook (trimmed), or
+   * null when there's no script, it produced no output, or it failed. Purely
+   * informational — it doesn't affect `healthy`/`issues`.
+   */
+  extra: string | null;
 }
 
 /**
@@ -261,6 +269,41 @@ function lastFetched(rp: string): string | null {
 }
 
 /**
+ * Run a repo's `health.sh` augmentation hook and capture its stdout.
+ *
+ * Runs with the repo's git clone as the working directory; repo context is
+ * passed via `MX_*` env vars. Returns the trimmed output, or null when there's
+ * no script, it produced nothing, or it exited non-zero (best-effort — a broken
+ * hook never breaks the health report).
+ *
+ * @param root - Runtime root.
+ * @param name - Repo name.
+ * @returns Trimmed hook stdout, or null.
+ */
+function runHealthScript(root: string, name: string): string | null {
+  const script = repoHealthScript(root, name);
+  if (!exists(script)) return null;
+  try {
+    const out = execFileSync(script, [], {
+      cwd: repoGitDir(root, name),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      env: {
+        ...process.env,
+        MX_RUNTIME: root,
+        MX_REPO: name,
+        MX_REPO_PATH: repoPath(root, name),
+        MX_GIT_DIR: repoGitDir(root, name),
+      },
+    });
+    const trimmed = out.trim();
+    return trimmed.length ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Compute a `RepoHealth` snapshot for a single pristine clone.
  *
  * Purely local — no network. The "behind origin" check compares against the
@@ -319,6 +362,7 @@ export function repoHealth(root: string, name: string): RepoHealth {
     worktreesInWorks,
     healthy: issues.length === 0,
     issues,
+    extra: runHealthScript(root, name),
   };
 }
 

@@ -77,6 +77,17 @@ export const repoSetupScript = (root: string, name: string): string =>
   path.join(repoPath(root, name), 'setup.sh');
 
 /**
+ * Path to a repo's health hook (`repos/<name>/health.sh`), whose stdout
+ * augments `mx repo health` output.
+ *
+ * @param root - Runtime root.
+ * @param name - Repo name.
+ * @returns Absolute path to the repo's `health.sh`.
+ */
+export const repoHealthScript = (root: string, name: string): string =>
+  path.join(repoPath(root, name), 'health.sh');
+
+/**
  * Path to a work folder under `works/`.
  *
  * @param root - Runtime root.
