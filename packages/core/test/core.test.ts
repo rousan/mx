@@ -604,9 +604,9 @@ describe('runtime versioning + migrate', () => {
   const runGit = (cwd: string, args: string[]) =>
     execFileSync('git', args, { cwd, stdio: 'ignore' });
 
-  it('readRuntimeVersion defaults to 1 when no VERSION file, else reads the value', () => {
+  it('readRuntimeVersion defaults to 1 when no mx.json, else reads the value', () => {
     const root = tmp();
-    expect(readRuntimeVersion(root)).toBe(1); // legacy: no VERSION file
+    expect(readRuntimeVersion(root)).toBe(1); // legacy: no mx.json
     writeRuntimeVersion(root, 5);
     expect(readRuntimeVersion(root)).toBe(5);
   });

@@ -366,6 +366,10 @@ The hook is **per-work** (not at the runtime root) because Claude Code reads `.c
 | `EXISTS` | something already exists (repo, work, worktree) |
 | `IN_USE` | resource is used elsewhere (e.g. repo has worktrees in works) |
 | `DIRTY` | git worktree has uncommitted changes |
+| `PORT_TAKEN` | requested port is already allocated to another work/service |
+| `NO_PORT` | `port unset` for a service that has no port set |
+| `GIT` | an underlying `git` command failed (message includes git's stderr) |
+| `OSASCRIPT` | an AppleScript step failed during `mx work new -o` (macOS) |
 | `ALREADY_ARCHIVED` | archive called on an archived work |
 | `NOT_ARCHIVED` | unarchive called on a non-archived work |
 | `NEED_FORCE` | mutating action gated behind `--force` |
