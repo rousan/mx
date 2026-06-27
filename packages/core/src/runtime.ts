@@ -429,12 +429,48 @@ export interface SyncResult {
  */
 export function ensureWorkScaffolding(root: string, workName: string): string[] {
   const created: string[] = [];
-  const sessions = path.join(workDir(root, workName), 'sessions');
+  const wd = workDir(root, workName);
+  const sessions = path.join(wd, 'sessions');
   if (!exists(sessions)) {
     fs.mkdirSync(sessions, { recursive: true });
     created.push(sessions);
   }
+  // Per-work Claude Code settings: a SessionStart hook that loads the runtime's
+  // context-registry index into every session launched in this work folder.
+  // Claude Code reads .claude/settings.json only from the session's launch dir
+  // (no upward walk) and mx sessions launch here, so it must be per-work — not
+  // at the runtime root. Stamp-if-missing: it's user-editable afterwards.
+  const settings = path.join(wd, '.claude', 'settings.json');
+  if (!exists(settings)) {
+    fs.mkdirSync(path.dirname(settings), { recursive: true });
+    fs.writeFileSync(settings, workClaudeSettings(root));
+    created.push(settings);
+  }
   return created;
+}
+
+/**
+ * Build the per-work `.claude/settings.json` contents: a `SessionStart` hook
+ * that prints the runtime's context-registry index so every session has the
+ * catalog in context from the start (deterministic, unlike CLAUDE.md prose).
+ * The runtime's absolute INDEX path is baked in, so this is generated
+ * programmatically rather than copied from a static template.
+ *
+ * @param root - Runtime root.
+ * @returns The settings JSON text (with a trailing newline).
+ */
+function workClaudeSettings(root: string): string {
+  const contextDir = path.join(root, 'context');
+  const indexPath = path.join(contextDir, 'INDEX.json');
+  const command =
+    `echo '# mx context registry — open ${contextDir}/<path>.md for relevant entries:'; ` +
+    `cat '${indexPath}' 2>/dev/null`;
+  const settings = {
+    hooks: {
+      SessionStart: [{ matcher: '*', hooks: [{ type: 'command', command }] }],
+    },
+  };
+  return JSON.stringify(settings, null, 2) + '\n';
 }
 
 /**

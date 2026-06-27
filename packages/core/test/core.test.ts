@@ -513,6 +513,40 @@ describe('archive / unarchive / destroy lifecycle', () => {
   });
 });
 
+describe('per-work context-index hook', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+
+  it('workNew stamps a .claude/settings.json SessionStart hook for the index', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const res = workNew(root, 'feat');
+    const settingsPath = path.join(res.path, '.claude', 'settings.json');
+    expect(fs.existsSync(settingsPath)).toBe(true);
+    const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    const cmd = s.hooks.SessionStart[0].hooks[0].command;
+    expect(cmd).toContain(path.join(root, 'context', 'INDEX.json'));
+  });
+
+  it('syncRuntime backfills the hook for an existing work, without clobbering edits', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    workNew(root, 'feat');
+    const settingsPath = path.join(root, 'works', 'feat', '.claude', 'settings.json');
+    // Simulate a pre-hook work: remove .claude, then verify sync recreates it.
+    fs.rmSync(path.join(root, 'works', 'feat', '.claude'), { recursive: true, force: true });
+    expect(fs.existsSync(settingsPath)).toBe(false);
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    expect(res.updated).toContain(settingsPath);
+    expect(fs.existsSync(settingsPath)).toBe(true);
+
+    // Non-clobbering: a user edit survives a second sync.
+    fs.writeFileSync(settingsPath, '{"hooks":{}}\n');
+    const res2 = syncRuntime(root, TEMPLATES_DIR);
+    expect(res2.updated).not.toContain(settingsPath);
+    expect(fs.readFileSync(settingsPath, 'utf8')).toBe('{"hooks":{}}\n');
+  });
+});
+
 describe('per-repo setup script', () => {
   const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
   const runGit = (cwd: string, args: string[]) =>
