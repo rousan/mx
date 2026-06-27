@@ -13,6 +13,7 @@ export {
   worksDir,
   repoPath,
   repoGitDir,
+  repoSetupScript,
   workDir,
   workManifest,
   workspaceFile,
@@ -39,7 +40,7 @@ export type { InitResult, SyncResult } from './runtime';
 export { migrateRuntime } from './migrations';
 export type { MigrateResult, AppliedMigration } from './migrations';
 
-export { stampClaudeMd, removeStaleRuntimeReadme } from './templates';
+export { stampClaudeMd, removeStaleRuntimeReadme, stampRepoScripts } from './templates';
 
 export {
   repoNameFromUrl,

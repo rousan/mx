@@ -2,6 +2,8 @@ import {
   requireRuntime,
   inferContext,
   repoAdd,
+  repoPath,
+  stampRepoScripts,
   listReposInfo,
   repoFetch,
   repoInfo,
@@ -12,6 +14,7 @@ import {
 } from '@mx/core';
 import type { RepoHealth } from '@mx/core';
 import { emit, dim, bold, check, warn, tildify } from '../output';
+import { templatesDir } from '../paths';
 import type { Flags } from '../args';
 
 /**
@@ -43,6 +46,8 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
     case 'add': {
       const url = need(positionals[2], 'usage: mx repo add <git-url> [--name <n>]');
       const res = repoAdd(root, url, flags.name);
+      // Stamp the repo's mx-owned scripts (setup.sh) into its container.
+      stampRepoScripts(repoPath(root, res.name), templatesDir());
       emit(() => console.log(`${check()} cloned ${bold(res.name)} ${dim(`→ ${res.path}`)}`), res);
       return;
     }

@@ -18,8 +18,10 @@ import {
   portList,
   MxError,
 } from '@mx/core';
+import * as path from 'node:path';
 import { emit, dim, bold, check, warn, confirmYesNo, tildify } from '../output';
 import { openWorkLayout } from '../open';
+import { runWorktreeSetup } from '../setup';
 import type { Flags } from '../args';
 
 /**
@@ -263,7 +265,7 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
     case 'add': {
       const repo = need(
         positionals[3],
-        'usage: mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>]',
+        'usage: mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-setup]',
       );
       const res = worktreeAdd(root, name, repo, { branch: flags.branch, base: flags.base });
       emit(
@@ -273,6 +275,19 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
           ),
         res,
       );
+      // Run the repo's setup hook for the new worktree (unless opted out). The
+      // worktree already exists, so a failure is a warning, not a hard error.
+      if (!flags.noSetup) {
+        const outcome = runWorktreeSetup(
+          { root, work: name, repo: res.repo, worktreePath: res.path, branch: res.branch, base: flags.base },
+          flags.porcelain,
+        );
+        if (outcome.ran && !outcome.ok && !flags.porcelain) {
+          process.stderr.write(
+            `${warn()} ${dim(`setup.sh for ${res.repo} exited non-zero — worktree kept. Re-run: mx work -n ${name} worktree setup ${res.repo}`)}\n`,
+          );
+        }
+      }
       return;
     }
     case 'ls': {
@@ -305,6 +320,32 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
           ),
         res,
       );
+      return;
+    }
+    case 'setup': {
+      // Re-run a repo's setup.sh against its existing worktree on demand.
+      const repo = need(positionals[3], 'usage: mx work -n <name> worktree setup <repo>');
+      const wt = worktreeList(root, name).find((w) => w.repo === repo);
+      if (!wt) throw new MxError(`work "${name}" has no worktree for ${repo}`, 'NO_WORKTREE');
+      const worktreePath = path.join(workPath(root, name).path, repo);
+      const outcome = runWorktreeSetup(
+        { root, work: name, repo, worktreePath, branch: wt.branch },
+        flags.porcelain,
+      );
+      if (outcome.missing) {
+        emit(
+          () => console.log(dim(`no setup.sh for ${repo} — nothing to run`)),
+          { work: name, repo, ran: false },
+        );
+        return;
+      }
+      if (!outcome.ok) throw new MxError(`setup.sh for ${repo} exited non-zero`, 'SETUP_FAILED');
+      emit(() => console.log(`${check()} ran setup for ${bold(repo)}`), {
+        work: name,
+        repo,
+        ran: true,
+        ok: true,
+      });
       return;
     }
     default:

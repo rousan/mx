@@ -31,6 +31,7 @@ import {
   repoFetch,
   repoInfo,
   repoHealth,
+  stampRepoScripts,
   listRepoHealth,
   statusRuntime,
 } from '../src/index';
@@ -509,6 +510,44 @@ describe('archive / unarchive / destroy lifecycle', () => {
     expect(onlyArchived.map((w) => w.name)).toEqual(['feat2']);
     expect(onlyArchived[0].isArchived).toBe(true);
     expect(onlyArchived[0].archived_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+});
+
+describe('per-repo setup script', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+  const runGit = (cwd: string, args: string[]) =>
+    execFileSync('git', args, { cwd, stdio: 'ignore' });
+
+  function srcRepo(): string {
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    runGit(src, ['commit', '-qm', 'init', '--allow-empty']);
+    return src;
+  }
+
+  it('stampRepoScripts writes an executable setup.sh, idempotently', () => {
+    const dir = tmp();
+    const dest = path.join(dir, 'setup.sh');
+    const created = stampRepoScripts(dir, TEMPLATES_DIR);
+    expect(created).toContain(dest);
+    expect(fs.existsSync(dest)).toBe(true);
+    expect((fs.statSync(dest).mode & 0o111) !== 0).toBe(true); // has an exec bit
+    // Idempotent + non-clobbering: a second call stamps nothing.
+    expect(stampRepoScripts(dir, TEMPLATES_DIR)).toEqual([]);
+  });
+
+  it('syncRuntime backfills setup.sh for existing repos', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, srcRepo(), 'app'); // core repoAdd clones only — no script yet
+    const dest = path.join(root, 'repos', 'app', 'setup.sh');
+    expect(fs.existsSync(dest)).toBe(false);
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    expect(res.updated).toContain(dest);
+    expect(fs.existsSync(dest)).toBe(true);
   });
 });
 

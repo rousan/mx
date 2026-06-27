@@ -5,7 +5,12 @@ import { MxError } from './errors';
 import { exists, isGitRepo, listDirs, realpath } from './fsutil';
 import { git } from './git';
 import { readJson, writeJson } from './json';
-import { stampClaudeMd, stampContextIndex, removeStaleRuntimeReadme } from './templates';
+import {
+  stampClaudeMd,
+  stampContextIndex,
+  removeStaleRuntimeReadme,
+  stampRepoScripts,
+} from './templates';
 import type { Work, Worktree, RuntimeOpts, InferredContext } from './types';
 
 /**
@@ -59,6 +64,17 @@ export const repoPath = (root: string, name: string): string => path.join(reposD
  */
 export const repoGitDir = (root: string, name: string): string =>
   path.join(repoPath(root, name), 'git');
+
+/**
+ * Path to a repo's per-worktree setup hook (`repos/<name>/setup.sh`), run after
+ * a worktree is created for that repo.
+ *
+ * @param root - Runtime root.
+ * @param name - Repo name.
+ * @returns Absolute path to the repo's `setup.sh`.
+ */
+export const repoSetupScript = (root: string, name: string): string =>
+  path.join(repoPath(root, name), 'setup.sh');
 
 /**
  * Path to a work folder under `works/`.
@@ -439,6 +455,10 @@ export function syncRuntime(root: string, templatesDir: string): SyncResult {
   if (ctxIndex) updated.push(ctxIndex);
   for (const workName of listWorkNames(root)) {
     updated.push(...ensureWorkScaffolding(root, workName));
+  }
+  // Backfill mx-owned per-repo scripts (e.g. setup.sh) for every pristine repo.
+  for (const repo of listRepoNames(root)) {
+    updated.push(...stampRepoScripts(repoPath(root, repo), templatesDir));
   }
   removeStaleRuntimeReadme(root);
   return { runtime: root, updated };
