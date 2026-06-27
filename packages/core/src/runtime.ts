@@ -56,7 +56,7 @@ export const repoPath = (root: string, name: string): string => path.join(reposD
 /**
  * Path to a repo's git clone — the `git/` subfolder inside the per-repo
  * container. The container (`repoPath`) holds the clone plus mx-owned per-repo
- * tooling (e.g. `setup.sh`, `health.sh`); the actual git repository lives here.
+ * tooling (e.g. `hydrate.sh`, `health.sh`); the actual git repository lives here.
  *
  * @param root - Runtime root.
  * @param name - Repo name.
@@ -66,15 +66,15 @@ export const repoGitDir = (root: string, name: string): string =>
   path.join(repoPath(root, name), 'git');
 
 /**
- * Path to a repo's per-worktree setup hook (`repos/<name>/setup.sh`), run after
- * a worktree is created for that repo.
+ * Path to a repo's per-worktree hydrate hook (`repos/<name>/hydrate.sh`), run
+ * after a worktree is created for that repo.
  *
  * @param root - Runtime root.
  * @param name - Repo name.
- * @returns Absolute path to the repo's `setup.sh`.
+ * @returns Absolute path to the repo's `hydrate.sh`.
  */
-export const repoSetupScript = (root: string, name: string): string =>
-  path.join(repoPath(root, name), 'setup.sh');
+export const repoHydrateScript = (root: string, name: string): string =>
+  path.join(repoPath(root, name), 'hydrate.sh');
 
 /**
  * Path to a repo's health hook (`repos/<name>/health.sh`), whose stdout
@@ -124,39 +124,65 @@ export const workspaceFile = (root: string, name: string): string =>
 export const RUNTIME_VERSION = 2;
 
 /**
- * Path to a runtime's `VERSION` file.
- *
- * @param root - Runtime root.
- * @returns Absolute path to `<root>/VERSION`.
+ * Shape of the runtime config file (`<runtime>/mx.json`). Intentionally open —
+ * `version` is the only field mx requires today; more runtime-level config can
+ * be added over time without changing the file's identity.
  */
-export const versionFile = (root: string): string => path.join(root, 'VERSION');
+export interface MxConfig {
+  /** Runtime layout version (>= 1). */
+  version: number;
+  /** Forward-compatible: unknown keys are preserved across writes. */
+  [key: string]: unknown;
+}
 
 /**
- * Read a runtime's layout version. A runtime with no `VERSION` file predates
- * versioning and is treated as **v1** (legacy).
+ * Path to a runtime's config file.
+ *
+ * @param root - Runtime root.
+ * @returns Absolute path to `<root>/mx.json`.
+ */
+export const mxConfigFile = (root: string): string => path.join(root, 'mx.json');
+
+/**
+ * Read a runtime's `mx.json`, or null when it doesn't exist (a runtime with no
+ * `mx.json` predates versioning and is treated as legacy v1).
+ *
+ * @param root - Runtime root.
+ * @returns The parsed config, or null if absent.
+ */
+export function readMxConfig(root: string): MxConfig | null {
+  const f = mxConfigFile(root);
+  if (!exists(f)) return null;
+  return readJson<MxConfig>(f);
+}
+
+/**
+ * Read a runtime's layout version from `mx.json`. A runtime with no `mx.json`
+ * predates versioning and is treated as **v1** (legacy).
  *
  * @param root - Runtime root.
  * @returns The integer runtime version (>= 1).
  */
 export function readRuntimeVersion(root: string): number {
-  const f = versionFile(root);
-  if (!exists(f)) return 1;
-  const raw = fs.readFileSync(f, 'utf8').trim();
-  const n = Number.parseInt(raw, 10);
-  if (!Number.isInteger(n) || n < 1) {
-    throw new MxError(`invalid runtime VERSION file (${JSON.stringify(raw)}) at ${f}`, 'BAD_VERSION');
+  const cfg = readMxConfig(root);
+  if (!cfg) return 1;
+  const n = cfg.version;
+  if (!Number.isInteger(n) || (n as number) < 1) {
+    throw new MxError(`invalid version in ${mxConfigFile(root)}: ${JSON.stringify(n)}`, 'BAD_VERSION');
   }
   return n;
 }
 
 /**
- * Write a runtime's layout version.
+ * Record a runtime's layout version in `mx.json`, preserving any other config
+ * keys already present.
  *
  * @param root - Runtime root.
  * @param version - Integer version to record.
  */
 export function writeRuntimeVersion(root: string, version: number): void {
-  fs.writeFileSync(versionFile(root), `${version}\n`);
+  const existing = readMxConfig(root) ?? {};
+  writeJson(mxConfigFile(root), { ...existing, version });
 }
 
 /**
@@ -394,9 +420,9 @@ export function initRuntime(target0: string, templatesDir: string): InitResult {
     fs.writeFileSync(marker, '');
     created.push(marker);
   }
-  if (!exists(versionFile(target))) {
+  if (!exists(mxConfigFile(target))) {
     writeRuntimeVersion(target, RUNTIME_VERSION);
-    created.push(versionFile(target));
+    created.push(mxConfigFile(target));
   }
   created.push(stampClaudeMd(target, templatesDir));
   const ctxIndex = stampContextIndex(target, templatesDir);
@@ -503,7 +529,7 @@ export function syncRuntime(root: string, templatesDir: string): SyncResult {
   for (const workName of listWorkNames(root)) {
     updated.push(...ensureWorkScaffolding(root, workName));
   }
-  // Backfill mx-owned per-repo scripts (e.g. setup.sh) for every pristine repo.
+  // Backfill mx-owned per-repo scripts (hydrate.sh, health.sh) for every repo.
   for (const repo of listRepoNames(root)) {
     updated.push(...stampRepoScripts(repoPath(root, repo), templatesDir));
   }

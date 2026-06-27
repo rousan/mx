@@ -19,7 +19,7 @@ Every read command takes `--porcelain` for stable JSON; parse that instead of sc
 
 ## Runtime version gate
 
-This runtime carries a layout version in `<runtime>/VERSION` (an integer). The `mx` CLI supports exactly
+This runtime carries a layout version in `<runtime>/mx.json` (an integer). The `mx` CLI supports exactly
 one runtime version (CLI major ⇄ runtime version). If the CLI and runtime versions don't match, **every
 runtime command refuses** with error `RUNTIME_VERSION_MISMATCH` — only `mx migrate`, `mx update`,
 `mx help`, and `mx version` are allowed. If you hit that error, **stop and tell the user**: run
@@ -51,14 +51,14 @@ a newer runtime. Don't try to work around the gate by editing files by hand.
 ```
 mx/
 ├── .mx-root                # empty marker: "this is the mx root"
-├── VERSION                 # runtime layout version, e.g. "2"
+├── mx.json                 # runtime config: { "version": 2 }
 ├── CLAUDE.md               # this file (installed by the mx CLI)
 ├── context/                # shared memory across all features (see § Context registry)
 │   ├── INDEX.json          # single source of truth — metadata for every entry
 │   └── <path>.md           # body-only entries; nested folders allowed
 ├── repos/<repo>/           # per-repo container
 │   ├── git/                # the PRISTINE clone (read-only reference)
-│   ├── setup.sh            # runs after worktree add (customizable)
+│   ├── hydrate.sh            # runs after worktree add (customizable)
 │   └── health.sh           # augments `mx repo health` (customizable)
 └── works/                  # one folder per feature/work
     └── feature-a/
@@ -72,9 +72,9 @@ mx/
 
 - `repos/<repo>/git` are **source-of-truth clones** — read-only reference. Worktrees fork from them
   and share their `.git` object store. Never edit, commit, or run dev servers in `repos/`.
-- `repos/<repo>/setup.sh` and `repos/<repo>/health.sh` are mx-owned per-repo hooks you may customize:
-  `setup.sh` runs automatically after `mx work … worktree add <repo>` (cwd = the new worktree); `health.sh`
-  augments `mx repo health`. Edit their bodies if a repo needs custom worktree setup or health output.
+- `repos/<repo>/hydrate.sh` and `repos/<repo>/health.sh` are mx-owned per-repo hooks you may customize:
+  `hydrate.sh` runs automatically after `mx work … worktree add <repo>` (cwd = the new worktree); `health.sh`
+  augments `mx repo health`. Edit their bodies if a repo needs custom worktree hydrate or health output.
 - `works/<feature>/<repo>` are **worktrees**, each on its own feature branch. All work happens here.
 
 ## work.json (per-work manifest, owned by mx)
@@ -226,9 +226,9 @@ clarity; dropping it works while you're inside the work.
     `migration-to-mt-service-from-cf`) resolves to that local branch or, failing that, `origin/<name>`.
     Run `mx repo -n <repo> fetch` first if you want the base at its latest upstream commit. Omit
     `--base` to fork from the pristine clone's current HEAD.
-  - After the worktree is created, the repo's `repos/<repo>/setup.sh` runs automatically with the new
-    worktree as the working directory (copy a `.env`, install deps, etc.). Pass `--no-setup` to skip it,
-    or re-run it later with `mx work -n <feature> worktree setup <repo>`.
+  - After the worktree is created, the repo's `repos/<repo>/hydrate.sh` runs automatically with the new
+    worktree as the working directory (copy a `.env`, install deps, etc.). Pass `--no-hydrate` to skip it,
+    or re-run it later with `mx work -n <feature> worktree hydrate <repo>`.
 - **Allocate a port:** `mx work -n <feature> port set <repo> <service>` returns a free port (unique
   across all works). This only records the port in `work.json` — **you** must then wire that port
   into the repo's own env/config (`.env`, `PORT=`, etc.) and remap any outbound URL to a sibling

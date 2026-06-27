@@ -8,9 +8,9 @@ Every command supported by `mx`, with flags, semantics, and examples.
 
 Scaffold or adopt a runtime. Target resolution: positional `path` arg → `$MX_RUNTIME` → `~/mx`.
 
-Creates: `repos/`, `works/`, `.mx-root`, `VERSION` (stamped with the runtime version this CLI supports), `CLAUDE.md` (stamped), `context/INDEX.json` (only if missing). Idempotent.
+Creates: `repos/`, `works/`, `.mx-root`, `mx.json` (stamped with the runtime version this CLI supports), `CLAUDE.md` (stamped), `context/INDEX.json` (only if missing). Idempotent.
 
-On a fresh runtime, `mx init` stamps `VERSION` with the runtime version this CLI supports (currently `2`). When adopting an existing runtime, it refuses if that runtime's `VERSION` differs from what this CLI supports — pointing you at `mx migrate` (if the runtime is older) or at upgrading the CLI (if the runtime is newer). See [Runtime versioning](#runtime-versioning).
+On a fresh runtime, `mx init` stamps `mx.json` with the runtime version this CLI supports (currently `2`). When adopting an existing runtime, it refuses if that runtime's `mx.json` differs from what this CLI supports — pointing you at `mx migrate` (if the runtime is older) or at upgrading the CLI (if the runtime is newer). See [Runtime versioning](#runtime-versioning).
 
 Prints a contextual hint about `$MX_RUNTIME`:
 - If `$MX_RUNTIME` already points at this runtime: confirms you're set.
@@ -54,7 +54,7 @@ Re-sync the runtime with the current mx version (this is the command formerly ca
 - re-stamps `<runtime>/CLAUDE.md` from `templates/CLAUDE.md` (always rewritten, mx-owned)
 - stamps `<runtime>/context/INDEX.json` **only if missing** (existing index content is preserved)
 - backfills mx-owned structural directories across every work — currently `<work>/sessions/` for any work that pre-dates that scaffolding
-- backfills per-repo `setup.sh` / `health.sh` in each repo container, **stamp-if-missing** and executable (see [Per-repo scripts](#per-repo-scripts))
+- backfills per-repo `hydrate.sh` / `health.sh` in each repo container, **stamp-if-missing** and executable (see [Per-repo scripts](#per-repo-scripts))
 - generates each work's `.claude/settings.json` context-index hook, **stamp-if-missing** (see [Per-work context-index hook](#per-work-context-index-hook))
 - removes a stale `<runtime>/README.md` if one lingers (legacy cleanup)
 
@@ -63,7 +63,7 @@ Output enumerates every path actually written:
 ```
 ✓ Synced runtime at /Users/rousan/mx
   + /Users/rousan/mx/CLAUDE.md
-  + /Users/rousan/mx/repos/app/setup.sh
+  + /Users/rousan/mx/repos/app/hydrate.sh
   + /Users/rousan/mx/works/old-feat/sessions
   + /Users/rousan/mx/works/old-feat/.claude/settings.json
 ```
@@ -84,7 +84,7 @@ Crossing a major is always a deliberate user action — `mx update` never does i
 
 ### `mx migrate`
 
-**Upgrade an older runtime** to the version this CLI supports. This is the only runtime-touching command allowed when the runtime's `VERSION` doesn't match (see [Runtime versioning](#runtime-versioning)).
+**Upgrade an older runtime** to the version this CLI supports. This is the only runtime-touching command allowed when the runtime's `mx.json` doesn't match (see [Runtime versioning](#runtime-versioning)).
 
 It validates the **full migration chain** (`v_current → … → supported`) *before* mutating anything:
 
@@ -100,27 +100,27 @@ Print help text or version (read from `<pkg>/package.json` at startup). Allowed 
 
 ## Runtime versioning
 
-A runtime carries its layout version in `<runtime>/VERSION` — an integer (currently `2`). An **absent** `VERSION` file means a legacy **v1** runtime.
+A runtime carries its layout version in `<runtime>/mx.json` — an integer (currently `2`). An **absent** `mx.json` file means a legacy **v1** runtime.
 
 This CLI supports a single runtime version (`RUNTIME_VERSION = 2`), and the mapping is fixed: **CLI major version ⇄ runtime version** (CLI 2.x supports runtime v2, CLI 3.x will support v3, …).
 
-**The version gate.** Before any runtime-touching command runs, mx compares the runtime's `VERSION` to the version it supports. On a mismatch it **refuses** the command with error code `RUNTIME_VERSION_MISMATCH` and points you at `mx migrate`. The only commands allowed on a mismatched runtime are:
+**The version gate.** Before any runtime-touching command runs, mx compares the runtime's `mx.json` to the version it supports. On a mismatch it **refuses** the command with error code `RUNTIME_VERSION_MISMATCH` and points you at `mx migrate`. The only commands allowed on a mismatched runtime are:
 
 - `mx migrate` — upgrades the runtime (the fix for an older runtime)
 - `mx update` — self-updates the CLI (the fix for a newer runtime; doesn't touch the runtime)
 - `mx help`, `mx version` — informational
 
-A malformed `VERSION` file errors with `BAD_VERSION`.
+A malformed `mx.json` file errors with `BAD_VERSION`.
 
 ## Repos (pristine clones)
 
-Each repo lives in a **container** at `<runtime>/repos/<repo>/`, holding the pristine clone at `git/` plus mx-owned per-repo scripts (`setup.sh`, `health.sh`). The commands below report the repo `path` as the container (`repos/<repo>`), not the inner git dir.
+Each repo lives in a **container** at `<runtime>/repos/<repo>/`, holding the pristine clone at `git/` plus mx-owned per-repo scripts (`hydrate.sh`, `health.sh`). The commands below report the repo `path` as the container (`repos/<repo>`), not the inner git dir.
 
 ### `mx repo add <git-url> [--name <n>]`
 
 Clone a repo into its container at `<runtime>/repos/<repo>/git/`. The only command that clones. Name is derived from the URL (last segment minus `.git`) unless `--name` overrides.
 
-Also stamps the per-repo scripts `setup.sh` and `health.sh` into the container (see [Per-repo scripts](#per-repo-scripts)).
+Also stamps the per-repo scripts `hydrate.sh` and `health.sh` into the container (see [Per-repo scripts](#per-repo-scripts)).
 
 ### `mx repo ls [--porcelain]`
 
@@ -183,9 +183,9 @@ Remove the repo container (clone + scripts). Refuses with `IN_USE` if any work s
 
 ## Per-repo scripts
 
-Each repo container holds two mx-owned-but-user-customizable hooks: `repos/<repo>/setup.sh` and `repos/<repo>/health.sh`. Both are stamped on `mx repo add` and backfilled by `mx sync` — always **stamp-if-missing** and executable, so your edits are preserved.
+Each repo container holds two mx-owned-but-user-customizable hooks: `repos/<repo>/hydrate.sh` and `repos/<repo>/health.sh`. Both are stamped on `mx repo add` and backfilled by `mx sync` — always **stamp-if-missing** and executable, so your edits are preserved.
 
-### `setup.sh` — runs after `worktree add`
+### `hydrate.sh` — runs after `worktree add`
 
 Default body just `echo "Setup is done"`. It runs **automatically after** `mx work … worktree add <repo>`, with the **new worktree as the working directory**. Context is passed both ways:
 
@@ -196,8 +196,8 @@ A non-zero exit during automatic post-`worktree add` execution is a **warning** 
 
 Typical uses: copy a `.env`, allocate a port with `mx work … port set` and wire it into config, install dependencies.
 
-- Pass `--no-setup` to `worktree add` to skip running it.
-- Re-run it on demand with `mx work -n <name> worktree setup <repo>` (see below) — in that explicit mode, a non-zero exit errors with `SETUP_FAILED`.
+- Pass `--no-hydrate` to `worktree add` to skip running it.
+- Re-run it on demand with `mx work -n <name> worktree hydrate <repo>` (see below) — in that explicit mode, a non-zero exit errors with `HYDRATE_FAILED`.
 
 ### `health.sh` — augments `mx repo health`
 
@@ -250,7 +250,7 @@ Plain output, no decoration.
 
 Update the work's description.
 
-### `mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-setup]`
+### `mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]`
 
 Create a git worktree of `<repo>` inside the work, on branch `<b>` (defaults to the work name). If the branch doesn't already exist, it's created.
 
@@ -258,11 +258,11 @@ Create a git worktree of `<repo>` inside the work, on branch `<b>` (defaults to 
 
 Run `mx repo -n <repo> fetch` first if you want the base at its latest upstream commit.
 
-**After** the worktree is created, the repo's `setup.sh` runs automatically with the new worktree as cwd (see [Per-repo scripts](#per-repo-scripts)). A non-zero exit here is a warning — the worktree is kept. Pass `--no-setup` to skip running it.
+**After** the worktree is created, the repo's `hydrate.sh` runs automatically with the new worktree as cwd (see [Per-repo scripts](#per-repo-scripts)). A non-zero exit here is a warning — the worktree is kept. Pass `--no-hydrate` to skip running it.
 
-### `mx work -n <name> worktree setup <repo>`
+### `mx work -n <name> worktree hydrate <repo>`
 
-Re-run the repo's `setup.sh` against an existing worktree on demand (same env + positional args as the automatic run). In this explicit mode a non-zero exit errors with `SETUP_FAILED`.
+Re-run the repo's `hydrate.sh` against an existing worktree on demand (same env + positional args as the automatic run). In this explicit mode a non-zero exit errors with `HYDRATE_FAILED`.
 
 ### `mx work -n <name> worktree ls [--porcelain]`
 
@@ -370,10 +370,10 @@ The hook is **per-work** (not at the runtime root) because Claude Code reads `.c
 | `NOT_ARCHIVED` | unarchive called on a non-archived work |
 | `NEED_FORCE` | mutating action gated behind `--force` |
 | `NEED_CONFIRMATION` | mutating action requires `--yes` (e.g. archive in `--porcelain` / non-TTY) |
-| `RUNTIME_VERSION_MISMATCH` | runtime `VERSION` differs from the version this CLI supports — run `mx migrate` (older) or `mx update` (newer) |
+| `RUNTIME_VERSION_MISMATCH` | runtime `mx.json` differs from the version this CLI supports — run `mx migrate` (older) or `mx update` (newer) |
 | `CLI_TOO_OLD` | runtime is newer than the CLI supports — upgrade the CLI |
 | `NO_MIGRATION` | no registered migration step for a version gap in the chain |
-| `BAD_VERSION` | malformed `<runtime>/VERSION` file |
-| `SETUP_FAILED` | explicit `worktree setup` hook exited non-zero |
+| `BAD_VERSION` | malformed `<runtime>/mx.json` file |
+| `HYDRATE_FAILED` | explicit `worktree hydrate` hook exited non-zero |
 | `UNSUPPORTED` | platform-unsupported action (e.g. `mx work new -o` on non-macOS; downgraded to a warning) |
 | `INTERNAL` | non-`MxError` thrown — bug |

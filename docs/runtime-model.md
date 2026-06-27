@@ -7,7 +7,7 @@ What an mx runtime looks like on disk, the contracts mx owns, and the data shape
 ```
 <runtime>/  (e.g. ~/mx, or wherever $MX_RUNTIME points)
 ├── .mx-root                     # empty marker file — "this is the mx root"
-├── VERSION                      # runtime layout version, e.g. "2" (absent = legacy v1)
+├── mx.json                      # runtime config: { "version": 2 } (absent = legacy v1)
 ├── CLAUDE.md                    # stamped from templates/CLAUDE.md; rules for feature sessions
 ├── context/                     # shared memory across all features (see § Context registry below)
 │   ├── INDEX.json               # single source of truth for entry metadata
@@ -15,11 +15,11 @@ What an mx runtime looks like on disk, the contracts mx owns, and the data shape
 ├── repos/                       # one container per repo
 │   ├── repo-a/
 │   │   ├── git/                 # the pristine clone — READ-ONLY reference for worktrees
-│   │   ├── setup.sh             # runs after `worktree add` (customizable)
+│   │   ├── hydrate.sh             # runs after `worktree add` (customizable)
 │   │   └── health.sh            # augments `mx repo health` (customizable)
 │   └── repo-b/
 │       ├── git/
-│       ├── setup.sh
+│       ├── hydrate.sh
 │       └── health.sh
 └── works/                       # one folder per parallel feature
     └── feature-a/
@@ -34,20 +34,20 @@ What an mx runtime looks like on disk, the contracts mx owns, and the data shape
 
 ## Runtime versioning
 
-`<runtime>/VERSION` holds an integer for the runtime's on-disk layout version (currently `2`). An **absent** file means a legacy **v1** runtime.
+`<runtime>/mx.json` holds an integer for the runtime's on-disk layout version (currently `2`). An **absent** file means a legacy **v1** runtime.
 
-A given CLI supports exactly one runtime version, with the mapping **CLI major ⇄ runtime version** (CLI 2.x ⇄ v2). Before any runtime-touching command, mx compares the runtime's `VERSION` against the version it supports; on a mismatch it refuses with `RUNTIME_VERSION_MISMATCH`. The only commands allowed on a mismatched runtime are `mx migrate`, `mx update` (self-update the CLI — doesn't touch the runtime), `mx help`, and `mx version`.
+A given CLI supports exactly one runtime version, with the mapping **CLI major ⇄ runtime version** (CLI 2.x ⇄ v2). Before any runtime-touching command, mx compares the runtime's `mx.json` against the version it supports; on a mismatch it refuses with `RUNTIME_VERSION_MISMATCH`. The only commands allowed on a mismatched runtime are `mx migrate`, `mx update` (self-update the CLI — doesn't touch the runtime), `mx help`, and `mx version`.
 
 - **Runtime older than the CLI** → run `mx migrate` to upgrade it. The registered v1 → v2 step moves each clone into `repos/<repo>/git/` and runs `git worktree repair`. `mx migrate` validates the whole chain before mutating; a missing step errors `NO_MIGRATION`.
 - **Runtime newer than the CLI** → upgrade the CLI (`mx update`, then `npm i -g @roulabs/mx@<N>` for a new major). `mx migrate` against a newer runtime errors `CLI_TOO_OLD`.
 
-`mx init` stamps `VERSION` on a fresh runtime and refuses to adopt an existing runtime whose version differs. A malformed `VERSION` errors `BAD_VERSION`.
+`mx init` stamps `mx.json` on a fresh runtime and refuses to adopt an existing runtime whose version differs. A malformed `mx.json` errors `BAD_VERSION`.
 
-## Per-repo scripts (`setup.sh`, `health.sh`)
+## Per-repo scripts (`hydrate.sh`, `health.sh`)
 
 Each repo container at `repos/<repo>/` holds two mx-owned-but-user-customizable hooks alongside the `git/` clone. Both are stamped on `mx repo add` and backfilled stamp-if-missing (executable) by `mx sync`.
 
-- **`setup.sh`** (default: `echo "Setup is done"`) runs automatically after `mx work … worktree add <repo>`, with the new worktree as cwd. Context arrives as positional args (`$1` = worktree path, `$2` = branch) and env vars (`MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_RUNTIME`). A non-zero exit on the automatic run is a warning (worktree kept). Skip with `worktree add --no-setup`; re-run explicitly with `mx work … worktree setup <repo>` (non-zero exit then errors `SETUP_FAILED`). Typical uses: copy a `.env`, allocate + wire a port, install deps.
+- **`hydrate.sh`** (default: `echo "Setup is done"`) runs automatically after `mx work … worktree add <repo>`, with the new worktree as cwd. Context arrives as positional args (`$1` = worktree path, `$2` = branch) and env vars (`MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_RUNTIME`). A non-zero exit on the automatic run is a warning (worktree kept). Skip with `worktree add --no-hydrate`; re-run explicitly with `mx work … worktree hydrate <repo>` (non-zero exit then errors `HYDRATE_FAILED`). Typical uses: copy a `.env`, allocate + wire a port, install deps.
 - **`health.sh`** (default: documented no-op) runs during `mx repo health` with the git clone as cwd; env: `MX_REPO`, `MX_REPO_PATH`, `MX_GIT_DIR`, `MX_RUNTIME`. Its stdout is captured into the `extra` field; a missing/empty/failing hook yields `extra: null` and never affects `healthy` / `issues`.
 
 ## Per-work context-index hook (`.claude/settings.json`)
@@ -146,11 +146,11 @@ Distillation, **not** a transcript. Capture the substance so a future agent can 
 
 | owned by | what |
 |---|---|
-| **mx** (programmatic) | `.mx-root` marker, `VERSION`, `repos/<repo>/` container incl. `git/` (created by `repo add` clone; touched only by `repo fetch`/`repo rm`/`migrate`), `works/<feature>/` (created by `work new`), `work.json`, `.code-workspace`, `sessions/` (directory only — files are agent-written), `context/INDEX.json` (only the starter empty array is stamped; subsequent edits are by the agent) |
-| **mx-stamped templates** (rewritten / stamped on `mx sync`) | `<runtime>/CLAUDE.md` (always rewritten), `<runtime>/context/INDEX.json` (only if missing — never overwrites user content), `repos/<repo>/{setup.sh,health.sh}` (stamp-if-missing), `works/<feature>/.claude/settings.json` (stamp-if-missing) |
-| **The user / agent** (mx never touches after stamping) | All worktree code, `context/<path>.md` body files, `INDEX.json` content after init, `sessions/*.md` files, the bodies of `setup.sh` / `health.sh` / `.claude/settings.json` once stamped |
+| **mx** (programmatic) | `.mx-root` marker, `mx.json`, `repos/<repo>/` container incl. `git/` (created by `repo add` clone; touched only by `repo fetch`/`repo rm`/`migrate`), `works/<feature>/` (created by `work new`), `work.json`, `.code-workspace`, `sessions/` (directory only — files are agent-written), `context/INDEX.json` (only the starter empty array is stamped; subsequent edits are by the agent) |
+| **mx-stamped templates** (rewritten / stamped on `mx sync`) | `<runtime>/CLAUDE.md` (always rewritten), `<runtime>/context/INDEX.json` (only if missing — never overwrites user content), `repos/<repo>/{hydrate.sh,health.sh}` (stamp-if-missing), `works/<feature>/.claude/settings.json` (stamp-if-missing) |
+| **The user / agent** (mx never touches after stamping) | All worktree code, `context/<path>.md` body files, `INDEX.json` content after init, `sessions/*.md` files, the bodies of `hydrate.sh` / `health.sh` / `.claude/settings.json` once stamped |
 
-`mx sync` is non-destructive: it re-stamps the mx-owned generated content (runtime `CLAUDE.md`), backfills mx-owned structural directories and stamp-if-missing files (e.g. `<work>/sessions/`, per-repo `setup.sh`/`health.sh`, per-work `.claude/settings.json`), and removes a stale `<runtime>/README.md` if one lingers. It never overwrites user-edited content in the "user / agent owns" column. (`mx update` is now a separate command that self-updates the CLI — see [commands](commands.md#mx-update).)
+`mx sync` is non-destructive: it re-stamps the mx-owned generated content (runtime `CLAUDE.md`), backfills mx-owned structural directories and stamp-if-missing files (e.g. `<work>/sessions/`, per-repo `hydrate.sh`/`health.sh`, per-work `.claude/settings.json`), and removes a stale `<runtime>/README.md` if one lingers. It never overwrites user-edited content in the "user / agent owns" column. (`mx update` is now a separate command that self-updates the CLI — see [commands](commands.md#mx-update).)
 
 ## Discovery: `--runtime` / `$MX_RUNTIME` / `~/mx`
 

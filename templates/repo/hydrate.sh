@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# mx per-worktree setup hook for this repo.
+# mx per-worktree hydrate hook for this repo.
 #
 # Runs automatically after `mx work -n <work> worktree add <this repo>` creates
-# a worktree (skip with --no-setup; re-run with `mx work -n <work> worktree
-# setup <this repo>`). Customize it to make a fresh worktree runnable: copy a
+# a worktree (skip with --no-hydrate; re-run with `mx work -n <work> worktree
+# hydrate <this repo>`). Customize it to make a fresh worktree runnable: copy a
 # .env, allocate a port and write it into the worktree, install deps, etc.
 #
 # mx runs this with the new worktree as the working directory and passes context
@@ -25,4 +25,4 @@
 # A non-zero exit is reported as a warning and the worktree is kept.
 set -euo pipefail
 
-echo "Setup is done"
+echo "Hydrate is done"

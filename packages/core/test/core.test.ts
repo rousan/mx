@@ -547,7 +547,7 @@ describe('per-work context-index hook', () => {
   });
 });
 
-describe('per-repo setup script', () => {
+describe('per-repo hydrate script', () => {
   const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
   const runGit = (cwd: string, args: string[]) =>
     execFileSync('git', args, { cwd, stdio: 'ignore' });
@@ -562,9 +562,9 @@ describe('per-repo setup script', () => {
     return src;
   }
 
-  it('stampRepoScripts writes an executable setup.sh, idempotently', () => {
+  it('stampRepoScripts writes an executable hydrate.sh, idempotently', () => {
     const dir = tmp();
-    const dest = path.join(dir, 'setup.sh');
+    const dest = path.join(dir, 'hydrate.sh');
     const created = stampRepoScripts(dir, TEMPLATES_DIR);
     expect(created).toContain(dest);
     expect(fs.existsSync(dest)).toBe(true);
@@ -573,17 +573,17 @@ describe('per-repo setup script', () => {
     expect(stampRepoScripts(dir, TEMPLATES_DIR)).toEqual([]);
   });
 
-  it('syncRuntime backfills setup.sh + health.sh for existing repos', () => {
+  it('syncRuntime backfills hydrate.sh + health.sh for existing repos', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
     repoAdd(root, srcRepo(), 'app'); // core repoAdd clones only — no scripts yet
-    const setup = path.join(root, 'repos', 'app', 'setup.sh');
+    const hydrate = path.join(root, 'repos', 'app', 'hydrate.sh');
     const health = path.join(root, 'repos', 'app', 'health.sh');
-    expect(fs.existsSync(setup)).toBe(false);
+    expect(fs.existsSync(hydrate)).toBe(false);
     const res = syncRuntime(root, TEMPLATES_DIR);
-    expect(res.updated).toContain(setup);
+    expect(res.updated).toContain(hydrate);
     expect(res.updated).toContain(health);
-    expect(fs.existsSync(setup)).toBe(true);
+    expect(fs.existsSync(hydrate)).toBe(true);
     expect(fs.existsSync(health)).toBe(true);
   });
 
@@ -611,11 +611,23 @@ describe('runtime versioning + migrate', () => {
     expect(readRuntimeVersion(root)).toBe(5);
   });
 
-  it('initRuntime stamps VERSION = RUNTIME_VERSION on a fresh runtime', () => {
+  it('initRuntime stamps mx.json with version = RUNTIME_VERSION on a fresh runtime', () => {
     const root = path.join(tmp(), 'rt');
     const res = initRuntime(root, TEMPLATES_DIR);
     expect(readRuntimeVersion(root)).toBe(RUNTIME_VERSION);
-    expect(res.created).toContain(path.join(root, 'VERSION'));
+    expect(res.created).toContain(path.join(root, 'mx.json'));
+  });
+
+  it('writeRuntimeVersion preserves other mx.json keys', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const cfg = JSON.parse(fs.readFileSync(path.join(root, 'mx.json'), 'utf8'));
+    cfg.custom = 'keep-me';
+    fs.writeFileSync(path.join(root, 'mx.json'), JSON.stringify(cfg));
+    writeRuntimeVersion(root, 7);
+    const after = JSON.parse(fs.readFileSync(path.join(root, 'mx.json'), 'utf8'));
+    expect(after.version).toBe(7);
+    expect(after.custom).toBe('keep-me');
   });
 
   it('initRuntime refuses to adopt an existing runtime of a different version', () => {

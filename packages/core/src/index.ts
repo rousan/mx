@@ -13,7 +13,7 @@ export {
   worksDir,
   repoPath,
   repoGitDir,
-  repoSetupScript,
+  repoHydrateScript,
   repoHealthScript,
   workDir,
   workManifest,
@@ -32,11 +32,12 @@ export {
   migrateRepoLayout,
   ensureWorkScaffolding,
   RUNTIME_VERSION,
-  versionFile,
+  mxConfigFile,
+  readMxConfig,
   readRuntimeVersion,
   writeRuntimeVersion,
 } from './runtime';
-export type { InitResult, SyncResult } from './runtime';
+export type { InitResult, SyncResult, MxConfig } from './runtime';
 
 export { migrateRuntime } from './migrations';
 export type { MigrateResult, AppliedMigration } from './migrations';

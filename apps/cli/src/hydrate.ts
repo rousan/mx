@@ -1,11 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { repoSetupScript, workPath } from '@mx/core';
+import { repoHydrateScript, workPath } from '@mx/core';
 
 /**
- * Inputs for running a repo's per-worktree setup hook.
+ * Inputs for running a repo's per-worktree hydrate hook.
  */
-export interface SetupContext {
+export interface HydrateContext {
   /** Runtime root. */
   root: string;
   /** Work name. */
@@ -21,19 +21,19 @@ export interface SetupContext {
 }
 
 /**
- * Outcome of a setup-hook run.
+ * Outcome of a hydrate-hook run.
  */
-export interface SetupOutcome {
+export interface HydrateOutcome {
   /** True if the script existed and was executed. */
   ran: boolean;
   /** True if it ran and exited 0 (also true when there was nothing to run). */
   ok: boolean;
-  /** True if the repo has no `setup.sh` (nothing was run). */
+  /** True if the repo has no `hydrate.sh` (nothing was run). */
   missing: boolean;
 }
 
 /**
- * Run a repo's `setup.sh` for a freshly-created worktree. The script runs with
+ * Run a repo's `hydrate.sh` for a freshly-created worktree. The script runs with
  * the worktree as its working directory and receives context as both positional
  * args (`$1` worktree path, `$2` branch) and `MX_*` environment variables.
  *
@@ -41,12 +41,12 @@ export interface SetupOutcome {
  * outcome so the caller can warn without unwinding the (already created)
  * worktree.
  *
- * @param ctx - Worktree/setup context.
+ * @param ctx - Worktree/hydrate context.
  * @param quiet - When true, suppress the script's stdio (keeps `--porcelain` clean).
  * @returns Whether the script ran and succeeded.
  */
-export function runWorktreeSetup(ctx: SetupContext, quiet: boolean): SetupOutcome {
-  const script = repoSetupScript(ctx.root, ctx.repo);
+export function runWorktreeHydrate(ctx: HydrateContext, quiet: boolean): HydrateOutcome {
+  const script = repoHydrateScript(ctx.root, ctx.repo);
   if (!existsSync(script)) return { ran: false, ok: true, missing: true };
   const env = {
     ...process.env,
