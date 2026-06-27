@@ -12,6 +12,7 @@ export {
   reposDir,
   worksDir,
   repoPath,
+  repoGitDir,
   workDir,
   workManifest,
   workspaceFile,
@@ -25,10 +26,18 @@ export {
   findWorktree,
   inferContext,
   initRuntime,
-  updateRuntime,
+  syncRuntime,
+  migrateRepoLayout,
   ensureWorkScaffolding,
+  RUNTIME_VERSION,
+  versionFile,
+  readRuntimeVersion,
+  writeRuntimeVersion,
 } from './runtime';
-export type { InitResult, UpdateResult } from './runtime';
+export type { InitResult, SyncResult } from './runtime';
+
+export { migrateRuntime } from './migrations';
+export type { MigrateResult, AppliedMigration } from './migrations';
 
 export { stampClaudeMd, removeStaleRuntimeReadme } from './templates';
 

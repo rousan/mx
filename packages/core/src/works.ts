@@ -7,7 +7,7 @@ import { git, branchExists, isDirty, resolveBase } from './git';
 import {
   workDir,
   workspaceFile,
-  repoPath,
+  repoGitDir,
   readWork,
   writeWork,
   findWorktree,
@@ -245,7 +245,7 @@ export function worktreeAdd(
   opts: WorktreeAddOpts = {},
 ): WorktreeAddResult {
   const work = readWork(root, name);
-  const rp = repoPath(root, repo);
+  const rp = repoGitDir(root, repo);
   if (!isGitRepo(rp)) throw new MxError(`no such repo: ${repo}`, 'NO_REPO');
   if (findWorktree(work, repo)) {
     throw new MxError(`work "${name}" already has worktree for ${repo}`, 'EXISTS');
@@ -318,7 +318,7 @@ export function worktreeRemove(root: string, name: string, repo: string): Worktr
   if (exists(dest) && isDirty(dest)) {
     throw new MxError(`worktree ${repo} has uncommitted changes — commit or discard them first`, 'DIRTY');
   }
-  git(['-C', repoPath(root, repo), 'worktree', 'remove', dest]); // keeps the branch
+  git(['-C', repoGitDir(root, repo), 'worktree', 'remove', dest]); // keeps the branch
   work.worktrees = work.worktrees.filter((w) => w.repo !== repo);
   writeWork(root, work);
   removeFolderFromWorkspace(root, name, repo);
@@ -391,7 +391,7 @@ export function workDestroy(
   const removed: string[] = [];
   for (const wt of work.worktrees ?? []) {
     const dest = path.join(workDir(root, name), wt.repo);
-    if (exists(dest)) git(['-C', repoPath(root, wt.repo), 'worktree', 'remove', dest]); // keeps branch
+    if (exists(dest)) git(['-C', repoGitDir(root, wt.repo), 'worktree', 'remove', dest]); // keeps branch
     removed.push(wt.repo);
   }
   fs.rmSync(workDir(root, name), { recursive: true, force: true });
@@ -444,7 +444,7 @@ export function archiveWork(root: string, name: string): ArchiveResult {
   const removed: string[] = [];
   for (const wt of work.worktrees ?? []) {
     const dest = path.join(workDir(root, name), wt.repo);
-    if (exists(dest)) git(['-C', repoPath(root, wt.repo), 'worktree', 'remove', dest]); // keeps branch
+    if (exists(dest)) git(['-C', repoGitDir(root, wt.repo), 'worktree', 'remove', dest]); // keeps branch
     removed.push(wt.repo);
   }
   clearWorkspaceFolders(root, name);
@@ -512,7 +512,7 @@ export function unarchiveWork(
 
   const missing: { repo: string; branch: string }[] = [];
   for (const d of desired) {
-    const rp = repoPath(root, d.repo);
+    const rp = repoGitDir(root, d.repo);
     if (!isGitRepo(rp)) {
       throw new MxError(`pristine clone missing for repo: ${d.repo}`, 'NO_REPO');
     }
@@ -531,7 +531,7 @@ export function unarchiveWork(
   const restored: UnarchiveRestoredWorktree[] = [];
   for (const d of desired) {
     const dest = path.join(workDir(root, name), d.repo);
-    git(['-C', repoPath(root, d.repo), 'worktree', 'add', dest, d.branch]);
+    git(['-C', repoGitDir(root, d.repo), 'worktree', 'add', dest, d.branch]);
     addFolderToWorkspace(root, name, d.repo);
     restored.push({ repo: d.repo, branch: d.branch, path: dest, ports: d.ports });
   }

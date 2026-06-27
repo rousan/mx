@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { MxError } from './errors';
 import { exists, isGitRepo, listDirs, realpath } from './fsutil';
+import { git } from './git';
 import { readJson, writeJson } from './json';
 import { stampClaudeMd, stampContextIndex, removeStaleRuntimeReadme } from './templates';
 import type { Work, Worktree, RuntimeOpts, InferredContext } from './types';
@@ -48,6 +49,18 @@ export const worksDir = (root: string): string => path.join(root, 'works');
 export const repoPath = (root: string, name: string): string => path.join(reposDir(root), name);
 
 /**
+ * Path to a repo's git clone — the `git/` subfolder inside the per-repo
+ * container. The container (`repoPath`) holds the clone plus mx-owned per-repo
+ * tooling (e.g. `setup.sh`, `health.sh`); the actual git repository lives here.
+ *
+ * @param root - Runtime root.
+ * @param name - Repo name.
+ * @returns Absolute path to `repos/<name>/git`.
+ */
+export const repoGitDir = (root: string, name: string): string =>
+  path.join(repoPath(root, name), 'git');
+
+/**
  * Path to a work folder under `works/`.
  *
  * @param root - Runtime root.
@@ -77,6 +90,63 @@ export const workspaceFile = (root: string, name: string): string =>
   path.join(workDir(root, name), `${name}.code-workspace`);
 
 /**
+ * The runtime layout version this build of mx supports. A runtime's `VERSION`
+ * file must match this for commands to run; `mx migrate` upgrades older
+ * runtimes up to it. Tracks the CLI major version (CLI 2.x ⇄ runtime v2).
+ */
+export const RUNTIME_VERSION = 2;
+
+/**
+ * Path to a runtime's `VERSION` file.
+ *
+ * @param root - Runtime root.
+ * @returns Absolute path to `<root>/VERSION`.
+ */
+export const versionFile = (root: string): string => path.join(root, 'VERSION');
+
+/**
+ * Read a runtime's layout version. A runtime with no `VERSION` file predates
+ * versioning and is treated as **v1** (legacy).
+ *
+ * @param root - Runtime root.
+ * @returns The integer runtime version (>= 1).
+ */
+export function readRuntimeVersion(root: string): number {
+  const f = versionFile(root);
+  if (!exists(f)) return 1;
+  const raw = fs.readFileSync(f, 'utf8').trim();
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new MxError(`invalid runtime VERSION file (${JSON.stringify(raw)}) at ${f}`, 'BAD_VERSION');
+  }
+  return n;
+}
+
+/**
+ * Write a runtime's layout version.
+ *
+ * @param root - Runtime root.
+ * @param version - Integer version to record.
+ */
+export function writeRuntimeVersion(root: string, version: number): void {
+  fs.writeFileSync(versionFile(root), `${version}\n`);
+}
+
+/**
+ * Human-readable message for a runtime/CLI version mismatch — points forward to
+ * `mx migrate` when the runtime is older, or to a CLI upgrade when it's newer.
+ *
+ * @param actual - The runtime's recorded version.
+ * @returns The message string.
+ */
+function versionMismatchMessage(actual: number): string {
+  if (actual > RUNTIME_VERSION) {
+    return `runtime is v${actual}, newer than this mx supports (v${RUNTIME_VERSION}). Upgrade your mx CLI: \`npm i -g @roulabs/mx@latest\`.`;
+  }
+  return `runtime is v${actual} but this mx supports runtime v${RUNTIME_VERSION}. Run \`mx migrate\` to upgrade the runtime.`;
+}
+
+/**
  * Resolve the runtime path: `--runtime` flag, then `$MX_RUNTIME`, then the
  * default `~/mx`. The location is never persisted in the source tree.
  *
@@ -99,6 +169,15 @@ export function requireRuntime(opts: RuntimeOpts = {}): string {
   if (!exists(path.join(root, '.mx-root'))) {
     throw new MxError(`not an mx runtime (no .mx-root): ${root} — run \`mx init\``, 'NO_RUNTIME');
   }
+  // Version gate: every runtime-touching command runs through here, so a
+  // mismatched runtime is rejected centrally. `mx migrate` opts out so it can
+  // upgrade an older runtime.
+  if (!opts.allowVersionMismatch) {
+    const v = readRuntimeVersion(root);
+    if (v !== RUNTIME_VERSION) {
+      throw new MxError(versionMismatchMessage(v), 'RUNTIME_VERSION_MISMATCH');
+    }
+  }
   return root;
 }
 
@@ -109,7 +188,47 @@ export function requireRuntime(opts: RuntimeOpts = {}): string {
  * @returns Sorted repo names that are git repositories.
  */
 export function listRepoNames(root: string): string[] {
-  return listDirs(reposDir(root)).filter((n) => isGitRepo(repoPath(root, n)));
+  return listDirs(reposDir(root)).filter((n) => isGitRepo(repoGitDir(root, n)));
+}
+
+/**
+ * Migrate any pristine repos still using the legacy flat layout
+ * (`repos/<name>` is itself the git clone) to the container layout
+ * (`repos/<name>/git` holds the clone). For each migrated repo, the clone is
+ * moved into a `git/` subfolder and `git worktree repair` is run so existing
+ * worktrees — whose `.git` files point at the old main-repo location — relink
+ * to the new path.
+ *
+ * Idempotent: repos already on the container layout are skipped, as are
+ * directories that aren't git repos at all. Best-effort `worktree repair`
+ * (a failure there doesn't abort the move).
+ *
+ * @param root - Runtime root.
+ * @returns Absolute container paths of the repos migrated this run.
+ */
+export function migrateRepoLayout(root: string): string[] {
+  const migrated: string[] = [];
+  for (const name of listDirs(reposDir(root))) {
+    const container = repoPath(root, name);
+    const gitdir = repoGitDir(root, name);
+    if (isGitRepo(gitdir)) continue; // already container layout
+    if (!isGitRepo(container)) continue; // not a flat clone — nothing to migrate
+    // Move the clone into a `git/` subfolder. Can't move a dir into its own
+    // child in one step, so stage via a sibling temp dir first.
+    const tmp = path.join(reposDir(root), `.${name}.mxmig`);
+    if (exists(tmp)) fs.rmSync(tmp, { recursive: true, force: true });
+    fs.renameSync(container, tmp);
+    fs.mkdirSync(container, { recursive: true });
+    fs.renameSync(tmp, gitdir);
+    // Relink worktrees whose .git now points at the old main-repo location.
+    try {
+      git(['-C', gitdir, 'worktree', 'repair']);
+    } catch {
+      /* best-effort: a repair failure shouldn't abort the migration */
+    }
+    migrated.push(container);
+  }
+  return migrated;
 }
 
 /**
@@ -225,6 +344,18 @@ export interface InitResult {
 export function initRuntime(target0: string, templatesDir: string): InitResult {
   const target = path.resolve(target0);
   const created: string[] = [];
+  // Adopting an existing runtime: it must already be this CLI's version —
+  // otherwise init would stamp current-version templates onto an older layout.
+  if (exists(path.join(target, '.mx-root'))) {
+    const v = readRuntimeVersion(target);
+    if (v !== RUNTIME_VERSION) {
+      throw new MxError(
+        `cannot init: existing runtime at ${target} is v${v}, but this mx supports v${RUNTIME_VERSION}. ` +
+          (v < RUNTIME_VERSION ? 'Run `mx migrate` to upgrade it.' : 'Upgrade your mx CLI.'),
+        'RUNTIME_VERSION_MISMATCH',
+      );
+    }
+  }
   for (const d of [target, reposDir(target), worksDir(target)]) {
     if (!exists(d)) {
       fs.mkdirSync(d, { recursive: true });
@@ -236,6 +367,10 @@ export function initRuntime(target0: string, templatesDir: string): InitResult {
     fs.writeFileSync(marker, '');
     created.push(marker);
   }
+  if (!exists(versionFile(target))) {
+    writeRuntimeVersion(target, RUNTIME_VERSION);
+    created.push(versionFile(target));
+  }
   created.push(stampClaudeMd(target, templatesDir));
   const ctxIndex = stampContextIndex(target, templatesDir);
   if (ctxIndex) created.push(ctxIndex);
@@ -244,12 +379,12 @@ export function initRuntime(target0: string, templatesDir: string): InitResult {
 }
 
 /**
- * Result of re-stamping a runtime's templated files.
+ * Result of re-stamping a runtime's templated files (`mx sync`).
  */
-export interface UpdateResult {
+export interface SyncResult {
   /** Absolute runtime path. */
   runtime: string;
-  /** Paths re-stamped during this update. */
+  /** Paths re-stamped during this sync. */
   updated: string[];
 }
 
@@ -258,7 +393,7 @@ export interface UpdateResult {
  * additive and **non-destructive**: only creates missing directories; never
  * touches `work.json`, `.code-workspace`, worktree code, session files, or
  * anything else the user owns. Both `workNew` (initial creation) and
- * `updateRuntime` (backfill on existing runtimes) call this so the structural
+ * `syncRuntime` (backfill on existing runtimes) call this so the structural
  * contract lives in exactly one place.
  *
  * @param root - Runtime root.
@@ -276,7 +411,8 @@ export function ensureWorkScaffolding(root: string, workName: string): string[] 
 }
 
 /**
- * Re-sync a runtime with the current mx version. The contract:
+ * Re-sync a runtime's mx-owned generated content with the current mx version
+ * (`mx sync`) — a **same-major, non-breaking** refresh. The contract:
  *
  * - **mx-owned generated content is re-stamped:** root `CLAUDE.md` always;
  *   `context/INDEX.json` only when missing.
@@ -289,13 +425,14 @@ export function ensureWorkScaffolding(root: string, workName: string): string[] 
  *   `INDEX.json` are all left exactly as-is.
  * - A stale runtime `README.md` (legacy) is removed if present.
  *
- * `repos/` is not modified.
+ * Cross-version **layout** changes are out of scope here — those live in
+ * `migrateRuntime` (`mx migrate`). `repos/` clones are not modified.
  *
  * @param root - Runtime root.
  * @param templatesDir - Directory holding the templates to stamp.
  * @returns The runtime path and every file/directory created or re-stamped.
  */
-export function updateRuntime(root: string, templatesDir: string): UpdateResult {
+export function syncRuntime(root: string, templatesDir: string): SyncResult {
   const updated: string[] = [];
   updated.push(stampClaudeMd(root, templatesDir));
   const ctxIndex = stampContextIndex(root, templatesDir);

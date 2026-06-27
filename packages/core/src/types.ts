@@ -53,6 +53,11 @@ export interface RepoSummary {
 export interface RuntimeOpts {
   /** Explicit runtime path from a `--runtime` flag, if provided. */
   runtime?: string;
+  /**
+   * Skip the runtime-version gate. Only `mx migrate` sets this — it must be
+   * able to operate on an older-version runtime in order to upgrade it.
+   */
+  allowVersionMismatch?: boolean;
 }
 
 /**

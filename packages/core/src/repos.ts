@@ -3,7 +3,14 @@ import * as path from 'node:path';
 import { MxError } from './errors';
 import { exists, isGitRepo } from './fsutil';
 import { git, gitQuiet, currentBranch, remoteUrl, remoteBranchList } from './git';
-import { repoPath, listRepoNames, listWorkNames, readWork, findWorktree } from './runtime';
+import {
+  repoPath,
+  repoGitDir,
+  listRepoNames,
+  listWorkNames,
+  readWork,
+  findWorktree,
+} from './runtime';
 import type { RepoSummary } from './types';
 
 /**
@@ -41,10 +48,13 @@ export interface RepoAddResult {
  */
 export function repoAdd(root: string, url: string, name0?: string): RepoAddResult {
   const name = name0 || repoNameFromUrl(url);
-  const dest = repoPath(root, name);
-  if (exists(dest)) throw new MxError(`repo already exists: ${name}`, 'EXISTS');
-  git(['clone', url, dest], { stdio: ['ignore', 'inherit', 'inherit'] });
-  return { name, path: dest, remote: remoteUrl(dest), branch: currentBranch(dest) };
+  const container = repoPath(root, name);
+  if (exists(container)) throw new MxError(`repo already exists: ${name}`, 'EXISTS');
+  const gitdir = repoGitDir(root, name);
+  // Container holds the clone (git/) plus mx-owned per-repo tooling.
+  fs.mkdirSync(container, { recursive: true });
+  git(['clone', url, gitdir], { stdio: ['ignore', 'inherit', 'inherit'] });
+  return { name, path: container, remote: remoteUrl(gitdir), branch: currentBranch(gitdir) };
 }
 
 /**
@@ -56,9 +66,10 @@ export function repoAdd(root: string, url: string, name0?: string): RepoAddResul
 export function listReposInfo(root: string): RepoSummary[] {
   return listRepoNames(root).map((name) => ({
     name,
+    // path is the container; branch/remote come from the git/ clone.
     path: repoPath(root, name),
-    branch: currentBranch(repoPath(root, name)),
-    remote: remoteUrl(repoPath(root, name)),
+    branch: currentBranch(repoGitDir(root, name)),
+    remote: remoteUrl(repoGitDir(root, name)),
   }));
 }
 
@@ -89,7 +100,7 @@ export interface RepoFetchResult {
  * @returns The repo's branch and the list of branches now on origin.
  */
 export function repoFetch(root: string, name: string): RepoFetchResult {
-  const rp = repoPath(root, name);
+  const rp = repoGitDir(root, name);
   if (!isGitRepo(rp)) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
   // Update every branch's remote-tracking ref, pull in new branches and tags,
   // and prune ones deleted on origin.
@@ -123,12 +134,12 @@ export interface RepoInfoResult {
  * @returns The repo's details.
  */
 export function repoInfo(root: string, name: string): RepoInfoResult {
-  const rp = repoPath(root, name);
+  const rp = repoGitDir(root, name);
   if (!isGitRepo(rp)) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
   const usedBy = listWorkNames(root).filter((w) => findWorktree(readWork(root, w), name));
   return {
     name,
-    path: rp,
+    path: repoPath(root, name), // the container (repo home)
     branch: currentBranch(rp),
     remote: remoteUrl(rp),
     worktreesInWorks: usedBy,
@@ -260,7 +271,7 @@ function lastFetched(rp: string): string | null {
  * @returns The health snapshot.
  */
 export function repoHealth(root: string, name: string): RepoHealth {
-  const rp = repoPath(root, name);
+  const rp = repoGitDir(root, name);
   if (!isGitRepo(rp)) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
 
   const defaultBranch = originDefaultBranch(rp);
@@ -296,7 +307,7 @@ export function repoHealth(root: string, name: string): RepoHealth {
 
   return {
     name,
-    path: rp,
+    path: repoPath(root, name), // the container (repo home)
     defaultBranch,
     currentBranch: current,
     isOnDefault,
@@ -339,8 +350,7 @@ export interface RepoRemoveResult {
  * @returns The removed repo name.
  */
 export function repoRemove(root: string, name: string): RepoRemoveResult {
-  const rp = repoPath(root, name);
-  if (!isGitRepo(rp)) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
+  if (!isGitRepo(repoGitDir(root, name))) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
   const usedBy = listWorkNames(root).filter((w) => findWorktree(readWork(root, w), name));
   if (usedBy.length) {
     throw new MxError(
@@ -348,6 +358,7 @@ export function repoRemove(root: string, name: string): RepoRemoveResult {
       'IN_USE',
     );
   }
-  fs.rmSync(rp, { recursive: true, force: true });
+  // Remove the whole container (clone + any per-repo tooling).
+  fs.rmSync(repoPath(root, name), { recursive: true, force: true });
   return { name, removed: true };
 }
