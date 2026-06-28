@@ -799,19 +799,21 @@ describe('repoFetch', () => {
     expect(sha(clone, 'main')).toBe(sha(src, 'main'));
   });
 
-  it('does not fast-forward a non-current branch — only the checked-out one', () => {
+  it('fast-forwards the base branch even when a different branch is checked out', () => {
     const { root, src, clone, name } = fixture();
-    const mainBefore = sha(clone, 'main');
-    // Move the pristine clone off main onto a branch with no upstream.
+    // Move the pristine off the default branch onto one with no upstream.
     runGit(clone, ['checkout', '-q', '-b', 'wip']);
+    const wipBefore = sha(clone, 'wip');
     advanceSrc(src); // origin/main advances
 
     repoFetch(root, name);
 
-    // The fetch updates origin/main, but local main (not checked out) is left
-    // exactly where it was — only the current branch is fast-forwarded.
-    expect(sha(clone, 'main')).toBe(mainBefore);
-    expect(sha(clone, 'main')).not.toBe(sha(clone, 'refs/remotes/origin/main'));
+    // Base (main) is fast-forwarded to origin/main even though it isn't checked
+    // out — so a worktree forked from `main` gets the latest.
+    expect(sha(clone, 'main')).toBe(sha(clone, 'refs/remotes/origin/main'));
+    expect(sha(clone, 'main')).toBe(sha(src, 'main'));
+    // The unrelated, upstream-less current branch is left untouched.
+    expect(sha(clone, 'wip')).toBe(wipBefore);
   });
 });
 

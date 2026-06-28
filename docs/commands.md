@@ -151,9 +151,13 @@ List all pristine clones in the same clean shape as `mx work ls`: bold name, dim
 
 Print the absolute path to the repo's container (`repos/<repo>`). Plain output, for shell substitution: `cd "$(mx repo -n app path)"`. Errors `NO_REPO` if the repo doesn't exist.
 
-### `mx repo -n <name> fetch`
+### `mx repo -n <name> fetch` · `mx repo fetch --all`
 
-Run `git fetch --all --prune --tags`, then best-effort fast-forward **only the currently checked-out branch** (not the base/default branch, not any other branch). Reports the branch and the list of branches now on origin.
+Run `git fetch --all --prune --tags`, then best-effort fast-forward **both** the currently checked-out branch **and** the base (origin default, e.g. `main`) branch to their upstreams — fast-forward-only, so divergent/upstream-less branches are left untouched. When the base *is* the checked-out branch, only one ff happens. Fast-forwarding the base keeps `worktree add --base <b>` correct (it resolves the local branch first, so a stale local `main` would otherwise yield stale worktrees).
+
+`--all` (`mx repo fetch --all`, or `mx repo --all fetch`) fetches **every** repo, one by one, continuing past any individual failure (failures are reported with `⚠`).
+
+Reports the branch and the list of branches now on origin (an array, one per repo, with `--all`).
 
 ### `mx repo -n <name> info [--porcelain]`
 

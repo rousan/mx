@@ -89,13 +89,15 @@ export interface RepoFetchResult {
 
 /**
  * Fetch all branches/tags from origin, prune deleted ones, and best-effort
- * fast-forward the pristine clone's **currently checked-out branch** to its
- * upstream.
+ * fast-forward **both** the pristine clone's currently checked-out branch and
+ * its base (origin default, e.g. `main`) branch to their upstreams.
  *
- * Only the current branch is fast-forwarded — not the base/default branch, nor
- * any other local branch — and only when it's a clean fast-forward with an
- * upstream, so divergent or upstream-less branches are left untouched (no
- * working-tree churn).
+ * The base fast-forward keeps `worktree add --base <b>` correct: it resolves
+ * the **local** branch first, so if `origin/main` advanced but local `main`
+ * lagged, a new worktree forked from `main` would start stale. When the base
+ * *is* the checked-out branch, only one ff happens. All updates are
+ * fast-forward-only — divergent or upstream-less branches are left untouched
+ * (no working-tree churn).
  *
  * @param root - Runtime root.
  * @param name - Repo name.
@@ -108,7 +110,15 @@ export function repoFetch(root: string, name: string): RepoFetchResult {
   // and prune ones deleted on origin.
   git(['-C', rp, 'fetch', '--all', '--prune', '--tags']);
   // Best-effort fast-forward of the checked-out branch (no working-tree churn).
+  const current = currentBranch(rp);
   gitQuiet(['-C', rp, 'merge', '--ff-only', '@{u}']);
+  // Also fast-forward the base/default branch when it isn't the checked-out one.
+  // `fetch . <remote-ref>:<local-ref>` advances the local branch only on a
+  // clean fast-forward (no leading `+`), so diverged history is left alone.
+  const base = originDefaultBranch(rp);
+  if (base && base !== current) {
+    gitQuiet(['-C', rp, 'fetch', '.', `refs/remotes/origin/${base}:refs/heads/${base}`]);
+  }
   return { name, branch: currentBranch(rp), remoteBranches: remoteBranchList(rp) };
 }
 
