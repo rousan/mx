@@ -88,7 +88,7 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 |---|---|
 | `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `mx.json`, `CLAUDE.md`, `context/INDEX.json`) |
 | `mx info [--all] [--porcelain]` | list repos, works, worktrees, and ports (active works only by default; `--all` includes archived) |
-| `mx sync` | re-sync runtime with current mx version: re-stamp `CLAUDE.md`, backfill `context/INDEX.json`, per-work dirs (`wt/`/`scripts/`/`files/`/`tmp/`/`hooks/`/`sessions/`) + work `CLAUDE.md` + `.claude/settings.json` + lifecycle hooks (`hooks/{pre,post}-{archive,unarchive}.sh`), per-repo `hydrate.sh`/`health.sh` if missing. Same-major, non-destructive. |
+| `mx sync` | re-sync runtime with current mx version: re-stamp `CLAUDE.md`, backfill `context/INDEX.json`, per-work dirs (`wt/`/`scripts/`/`bin/`/`files/`/`tmp/`/`hooks/`/`sessions/`) + work `CLAUDE.md` + `.claude/settings.json` + lifecycle hooks (`hooks/{pre,post}-{archive,unarchive}.sh`), per-repo `hydrate.sh`/`health.sh` if missing. Same-major, non-destructive. |
 | `mx update` | self-update the CLI within its major (`npm i -g`); reports a newer major if available. Not runtime-gated. |
 | `mx migrate` | upgrade an older-version runtime to the version this CLI supports (only command allowed on a version mismatch) |
 | `mx repo add <git-url> [--name <n>]` | clone a pristine repo into `repos/<repo>/git` (stamps its `hydrate.sh`/`health.sh`) |

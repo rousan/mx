@@ -154,7 +154,7 @@ describe('inferContext', () => {
     process.chdir(path.join(root, 'works', 'feat', 'wt', 'repoA'));
     expect(inferContext(root)).toEqual({ work: 'feat', repo: 'repoA' });
 
-    // A non-wt work subdir (scripts/, files/, tmp/, sessions/) implies no repo.
+    // A non-wt work subdir (scripts/, bin/, files/, tmp/, sessions/) implies no repo.
     process.chdir(path.join(root, 'works', 'feat', 'scripts'));
     expect(inferContext(root)).toEqual({ work: 'feat', repo: null });
 
@@ -552,6 +552,38 @@ describe('per-work context-index hook', () => {
     const res2 = syncRuntime(root, TEMPLATES_DIR);
     expect(res2.updated).not.toContain(settingsPath);
     expect(fs.readFileSync(settingsPath, 'utf8')).toBe('{"hooks":{}}\n');
+  });
+});
+
+describe('per-work bin directory', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+
+  it('workNew creates an empty bin/ directory', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const res = workNew(root, 'feat');
+    const bin = path.join(res.path, 'bin');
+    expect(fs.statSync(bin).isDirectory()).toBe(true);
+    expect(fs.readdirSync(bin)).toEqual([]); // starts empty
+  });
+
+  it('syncRuntime backfills bin/ for an existing work, preserving its contents', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    workNew(root, 'feat');
+    const bin = path.join(root, 'works', 'feat', 'bin');
+    // Simulate a pre-bin work: remove bin/, then verify sync recreates it.
+    fs.rmSync(bin, { recursive: true, force: true });
+    expect(fs.existsSync(bin)).toBe(false);
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    expect(res.updated).toContain(bin);
+    expect(fs.existsSync(bin)).toBe(true);
+
+    // Non-destructive: a binary already in bin/ survives a second sync.
+    fs.writeFileSync(path.join(bin, 'tool'), 'x');
+    const res2 = syncRuntime(root, TEMPLATES_DIR);
+    expect(res2.updated).not.toContain(bin);
+    expect(fs.existsSync(path.join(bin, 'tool'))).toBe(true);
   });
 });
 

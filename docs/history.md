@@ -2,6 +2,10 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 2.3.0 — 2026-06-28
+
+**Per-work `bin/` directory.** Every work now gets a `bin/` folder alongside `scripts/`, `files/`, `tmp/`, and `hooks/` — a place for executables and binaries a session builds or downloads (compiled tools, fetched CLIs, helper binaries). It starts empty and is owned by the user/agent; mx just creates the directory. `mx work new` creates it and `mx sync` backfills it (stamp-if-missing) on existing v2 runtimes — no migration or version bump needed, so it ships as a minor. Added by listing `bin` in `ensureWorkScaffolding`; `inferContext` treats it like the other non-`wt/` work subdirs (implies the work, no repo).
+
 ## 2.2.0 — 2026-06-28
 
 **Per-work lifecycle hooks for archive/unarchive.** Each work now has a `hooks/` folder with four mx-stamped, executable **no-op** scripts: `pre-archive.sh`, `post-archive.sh`, `pre-unarchive.sh`, `post-unarchive.sh`. mx runs them around `mx work archive` / `mx work unarchive`:
