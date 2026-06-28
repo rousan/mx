@@ -19,6 +19,8 @@ import {
   writeRuntimeVersion,
   RUNTIME_VERSION,
   repoGitDir,
+  workHookScript,
+  WORK_HOOK_EVENTS,
   readWork,
   writeWork,
   workNew,
@@ -550,6 +552,61 @@ describe('per-work context-index hook', () => {
     const res2 = syncRuntime(root, TEMPLATES_DIR);
     expect(res2.updated).not.toContain(settingsPath);
     expect(fs.readFileSync(settingsPath, 'utf8')).toBe('{"hooks":{}}\n');
+  });
+});
+
+describe('per-work lifecycle hooks', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+
+  it('workNew stamps the four archive/unarchive hook scripts, executable no-ops', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const res = workNew(root, 'feat');
+    expect(fs.existsSync(path.join(res.path, 'hooks'))).toBe(true);
+    expect(WORK_HOOK_EVENTS).toEqual([
+      'pre-archive',
+      'post-archive',
+      'pre-unarchive',
+      'post-unarchive',
+    ]);
+    for (const event of WORK_HOOK_EVENTS) {
+      const hook = workHookScript(root, 'feat', event);
+      expect(fs.existsSync(hook)).toBe(true);
+      expect((fs.statSync(hook).mode & 0o111) !== 0).toBe(true); // has an exec bit
+      const body = fs.readFileSync(hook, 'utf8');
+      expect(body).toContain(`mx ${event} hook`);
+      expect(body.trimEnd().endsWith('exit 0')).toBe(true); // no-op by default
+    }
+  });
+
+  it('pre-hooks document the abort contract; post-hooks document warn-only', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    workNew(root, 'feat');
+    const pre = fs.readFileSync(workHookScript(root, 'feat', 'pre-archive'), 'utf8');
+    const post = fs.readFileSync(workHookScript(root, 'feat', 'post-archive'), 'utf8');
+    expect(pre).toContain('ABORTS');
+    expect(pre).toContain('HOOK_FAILED');
+    expect(post).toContain('cannot undo');
+  });
+
+  it('syncRuntime backfills hooks/ for an existing work, without clobbering edits', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    workNew(root, 'feat');
+    // Simulate a pre-hooks work: remove hooks/, then verify sync recreates it.
+    fs.rmSync(path.join(root, 'works', 'feat', 'hooks'), { recursive: true, force: true });
+    const preArchive = workHookScript(root, 'feat', 'pre-archive');
+    expect(fs.existsSync(preArchive)).toBe(false);
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    expect(res.updated).toContain(preArchive);
+    expect(fs.existsSync(preArchive)).toBe(true);
+
+    // Non-clobbering: a user edit survives a second sync.
+    fs.writeFileSync(preArchive, '#!/usr/bin/env bash\nexit 1\n');
+    const res2 = syncRuntime(root, TEMPLATES_DIR);
+    expect(res2.updated).not.toContain(preArchive);
+    expect(fs.readFileSync(preArchive, 'utf8')).toBe('#!/usr/bin/env bash\nexit 1\n');
   });
 });
 

@@ -72,6 +72,9 @@ mx/
         ├── scripts/        # ad-hoc per-work scripts
         ├── files/          # artifacts worth keeping (agent/user drop zone)
         ├── tmp/            # throwaway scratch — may be deleted at any time
+        ├── hooks/          # per-work lifecycle hooks (see § Work lifecycle hooks)
+        │   ├── pre-archive.sh · post-archive.sh
+        │   └── pre-unarchive.sh · post-unarchive.sh
         └── sessions/       # session summaries (see § Session summaries)
 ```
 
@@ -85,8 +88,38 @@ mx/
   `CLAUDE.md` for any session started in the work folder (Claude Code walks up from the session's cwd).
   mx stamps it once (an explanatory comment, otherwise empty) and then **never touches it** — it's where
   you and the user record rules specific to this work.
+- `works/<feature>/hooks/` holds **per-work lifecycle hooks** — mx-owned scripts mx runs around
+  `mx work archive`/`unarchive`. mx stamps documented no-op scripts you customize (see § Work
+  lifecycle hooks).
 - `works/<feature>/{scripts,files,tmp}/` are the only places to put non-mx files in a work — see
   § The work folder holds mx-native files only.
+
+## Work lifecycle hooks
+
+Each work has a `hooks/` folder with mx-owned scripts that fire around archive/unarchive. mx stamps
+four documented **no-op** scripts (they just `exit 0`) when the work is created — edit a script's body
+to make it do something; leave it as-is to opt out.
+
+| hook | when it runs | non-zero exit |
+|---|---|---|
+| `pre-archive.sh` | before `mx work archive` removes worktrees (worktrees still on disk) | **aborts** the archive (`HOOK_FAILED`); nothing is mutated |
+| `post-archive.sh` | after the work is archived (worktrees gone, branches kept) | warning only — the archive already happened |
+| `pre-unarchive.sh` | before `mx work unarchive` re-creates worktrees (none on disk yet) | **aborts** the unarchive (`HOOK_FAILED`) |
+| `post-unarchive.sh` | after worktrees are restored | warning only |
+
+A `pre-*` hook is a veto point (e.g. block archive if a branch has unpushed commits); a `post-*` hook
+is for cleanup/notification after the fact. mx runs each with the **work folder** as the working
+directory and passes context as positional args and environment variables:
+
+```
+$1 / $MX_EVENT       the event name (e.g. "pre-archive")
+$2 / $MX_WORK_PATH   absolute path to the work folder
+$MX_WORK             work name
+$MX_RUNTIME          runtime root
+```
+
+These hooks are mx-owned but **yours to edit** — `mx sync` only re-stamps a script if it's missing,
+never clobbering your changes, and backfills `hooks/` for works created before this feature existed.
 
 ## The work folder holds mx-native files only
 

@@ -22,6 +22,7 @@ import * as path from 'node:path';
 import { emit, dim, bold, check, warn, confirmYesNo, tildify } from '../output';
 import { openWorkLayout } from '../open';
 import { runWorktreeHydrate } from '../hydrate';
+import { runWorkHook } from '../workhooks';
 import type { Flags } from '../args';
 
 /**
@@ -232,7 +233,28 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
           return;
         }
       }
+      // pre-archive hook runs while worktrees are still intact; a non-zero exit
+      // vetoes the archive before anything is removed. Skip it when the work is
+      // already archived so a side-effecting hook never fires on a no-op — core
+      // will throw the canonical ALREADY_ARCHIVED below.
+      if (workInfo(root, name).isArchived !== true) {
+        const preArchive = runWorkHook(root, name, 'pre-archive', flags.porcelain);
+        if (preArchive.ran && !preArchive.ok) {
+          throw new MxError(
+            `pre-archive hook for "${name}" exited non-zero — archive aborted`,
+            'HOOK_FAILED',
+          );
+        }
+      }
       const res = archiveWork(root, name);
+      // post-archive hook is best-effort: the archive already happened, so a
+      // non-zero exit only warns.
+      const postArchive = runWorkHook(root, name, 'post-archive', flags.porcelain);
+      if (postArchive.ran && !postArchive.ok && !flags.porcelain) {
+        process.stderr.write(
+          `${warn()} ${dim(`post-archive hook for ${name} exited non-zero (archive already applied)`)}\n`,
+        );
+      }
       emit(() => {
         const removed = res.removedWorktrees.join(', ') || 'none';
         console.log(`${check()} archived work ${bold(name)}`);
@@ -256,7 +278,27 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         }
         overrides[tok.slice(0, eq)] = tok.slice(eq + 1);
       }
+      // pre-unarchive hook runs before any worktree is re-created; a non-zero
+      // exit vetoes the unarchive. Skip it when the work isn't archived so a
+      // side-effecting hook never fires on a no-op — core will throw the
+      // canonical NOT_ARCHIVED below.
+      if (workInfo(root, name).isArchived === true) {
+        const preUnarchive = runWorkHook(root, name, 'pre-unarchive', flags.porcelain);
+        if (preUnarchive.ran && !preUnarchive.ok) {
+          throw new MxError(
+            `pre-unarchive hook for "${name}" exited non-zero — unarchive aborted`,
+            'HOOK_FAILED',
+          );
+        }
+      }
       const res = unarchiveWork(root, name, overrides);
+      // post-unarchive hook is best-effort: the worktrees are already back.
+      const postUnarchive = runWorkHook(root, name, 'post-unarchive', flags.porcelain);
+      if (postUnarchive.ran && !postUnarchive.ok && !flags.porcelain) {
+        process.stderr.write(
+          `${warn()} ${dim(`post-unarchive hook for ${name} exited non-zero (unarchive already applied)`)}\n`,
+        );
+      }
       emit(() => {
         console.log(`${check()} unarchived work ${bold(name)}`);
         for (const r of res.restored) {

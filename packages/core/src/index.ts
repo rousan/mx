@@ -20,6 +20,9 @@ export {
   workspaceFile,
   worktreesDir,
   worktreePath,
+  workHooksDir,
+  workHookScript,
+  WORK_HOOK_EVENTS,
   defaultRuntime,
   discoverRuntime,
   requireRuntime,
@@ -40,7 +43,7 @@ export {
   readRuntimeVersion,
   writeRuntimeVersion,
 } from './runtime';
-export type { InitResult, SyncResult, MxConfig } from './runtime';
+export type { InitResult, SyncResult, MxConfig, WorkHookEvent } from './runtime';
 
 export { migrateRuntime } from './migrations';
 export type { MigrateResult, AppliedMigration } from './migrations';

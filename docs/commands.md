@@ -340,6 +340,8 @@ Only `y` / `yes` (case-insensitive) proceeds; anything else aborts with `Aborted
 
 `--yes` / `-y` skips the prompt. **Required** when stdin isn't a TTY (piped, scripted) or with `--porcelain` — otherwise mx errors with code `NEED_CONFIRMATION`.
 
+**Lifecycle hooks:** after confirmation, mx runs `works/<name>/hooks/pre-archive.sh` (worktrees still on disk). A non-zero exit **aborts** the archive with `HOOK_FAILED` — nothing is mutated. After a successful archive it runs `hooks/post-archive.sh`; a non-zero exit there is a warning only (the archive already happened). See [Work lifecycle hooks](#work-lifecycle-hooks).
+
 ### `mx work -n <name> unarchive [<repo>=<branch>...]`
 
 Restore an archived work. Re-creates worktrees from the branches recorded in `work.json`. Refuses with `NOT_ARCHIVED` if the work isn't archived.
@@ -351,6 +353,8 @@ mx: cannot unarchive "feat" — branch(es) not found: app=feature-x. Re-run with
 ```
 
 To override per-repo: pass `<repo>=<branch>` positional args. Overrides update `work.json`'s recorded branches to the actually-used ones.
+
+**Lifecycle hooks:** mx runs `hooks/pre-unarchive.sh` before re-creating any worktree (a non-zero exit aborts with `HOOK_FAILED`) and `hooks/post-unarchive.sh` after restoration (non-zero warns only). See [Work lifecycle hooks](#work-lifecycle-hooks).
 
 ### `mx work -n <name> destroy --force`
 
@@ -369,6 +373,28 @@ With `--force`, prints a loud irreversibility warning to stderr before executing
 `mx work new` and `mx sync` generate `works/<feature>/.claude/settings.json`, a Claude Code `SessionStart` hook that prints the runtime's `context/INDEX.json` into every session launched in that work folder. This loads the context-registry catalog **deterministically** every session (relying on CLAUDE.md prose alone proved unreliable).
 
 The hook is **per-work** (not at the runtime root) because Claude Code reads `.claude/settings.json` only from the session's launch directory, and mx sessions launch in the work folder. It is **stamp-if-missing** — user edits are preserved.
+
+## Work lifecycle hooks
+
+`mx work new` and `mx sync` stamp four documented, executable **no-op** scripts into `works/<feature>/hooks/`, run around archive/unarchive:
+
+| hook | runs | non-zero exit |
+|---|---|---|
+| `pre-archive.sh` | before `archive` removes worktrees (worktrees on disk) | **aborts** the archive (`HOOK_FAILED`); nothing mutated |
+| `post-archive.sh` | after a successful archive (worktrees gone) | warning only |
+| `pre-unarchive.sh` | before `unarchive` re-creates worktrees (none on disk) | **aborts** the unarchive (`HOOK_FAILED`) |
+| `post-unarchive.sh` | after worktrees are restored | warning only |
+
+Each runs with the **work folder** as the working directory. Context is passed as positional args and environment variables:
+
+```
+$1 / $MX_EVENT       the event name (e.g. "pre-archive")
+$2 / $MX_WORK_PATH   absolute path to the work folder
+$MX_WORK             work name
+$MX_RUNTIME          runtime root
+```
+
+A `pre-*` hook is a veto point (block archive on unpushed commits, snapshot state, etc.); a `post-*` hook is for after-the-fact cleanup or notification. The default scripts just `exit 0`, so an un-customized hook is inert. They are mx-owned but **user-editable** — `mx sync` re-stamps a script only if it's missing (never clobbering edits) and backfills `hooks/` for works created before this feature. In `--porcelain` mode hook stdio is suppressed to keep output clean, but a `pre-*` veto still aborts with a JSON `HOOK_FAILED` error.
 
 ## Output conventions
 
@@ -407,5 +433,6 @@ The hook is **per-work** (not at the runtime root) because Claude Code reads `.c
 | `NO_MIGRATION` | no registered migration step for a version gap in the chain |
 | `BAD_VERSION` | malformed `<runtime>/mx.json` file |
 | `HYDRATE_FAILED` | explicit `worktree hydrate` hook exited non-zero |
+| `HOOK_FAILED` | a `pre-archive`/`pre-unarchive` work lifecycle hook exited non-zero — the operation was aborted |
 | `UNSUPPORTED` | platform-unsupported action (e.g. `mx work new -o` on non-macOS; downgraded to a warning) |
 | `INTERNAL` | non-`MxError` thrown — bug |

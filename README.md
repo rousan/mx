@@ -88,7 +88,7 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 |---|---|
 | `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `mx.json`, `CLAUDE.md`, `context/INDEX.json`) |
 | `mx info [--all] [--porcelain]` | list repos, works, worktrees, and ports (active works only by default; `--all` includes archived) |
-| `mx sync` | re-sync runtime with current mx version: re-stamp `CLAUDE.md`, backfill `context/INDEX.json`, per-work dirs (`wt/`/`scripts/`/`files/`/`tmp/`/`sessions/`) + work `CLAUDE.md` + `.claude/settings.json`, per-repo `hydrate.sh`/`health.sh` if missing. Same-major, non-destructive. |
+| `mx sync` | re-sync runtime with current mx version: re-stamp `CLAUDE.md`, backfill `context/INDEX.json`, per-work dirs (`wt/`/`scripts/`/`files/`/`tmp/`/`hooks/`/`sessions/`) + work `CLAUDE.md` + `.claude/settings.json` + lifecycle hooks (`hooks/{pre,post}-{archive,unarchive}.sh`), per-repo `hydrate.sh`/`health.sh` if missing. Same-major, non-destructive. |
 | `mx update` | self-update the CLI within its major (`npm i -g`); reports a newer major if available. Not runtime-gated. |
 | `mx migrate` | upgrade an older-version runtime to the version this CLI supports (only command allowed on a version mismatch) |
 | `mx repo add <git-url> [--name <n>]` | clone a pristine repo into `repos/<repo>/git` (stamps its `hydrate.sh`/`health.sh`) |
@@ -98,8 +98,8 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 | `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works (ls shows active only by default; `--all` includes archived; `--archived` shows archived only) |
 | `mx work -n <name> worktree add\|ls\|rm\|hydrate <repo> [--no-hydrate]` | manage worktrees; `add` runs the repo's `hydrate.sh` (skip with `--no-hydrate`), `hydrate` re-runs it |
 | `mx work -n <name> port set\|unset\|ls <repo> <service> [<port>]` | allocate/release ports |
-| `mx work -n <name> archive [--yes\|-y]` | remove worktrees; keep folder + work.json + sessions/ + branches (recoverable). Prompts for confirmation; `--yes` skips the prompt (required for `--porcelain` and non-TTY callers) |
-| `mx work -n <name> unarchive [<repo>=<branch>...]` | re-create worktrees; positional overrides if recorded branches are missing |
+| `mx work -n <name> archive [--yes\|-y]` | remove worktrees; keep folder + work.json + sessions/ + branches (recoverable). Prompts for confirmation; `--yes` skips the prompt (required for `--porcelain` and non-TTY callers). Runs the work's `hooks/pre-archive.sh` (non-zero aborts: `HOOK_FAILED`) and `hooks/post-archive.sh` (non-zero warns) |
+| `mx work -n <name> unarchive [<repo>=<branch>...]` | re-create worktrees; positional overrides if recorded branches are missing. Runs `hooks/pre-unarchive.sh` (non-zero aborts) and `hooks/post-unarchive.sh` (non-zero warns) |
 | `mx work -n <name> destroy --force` | **permanent**: delete the work folder (incl. sessions); branches kept. Prefer archive. |
 
 Read commands take `--porcelain` for stable JSON; mutations echo the resulting object; errors are `{"error","code"}` with a non-zero exit. `-n <name>` can be omitted when your cwd implies it (inside a work folder/worktree, or a pristine clone).
