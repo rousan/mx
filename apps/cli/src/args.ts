@@ -25,6 +25,8 @@ export interface Flags {
   noHydrate: boolean;
   /** Plan only, mutate nothing (currently: `mx migrate --dry-run`). */
   dryRun: boolean;
+  /** Quick-start a work + worktree (currently: `mx repo new <name> --quick`). */
+  quick: boolean;
   /** Explicit runtime path from `--runtime`. */
   runtime?: string;
   /** Target name from `-n`/`--name`. */
@@ -82,6 +84,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     open: false,
     noHydrate: false,
     dryRun: false,
+    quick: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -105,6 +108,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       flags.noHydrate = true;
     } else if (a === '--dry-run') {
       flags.dryRun = true;
+    } else if (a === '--quick') {
+      flags.quick = true;
     } else if (a.startsWith('--') && a.includes('=')) {
       const eq = a.indexOf('=');
       const key = VALUE_FLAGS[a.slice(0, eq)];

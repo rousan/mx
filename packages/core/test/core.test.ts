@@ -30,6 +30,7 @@ import {
   workDestroy,
   listWorksInfo,
   repoAdd,
+  repoNew,
   repoFetch,
   repoInfo,
   repoHealth,
@@ -552,6 +553,63 @@ describe('per-work context-index hook', () => {
     const res2 = syncRuntime(root, TEMPLATES_DIR);
     expect(res2.updated).not.toContain(settingsPath);
     expect(fs.readFileSync(settingsPath, 'utf8')).toBe('{"hooks":{}}\n');
+  });
+});
+
+describe('repoNew (local repo)', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+
+  it('creates a local repo on main with a committed README and no remote', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const res = repoNew(root, 'exp');
+    expect(res.name).toBe('exp');
+    expect(res.remote).toBeNull();
+    expect(res.branch).toBe('main');
+    expect(res.path).toBe(path.join(root, 'repos', 'exp'));
+    // Clone lives at repos/<name>/git, on main, with an initial commit.
+    const gitdir = repoGitDir(root, 'exp');
+    expect(fs.existsSync(path.join(gitdir, '.git'))).toBe(true);
+    expect(fs.existsSync(path.join(gitdir, 'README.md'))).toBe(true);
+    const log = execFileSync('git', ['-C', gitdir, 'log', '--oneline'], { encoding: 'utf8' });
+    expect(log.trim().split('\n')).toHaveLength(1);
+    expect(repoInfo(root, 'exp').branch).toBe('main');
+  });
+
+  it('refuses an existing repo and rejects an invalid name', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoNew(root, 'exp');
+    expect(() => repoNew(root, 'exp')).toThrow(/already exists/);
+    expect(() => repoNew(root, 'a/b')).toThrow(/invalid repo name/);
+  });
+
+  it('a fresh local repo supports a work + worktree (forks main onto a branch)', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoNew(root, 'exp');
+    workNew(root, 'exp');
+    const wt = worktreeAdd(root, 'exp', 'exp', {}); // branch defaults to work name
+    expect(wt.branch).toBe('exp');
+    expect(fs.existsSync(path.join(wt.path, 'README.md'))).toBe(true); // forked from main
+    const branch = execFileSync('git', ['-C', wt.path, 'rev-parse', '--abbrev-ref', 'HEAD'], {
+      encoding: 'utf8',
+    }).trim();
+    expect(branch).toBe('exp');
+    // Pristine stays on main, so `mx repo health` won't flag a detached HEAD.
+    expect(repoInfo(root, 'exp').branch).toBe('main');
+  });
+
+  it('--no-readme makes an empty initial commit so main still exists', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const res = repoNew(root, 'bare', { readme: false });
+    expect(res.branch).toBe('main');
+    const gitdir = repoGitDir(root, 'bare');
+    expect(fs.existsSync(path.join(gitdir, 'README.md'))).toBe(false);
+    // main exists (the commit created it), so a worktree can fork it.
+    workNew(root, 'bare');
+    expect(() => worktreeAdd(root, 'bare', 'bare', {})).not.toThrow();
   });
 });
 

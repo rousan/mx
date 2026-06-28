@@ -13,6 +13,7 @@ Global:
 
 Repos (pristine clones):
   mx repo add <git-url> [--name <n>]     clone a repo into the runtime
+  mx repo new <name> [--quick] [-o]      create a fresh local repo (no remote); --quick also makes a dev-<name> work + develop worktree
   mx repo ls [--porcelain]
   mx repo -n <name> path                 print the repo container path (cd "$(mx repo -n <name> path)")
   mx repo -n <name> fetch                git fetch (+ ff the checked-out and base branches)

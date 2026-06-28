@@ -2,6 +2,12 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 2.5.0 — 2026-06-28
+
+**`mx repo new` — create a local repo, no remote.** The counterpart to `mx repo add` for quick experiments and throwaway apps you don't want to push anywhere: `mx repo new <name>` runs `git init` on `main`, writes a starter `README.md`, makes an initial commit (so `main` exists and worktrees can fork from it), and stamps the per-repo `hydrate.sh`/`health.sh` — removing the manual `mkdir` + `git init` + commit dance. The commit uses your git identity, falling back to a neutral `mx <mx@localhost>` only when none is configured.
+
+`--quick` turns it into a **one-shot quick-start**: it also creates a `dev-<name>` work, adds a worktree of the repo on the `develop` branch, and runs hydrate — pair with `-o` to open the Terminal + editor layout. So a fresh experiment is one line: `mx repo new exp --quick -o` (→ repo `exp`, work `dev-exp`, worktree on `develop`). Because the pristine clone holds `main` (git won't check a branch out twice), the worktree forks `main` onto `develop`; the pristine stays on `main` so `mx repo health` stays clean. New `--quick` CLI flag; `repoNew` in `@mx/core`. Minor — no runtime-layout change.
+
 ## 2.4.0 — 2026-06-28
 
 **`mx migrate --dry-run`.** Preview a migration without touching anything. It runs the same up-front chain validation (so an impossible migration still errors `NO_MIGRATION` / `CLI_TOO_OLD`), then prints every path it *would* move, stamp, or create and ends with "No changes were made." — the runtime's `mx.json` version and all files are left exactly as they were. Useful before letting migrate run against an old runtime. Porcelain output carries `"dryRun": true` and the planned paths in `changed`. Implemented by threading a `dryRun` flag through `migrateRuntime` and the underlying `migrateRepoLayout` / `migrateWorkLayout` / `ensureWorkScaffolding` (each guards its mutations but still reports what it would do). New `--dry-run` CLI flag. Minor — no runtime-layout change.

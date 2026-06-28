@@ -53,6 +53,7 @@ export { stampClaudeMd, removeStaleRuntimeReadme, stampRepoScripts } from './tem
 export {
   repoNameFromUrl,
   repoAdd,
+  repoNew,
   listReposInfo,
   repoFetch,
   repoInfo,
@@ -62,6 +63,7 @@ export {
 } from './repos';
 export type {
   RepoAddResult,
+  RepoNewResult,
   RepoFetchResult,
   RepoInfoResult,
   RepoHealth,
