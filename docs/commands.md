@@ -17,7 +17,7 @@ Prints a contextual hint about `$MX_RUNTIME`:
 - If the target is the default `~/mx` and `$MX_RUNTIME` is unset: notes that no setup is needed.
 - Otherwise: gives the `export MX_RUNTIME="…"` line to add to your shell config.
 
-### `mx status [--all] [--porcelain]` (aliases: `mx s`, `mx st`)
+### `mx info [--all] [--porcelain]` (alias: `mx i`)
 
 Show the runtime overview: path + version, context entry count, repos, works. The header shows the runtime layout version (`mx vN`); repos and works each show their folder path (home-collapsed to `~`). Porcelain output includes a top-level `version` field.
 

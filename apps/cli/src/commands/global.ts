@@ -65,7 +65,7 @@ export function runGlobal(positionals: string[], flags: Flags): void {
       }, res);
       return;
     }
-    case 'status': {
+    case 'info': {
       const root = requireRuntime({ runtime: flags.runtime });
       // Default: active works only. --all expands the works section.
       const data = statusRuntime(root, { includeArchived: flags.all });

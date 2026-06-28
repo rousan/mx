@@ -28,7 +28,7 @@ There are two `mx` binaries available inside a self-hosted worktree, and they mu
 
 | binary | what it runs | use for |
 |---|---|---|
-| `mx` (on `$PATH`) | the **globally installed** `@roulabs/mx` — published version | productive runtime operations: `mx s`, `mx work archive feat`, etc. **Safe** against the productive runtime. |
+| `mx` (on `$PATH`) | the **globally installed** `@roulabs/mx` — published version | productive runtime operations: `mx i`, `mx work archive feat`, etc. **Safe** against the productive runtime. |
 | `pnpm mx ...` or `node npm/bin/mx.js ...` | the **locally-built** CLI from your in-progress code | **testing only** — must always be pointed at a sandbox runtime, never the productive one. |
 
 ## The strict rule

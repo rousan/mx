@@ -18,7 +18,7 @@ export MX_RUNTIME="$PWD/.mx"     # gitignored dev runtime in this repo
 pnpm mx init                     # runs node npm/bin/mx.js init against the dev runtime
 pnpm mx repo add git@github.com:you/app.git
 pnpm mx work new my-feature
-pnpm mx status
+pnpm mx info
 ```
 
 The `.mx/` folder is gitignored — your dev runtime is local-only and disposable.

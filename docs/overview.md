@@ -47,7 +47,7 @@ The runtime is **versioned**: `mx.json` records the on-disk layout version (CLI 
 
 ## Two surfaces
 
-- **The CLI** — `mx init`, `mx work new`, `mx repo add`, `mx status`, etc. Every read takes `--porcelain` for stable JSON; mutations echo the resulting object; errors are `{"error","code"}` with a non-zero exit. See [commands](commands.md).
+- **The CLI** — `mx init`, `mx work new`, `mx repo add`, `mx info`, etc. Every read takes `--porcelain` for stable JSON; mutations echo the resulting object; errors are `{"error","code"}` with a non-zero exit. See [commands](commands.md).
 - **The runtime CLAUDE.md** — stamped into the runtime by `mx init` (re-stamped by `mx sync`). Tells the agent (Claude or otherwise) the rules for working inside this runtime: never edit `repos/`, never hand-edit `work.json`, etc. The contract feature sessions rely on.
 
 ## Who uses mx

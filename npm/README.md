@@ -30,7 +30,7 @@ mx repo add git@github.com:you/app.git   # clone a pristine repo into the runtim
 mx work new my-feature                   # create a work (prints its folder path)
 mx work -n my-feature worktree add app   # add a worktree on branch my-feature
 mx work -n my-feature port set app web   # allocate a free port (across all works)
-mx status                                # see repos, works, worktrees, ports
+mx info                                # see repos, works, worktrees, ports
 ```
 
 Inside a work folder or worktree you can drop `-n` — mx infers the work/repo from your cwd. Read commands accept `--porcelain` for stable JSON; errors are `{"error","code"}` with a non-zero exit.
@@ -40,7 +40,7 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 | command | does |
 |---|---|
 | `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `mx.json`, `CLAUDE.md`) |
-| `mx status [--all] [--porcelain]` | list repos, works, worktrees, ports |
+| `mx info [--all] [--porcelain]` | list repos, works, worktrees, ports |
 | `mx sync` | re-stamp the runtime's mx-owned files (`CLAUDE.md`, per-repo/per-work scaffolding) from the current CLI — same-major, non-destructive |
 | `mx update` | self-update the CLI within its major (`npm i -g`); flags a newer major if one exists |
 | `mx migrate` | upgrade an older-version runtime to the version this CLI supports (the only command allowed on a version-mismatched runtime) |

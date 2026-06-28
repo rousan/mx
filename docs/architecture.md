@@ -38,7 +38,7 @@ Thin CLI over `@mx/core`. Handles arg parsing, cwd→`-n` inference, output form
 Key files in `apps/cli/src/`:
 
 - `bin/mx.ts` — entrypoint; just calls `main()`
-- `main.ts` — version read from `<pkg>/package.json` at startup; alias handling (`mx s`/`st` → `status`); top-level dispatch; applies the runtime version gate before runtime-touching commands (allowing only `migrate`, `update`, `help`, `version` on a mismatch)
+- `main.ts` — version read from `<pkg>/package.json` at startup; alias handling (`mx i` → `info`); top-level dispatch; applies the runtime version gate before runtime-touching commands (allowing only `migrate`, `update`, `help`, `version` on a mismatch)
 - `args.ts` — argv parser with `Flags`: `porcelain`, `help`, `version`, `force`, `yes`, `all`, `archived`, `open`, `noSetup`, `runtime`, `name`, `description`, `branch`, `base`
 - `output.ts` — `emit(human, data)`, `fail(err)`, the monochrome style helpers (`dim`, `bold`), the plain glyphs (`check()` = ✓, `warn()` = ⚠), and `confirmYesNo()` (sync TTY prompt via `spawnSync('/bin/sh', ['-c', 'read REPLY'])`)
 - `paths.ts` — `templatesDir()` resolves `<pkg>/bin/mx.js` → `<pkg>/templates`

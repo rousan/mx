@@ -44,7 +44,7 @@ pnpm install
 pnpm build                     # populates npm/ (bin/mx.js + templates/ + LICENSE)
 export MX_RUNTIME="$PWD/.mx"   # a gitignored dev runtime in this repo
 pnpm mx init                   # = node npm/bin/mx.js init
-pnpm mx status
+pnpm mx info
 ```
 
 `mx` reflects **built** output: after changing CLI/core code, `pnpm build` (or keep `pnpm dev` running). Templates live at `/templates` and are copied into `npm/templates/` at build, so editing them requires a rebuild to take effect.
@@ -122,7 +122,7 @@ There are two `mx` binaries available inside a self-hosted worktree, and they mu
 
 | binary | what it runs | use for |
 |---|---|---|
-| `mx` (on `$PATH`) | the **globally installed** `@roulabs/mx` — published version | productive runtime operations: `mx s`, `mx work archive feat`, etc. **Safe** against the productive runtime. |
+| `mx` (on `$PATH`) | the **globally installed** `@roulabs/mx` — published version | productive runtime operations: `mx i`, `mx work archive feat`, etc. **Safe** against the productive runtime. |
 | `pnpm mx ...` or `node npm/bin/mx.js ...` | the **locally-built** CLI from your in-progress code | **testing only** — must always be pointed at a sandbox runtime, never the productive one. |
 
 The hard rule: **the locally-built CLI never sees the productive runtime.** Before any test, set `$MX_RUNTIME` to a sandbox:
@@ -214,7 +214,7 @@ Implemented in `apps/cli` over `@mx/core`. Each command resolves the runtime via
 
 **Global**
 - **`mx init [path]`** — scaffold/adopt a runtime (target = path arg, else `$MX_RUNTIME`, else `~/mx`): create `repos/`, `works/`, `.mx-root`; stamp `mx.json`, `CLAUDE.md`; stamp `context/INDEX.json` (only if missing — context is user data). Refuses to adopt a runtime whose `mx.json` differs (→ `mx migrate`, or upgrade the CLI). Idempotent; no clone; no pointer written.
-- **`mx status [--all] [--porcelain]`** — runtime path, repos + branches, works + worktrees + ports. Active works only by default; `--all` includes archived. Aliases: `mx s`, `mx st`.
+- **`mx info [--all] [--porcelain]`** — runtime path, repos + branches, works + worktrees + ports. Active works only by default; `--all` includes archived. Alias: `mx i`.
 - **`mx sync`** — (formerly `mx update`) re-stamp the runtime `CLAUDE.md`; stamp `context/INDEX.json` only if missing; backfill the per-work dirs (`wt/`, `scripts/`, `files/`, `tmp/`, `sessions/`), per-repo `hydrate.sh`/`health.sh`, the per-work `CLAUDE.md`, and per-work `.claude/settings.json` (stamp-if-missing). Never modifies user data. Version-gated.
 - **`mx update`** — self-update the CLI within its major (`npm i -g @roulabs/mx@^<major>`); suggests a deliberate major upgrade if one exists. Not version-gated.
 - **`mx migrate`** — upgrade an older runtime to the supported version (the only runtime command allowed on a version mismatch); validates the chain first (`NO_MIGRATION` / `CLI_TOO_OLD`). v1→v2 moves clones into `git/` (`git worktree repair`) **and** restructures every work: flat worktrees into `wt/`, creates `scripts/`/`files/`/`tmp/`, stamps the work `CLAUDE.md`, rewrites `.code-workspace` paths to `wt/<repo>`.

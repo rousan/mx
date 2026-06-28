@@ -64,7 +64,7 @@ export MX_RUNTIME="$PWD/.mx"     # gitignored dev runtime in this repo
 pnpm mx init                     # node npm/bin/mx.js init
 pnpm mx repo add git@github.com:you/app.git
 pnpm mx work new my-feature
-pnpm mx status
+pnpm mx info
 ```
 
 `mx` runs the **built** output, so re-run `pnpm build` (or keep `pnpm dev` watching) after changing CLI/core code. Templates live at `/templates` (no code, just content) and are copied into `npm/templates/` at build — edits take effect on the next build. There is no global PATH coupling to this repo — the global `mx` comes only from installing a build (`npm i -g @roulabs/mx`).
@@ -87,7 +87,7 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 | command | does |
 |---|---|
 | `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `mx.json`, `CLAUDE.md`, `context/INDEX.json`) |
-| `mx status [--all] [--porcelain]` | list repos, works, worktrees, and ports (active works only by default; `--all` includes archived) |
+| `mx info [--all] [--porcelain]` | list repos, works, worktrees, and ports (active works only by default; `--all` includes archived) |
 | `mx sync` | re-sync runtime with current mx version: re-stamp `CLAUDE.md`, backfill `context/INDEX.json`, per-work dirs (`wt/`/`scripts/`/`files/`/`tmp/`/`sessions/`) + work `CLAUDE.md` + `.claude/settings.json`, per-repo `hydrate.sh`/`health.sh` if missing. Same-major, non-destructive. |
 | `mx update` | self-update the CLI within its major (`npm i -g`); reports a newer major if available. Not runtime-gated. |
 | `mx migrate` | upgrade an older-version runtime to the version this CLI supports (only command allowed on a version mismatch) |
