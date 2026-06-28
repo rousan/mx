@@ -293,6 +293,10 @@ clarity; dropping it works while you're inside the work.
   - After the worktree is created, the repo's `repos/<repo>/hydrate.sh` runs automatically with the new
     worktree as the working directory (copy a `.env`, install deps, etc.). Pass `--no-hydrate` to skip it,
     or re-run it later with `mx work -n <feature> worktree hydrate <repo>`.
+- **Spin up a quick local app (no remote):** for a throwaway/experiment repo you don't want on GitHub,
+  `mx repo new <name>` creates a fresh local repo (git init on `main` + README + initial commit). Add
+  `--quick` (and `-o`) to also create a `dev-<name>` work + a worktree on `develop` and open it in one
+  shot: `mx repo new <name> --quick -o`. Like adding any repo/worktree, **ask the user first.**
 - **Allocate a port:** `mx work -n <feature> port set <repo> <service>` returns a free port (unique
   across all works). This only records the port in `work.json` — **you** must then wire that port
   into the repo's own env/config (`.env`, `PORT=`, etc.) and remap any outbound URL to a sibling

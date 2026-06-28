@@ -135,6 +135,18 @@ Clone a repo into its container at `<runtime>/repos/<repo>/git/`. The only comma
 
 Also stamps the per-repo scripts `hydrate.sh` and `health.sh` into the container (see [Per-repo scripts](#per-repo-scripts)).
 
+### `mx repo new <name> [--quick] [-o] [--description <t>]`
+
+Create a brand-new **local** repo (no remote) at `<runtime>/repos/<name>/git/`: `git init` on `main`, a starter `README.md`, and an initial commit (so `main` exists and worktrees can fork from it). Stamps `hydrate.sh`/`health.sh` like `add`. This is the counterpart to `add` for quick experiments and throwaway apps you don't want to push to a remote yet — no more manual `mkdir` + `git init` + commit dance. The initial commit uses your git identity, falling back to a neutral `mx <mx@localhost>` only if none is configured. Errors `EXISTS` if the repo already exists, `BAD_ARGS` on an invalid name (must be a single path segment).
+
+`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and runs the repo's `hydrate.sh` (skip with `--no-hydrate`). Pair with `-o`/`--open` to open the work's Terminal + editor layout (macOS), and `--description <t>` to set the work description. So a fresh experiment is one line:
+
+```
+mx repo new exp --quick -o     # repo "exp", work "dev-exp", worktree on "develop", opened
+```
+
+Note on the branch: the pristine clone holds `main`, and git won't check the same branch out twice, so the worktree forks `main` onto `develop` rather than `main` itself. The pristine stays on `main`, so `mx repo health` stays clean.
+
 ### `mx repo ls [--porcelain]`
 
 List all pristine clones in the same clean shape as `mx work ls`: bold name, dim container path, dim `branch  remote`, a blank line between entries. Human output collapses `$HOME` to `~`; porcelain adds an absolute `path` field per repo.

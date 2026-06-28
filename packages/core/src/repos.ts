@@ -60,6 +60,73 @@ export function repoAdd(root: string, url: string, name0?: string): RepoAddResul
 }
 
 /**
+ * Result of creating a fresh local repo.
+ */
+export interface RepoNewResult {
+  /** Repo name. */
+  name: string;
+  /** Absolute container path (`repos/<name>`). */
+  path: string;
+  /** Always null — a local repo has no remote. */
+  remote: null;
+  /** Default branch the initial commit landed on (`main`). */
+  branch: string;
+}
+
+/**
+ * Create a brand-new **local** repo (no remote) under `repos/`: `git init` on
+ * `main`, an optional starter `README.md`, and an initial commit so `main`
+ * actually exists and worktrees can fork from it.
+ *
+ * This is the counterpart to `repoAdd` for quick experiments and throwaway apps
+ * you don't want on a remote yet — it removes the manual `mkdir` + `git init` +
+ * README + commit dance, keeping everything in mx's container layout.
+ *
+ * The commit uses the user's configured git identity; when none is set, a
+ * neutral `mx <mx@localhost>` identity is supplied for this one commit so the
+ * command never fails on an unconfigured machine.
+ *
+ * @param root - Runtime root.
+ * @param name - New repo name (a single path segment).
+ * @param opts - Options.
+ * @param opts.readme - Write a starter `README.md` (default true); when false an
+ *   empty initial commit is made instead.
+ * @returns The new repo's name, container path, null remote, and branch.
+ */
+export function repoNew(
+  root: string,
+  name: string,
+  opts: { readme?: boolean } = {},
+): RepoNewResult {
+  if (!name || name.includes('/') || name.includes('\\') || name === '.' || name === '..') {
+    throw new MxError(`invalid repo name: ${JSON.stringify(name)}`, 'BAD_ARGS');
+  }
+  const container = repoPath(root, name);
+  if (exists(container)) throw new MxError(`repo already exists: ${name}`, 'EXISTS');
+  const gitdir = repoGitDir(root, name);
+  fs.mkdirSync(gitdir, { recursive: true });
+  git(['-C', gitdir, 'init', '-q', '-b', 'main']);
+  const withReadme = opts.readme !== false;
+  if (withReadme) {
+    fs.writeFileSync(path.join(gitdir, 'README.md'), `# ${name}\n`);
+    git(['-C', gitdir, 'add', 'README.md']);
+  }
+  // An initial commit is required so `main` exists as a ref (an unborn branch
+  // can't be forked into a worktree). Fall back to a neutral identity only when
+  // the user has none configured, so we never override a real one.
+  const haveIdentity =
+    gitQuiet(['-C', gitdir, 'config', 'user.name']) !== null &&
+    gitQuiet(['-C', gitdir, 'config', 'user.email']) !== null;
+  const idArgs = haveIdentity
+    ? []
+    : ['-c', 'user.name=mx', '-c', 'user.email=mx@localhost'];
+  const commitArgs = ['-C', gitdir, ...idArgs, 'commit', '-q', '-m', 'init'];
+  if (!withReadme) commitArgs.push('--allow-empty');
+  git(commitArgs);
+  return { name, path: container, remote: null, branch: currentBranch(gitdir) };
+}
+
+/**
  * Summaries of all pristine clones.
  *
  * @param root - Runtime root.

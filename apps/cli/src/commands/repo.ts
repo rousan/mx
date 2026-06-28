@@ -2,6 +2,7 @@ import {
   requireRuntime,
   inferContext,
   repoAdd,
+  repoNew,
   repoPath,
   stampRepoScripts,
   listReposInfo,
@@ -10,10 +11,15 @@ import {
   repoHealth,
   listRepoHealth,
   repoRemove,
+  workNew,
+  worktreeAdd,
+  workspaceFile,
   MxError,
 } from '@mx/core';
 import type { RepoHealth } from '@mx/core';
 import { emit, dim, bold, check, warn, tildify } from '../output';
+import { openWorkLayout } from '../open';
+import { runWorktreeHydrate } from '../hydrate';
 import { templatesDir } from '../paths';
 import type { Flags } from '../args';
 
@@ -49,6 +55,64 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
       // Stamp the repo's mx-owned scripts (hydrate.sh, health.sh) into its container.
       stampRepoScripts(repoPath(root, res.name), templatesDir());
       emit(() => console.log(`${check()} cloned ${bold(res.name)} ${dim(`→ ${res.path}`)}`), res);
+      return;
+    }
+    case 'new': {
+      // Create a fresh local repo (no remote) — for quick experiments you don't
+      // want to push anywhere. With --quick it also spins up a `dev-<name>` work
+      // and a worktree on `develop`, so a throwaway app is one command (add -o to
+      // open it in Terminal + editor).
+      const name = need(
+        positionals[2],
+        'usage: mx repo new <name> [--quick] [-o] [--description <t>]',
+      );
+      const res = repoNew(root, name);
+      stampRepoScripts(repoPath(root, res.name), templatesDir());
+
+      if (!flags.quick) {
+        emit(() => {
+          console.log(`${check()} created repo ${bold(res.name)} ${dim('(local, no remote)')}`);
+          console.log(`  ${dim(res.path)}`);
+          console.log(`  ${dim(`next: mx repo new ${res.name} --quick -o (or add it to a work yourself)`)}`);
+        }, res);
+        return;
+      }
+
+      // --quick: scaffold a `dev-<name>` work and a worktree of the new repo on
+      // the `develop` branch in one shot. The pristine clone holds `main`, so the
+      // worktree forks `main` onto `develop` (git won't check out `main` twice).
+      const workName = `dev-${name}`;
+      const workRes = workNew(root, workName, flags.description ?? '');
+      const wtRes = worktreeAdd(root, workName, name, { branch: 'develop' });
+      if (!flags.noHydrate) {
+        const outcome = runWorktreeHydrate(
+          { root, work: workName, repo: name, worktreePath: wtRes.path, branch: wtRes.branch },
+          flags.porcelain,
+        );
+        if (outcome.ran && !outcome.ok && !flags.porcelain) {
+          process.stderr.write(
+            `${warn()} ${dim(`hydrate.sh exited non-zero — worktree kept. Re-run: mx work -n ${workName} worktree hydrate ${name}`)}\n`,
+          );
+        }
+      }
+      let opened = false;
+      if (flags.open) {
+        try {
+          openWorkLayout(workRes.path, workspaceFile(root, workName));
+          opened = true;
+        } catch (e) {
+          const msg = e instanceof MxError ? e.message : String(e);
+          process.stderr.write(`${warn()} ${dim(`could not open layout: ${msg}`)}\n`);
+        }
+      }
+      emit(() => {
+        console.log(`${check()} created repo ${bold(res.name)} ${dim('(local, no remote)')}`);
+        console.log(`${check()} created work ${bold(workRes.name)} ${dim(`→ ${workRes.path}`)}`);
+        console.log(
+          `${check()} added worktree ${bold(wtRes.repo)} ${dim(`[${wtRes.branch}]`)} ${dim(`→ ${wtRes.path}`)}`,
+        );
+        if (opened) console.log(`${check()} opened ${dim('(Terminal + editor)')}`);
+      }, { repo: res, work: workRes, worktree: wtRes, opened });
       return;
     }
     case 'ls': {

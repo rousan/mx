@@ -45,6 +45,7 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 | `mx update` | self-update the CLI within its major (`npm i -g`); flags a newer major if one exists |
 | `mx migrate [--dry-run]` | upgrade an older-version runtime to the version this CLI supports (the only command allowed on a version-mismatched runtime); `--dry-run` previews the plan without changing anything |
 | `mx repo add <git-url> [--name <n>]` | clone a pristine repo (into `repos/<repo>/git`; stamps its `hydrate.sh`/`health.sh`) |
+| `mx repo new <name> [--quick] [-o]` | create a fresh local repo with no remote (git init on main + README + initial commit); `--quick` also makes a `dev-<name>` work + a `develop` worktree (quick-experiment one-shot) |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
 | `mx repo health` / `mx repo -n <name> health` | local-only health check (augmented by the repo's `health.sh`) |
 | `mx work new <name> [--description <t>] [-o]` | create a work; `-o` opens a fullscreen Terminal + editor (macOS) |
