@@ -2,6 +2,17 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 2.1.0 — 2026-06-28
+
+CLI surface polish (runtime stays v2, no migration):
+
+- **`mx status` → `mx info`** (alias `mx i`). Renamed for consistency with `repo info` / `work info`. The old `status`/`s`/`st` are removed — a **breaking CLI change**, but the runtime layout is unchanged, so per mx's "major = runtime-layout version" rule it ships as a minor.
+- **`mx info` shows more.** Header now includes the runtime version (`mx vN`); the repos and works sections show each entry's path; porcelain gains a top-level `version` field; the works-section `(N active, M archived)` count suffix was dropped.
+- **`mx repo ls`** restyled to match `mx work ls` (bold name / dim path / dim `branch  remote`, blank line between).
+- **`mx repo -n <name> path`** — print the repo container path (for shell substitution), mirroring `mx work … path`.
+- **`mx work -n <name> open`** (and `-o`) — open an existing work's fullscreen Terminal + editor layout (the same thing `mx work new -o` does at creation).
+- **`mx repo fetch`** now fast-forwards **both** the checked-out and base (origin default) branch, so a worktree forked from the base isn't stale. **`mx repo fetch --all`** (or `mx repo --all fetch`) fetches every repo one by one, continuing past individual failures.
+
 ## 2.0.0 — 2026-06-27
 
 **Runtime versioning + container repo layout — the first major.** Several intertwined changes that together cross to runtime **v2**:
