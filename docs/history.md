@@ -2,6 +2,10 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 2.4.0 — 2026-06-28
+
+**`mx migrate --dry-run`.** Preview a migration without touching anything. It runs the same up-front chain validation (so an impossible migration still errors `NO_MIGRATION` / `CLI_TOO_OLD`), then prints every path it *would* move, stamp, or create and ends with "No changes were made." — the runtime's `mx.json` version and all files are left exactly as they were. Useful before letting migrate run against an old runtime. Porcelain output carries `"dryRun": true` and the planned paths in `changed`. Implemented by threading a `dryRun` flag through `migrateRuntime` and the underlying `migrateRepoLayout` / `migrateWorkLayout` / `ensureWorkScaffolding` (each guards its mutations but still reports what it would do). New `--dry-run` CLI flag. Minor — no runtime-layout change.
+
 ## 2.3.0 — 2026-06-28
 
 **Per-work `bin/` directory.** Every work now gets a `bin/` folder alongside `scripts/`, `files/`, `tmp/`, and `hooks/` — a place for executables and binaries a session builds or downloads (compiled tools, fetched CLIs, helper binaries). It starts empty and is owned by the user/agent; mx just creates the directory. `mx work new` creates it and `mx sync` backfills it (stamp-if-missing) on existing v2 runtimes — no migration or version bump needed, so it ships as a minor. Added by listing `bin` in `ensureWorkScaffolding`; `inferContext` treats it like the other non-`wt/` work subdirs (implies the work, no repo).

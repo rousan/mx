@@ -319,15 +319,23 @@ export function listRepoNames(root: string): string[] {
  * (a failure there doesn't abort the move).
  *
  * @param root - Runtime root.
+ * @param opts - Migration options.
+ * @param opts.dryRun - When set, nothing is moved; the returned list is exactly
+ *   the repos that would be migrated.
  * @returns Absolute container paths of the repos migrated this run.
  */
-export function migrateRepoLayout(root: string): string[] {
+export function migrateRepoLayout(root: string, opts: { dryRun?: boolean } = {}): string[] {
+  const dry = opts.dryRun === true;
   const migrated: string[] = [];
   for (const name of listDirs(reposDir(root))) {
     const container = repoPath(root, name);
     const gitdir = repoGitDir(root, name);
     if (isGitRepo(gitdir)) continue; // already container layout
     if (!isGitRepo(container)) continue; // not a flat clone — nothing to migrate
+    if (dry) {
+      migrated.push(container);
+      continue;
+    }
     // Move the clone into a `git/` subfolder. Can't move a dir into its own
     // child in one step, so stage via a sibling temp dir first.
     const tmp = path.join(reposDir(root), `.${name}.mxmig`);
@@ -358,9 +366,13 @@ export function migrateRepoLayout(root: string): string[] {
  * `git/` and worktrees are relinked to it.
  *
  * @param root - Runtime root.
+ * @param opts - Migration options.
+ * @param opts.dryRun - When set, nothing is moved or rewritten; the returned
+ *   list is exactly the paths that would change.
  * @returns Absolute paths relocated/rewritten this run.
  */
-export function migrateWorkLayout(root: string): string[] {
+export function migrateWorkLayout(root: string, opts: { dryRun?: boolean } = {}): string[] {
+  const dry = opts.dryRun === true;
   const changed: string[] = [];
   for (const name of listWorkNames(root)) {
     let work: Work;
@@ -375,6 +387,10 @@ export function migrateWorkLayout(root: string): string[] {
       const flat = path.join(wd, wt.repo);
       const dest = path.join(wtDir, wt.repo);
       if (exists(dest) || !exists(flat)) continue; // already moved, or archived
+      if (dry) {
+        changed.push(dest);
+        continue;
+      }
       fs.mkdirSync(wtDir, { recursive: true });
       try {
         git(['-C', repoGitDir(root, wt.repo), 'worktree', 'move', flat, dest]);
@@ -397,12 +413,12 @@ export function migrateWorkLayout(root: string): string[] {
       let touched = false;
       for (const f of ws.folders ?? []) {
         if (f.path && !f.path.startsWith('wt/') && repos.has(f.path)) {
-          f.path = `wt/${f.path}`;
+          if (!dry) f.path = `wt/${f.path}`;
           touched = true;
         }
       }
       if (touched) {
-        writeJson(wsFile, ws);
+        if (!dry) writeJson(wsFile, ws);
         changed.push(wsFile);
       }
     }
@@ -579,9 +595,17 @@ export interface SyncResult {
  *
  * @param root - Runtime root.
  * @param workName - Work to scaffold inside.
+ * @param opts - Scaffolding options.
+ * @param opts.dryRun - When set, nothing is written; the returned list is
+ *   exactly what would be created (for `mx migrate --dry-run`).
  * @returns Paths newly created this call (empty if everything already existed).
  */
-export function ensureWorkScaffolding(root: string, workName: string): string[] {
+export function ensureWorkScaffolding(
+  root: string,
+  workName: string,
+  opts: { dryRun?: boolean } = {},
+): string[] {
+  const dry = opts.dryRun === true;
   const created: string[] = [];
   const wd = workDir(root, workName);
   // mx-owned work subdirectories. `wt/` holds worktrees; the rest separate
@@ -595,7 +619,7 @@ export function ensureWorkScaffolding(root: string, workName: string): string[] 
   for (const d of ['wt', 'scripts', 'bin', 'files', 'tmp', 'sessions', 'hooks']) {
     const p = path.join(wd, d);
     if (!exists(p)) {
-      fs.mkdirSync(p, { recursive: true });
+      if (!dry) fs.mkdirSync(p, { recursive: true });
       created.push(p);
     }
   }
@@ -603,7 +627,7 @@ export function ensureWorkScaffolding(root: string, workName: string): string[] 
   // the runtime CLAUDE.md for sessions started in this work folder.
   const claudeMd = path.join(wd, 'CLAUDE.md');
   if (!exists(claudeMd)) {
-    fs.writeFileSync(claudeMd, workClaudeMd(workName));
+    if (!dry) fs.writeFileSync(claudeMd, workClaudeMd(workName));
     created.push(claudeMd);
   }
   // Per-work Claude Code settings: a SessionStart hook that loads the runtime's
@@ -613,8 +637,10 @@ export function ensureWorkScaffolding(root: string, workName: string): string[] 
   // at the runtime root. Stamp-if-missing: it's user-editable afterwards.
   const settings = path.join(wd, '.claude', 'settings.json');
   if (!exists(settings)) {
-    fs.mkdirSync(path.dirname(settings), { recursive: true });
-    fs.writeFileSync(settings, workClaudeSettings(root));
+    if (!dry) {
+      fs.mkdirSync(path.dirname(settings), { recursive: true });
+      fs.writeFileSync(settings, workClaudeSettings(root));
+    }
     created.push(settings);
   }
   // Per-work lifecycle hook scripts (stamp-if-missing; user-editable, executable).
@@ -623,8 +649,10 @@ export function ensureWorkScaffolding(root: string, workName: string): string[] 
   for (const event of WORK_HOOK_EVENTS) {
     const hook = workHookScript(root, workName, event);
     if (!exists(hook)) {
-      fs.writeFileSync(hook, workHookScriptBody(event));
-      fs.chmodSync(hook, 0o755);
+      if (!dry) {
+        fs.writeFileSync(hook, workHookScriptBody(event));
+        fs.chmodSync(hook, 0o755);
+      }
       created.push(hook);
     }
   }

@@ -785,6 +785,58 @@ describe('runtime versioning + migrate', () => {
     expect(migrateRuntime(root).applied).toEqual([]);
   });
 
+  it('migrateRuntime --dry-run plans the same changes but mutates nothing', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'x');
+    runGit(src, ['add', '-A']);
+    runGit(src, ['commit', '-qm', 'init']);
+    const flat = path.join(root, 'repos', 'app');
+    execFileSync('git', ['clone', '-q', src, flat], { stdio: 'ignore' });
+    seedWork(root, {
+      name: 'feat',
+      description: '',
+      worktrees: [{ repo: 'app', branch: 'feat', ports: {} }],
+    });
+    const flatWt = path.join(root, 'works', 'feat', 'app');
+    runGit(flat, ['worktree', 'add', '-q', '-b', 'feat', flatWt]);
+    writeRuntimeVersion(root, 1);
+
+    const plan = migrateRuntime(root, { dryRun: true });
+    expect(plan.dryRun).toBe(true);
+    expect(plan.from).toBe(1);
+    expect(plan.applied).toEqual([{ from: 1, to: 2 }]);
+    // The plan names the real targets...
+    expect(plan.changed).toContain(path.join(root, 'repos', 'app'));
+    expect(plan.changed).toContain(path.join(root, 'works', 'feat', 'wt', 'app'));
+    // ...but NOTHING was actually moved or stamped, and VERSION is untouched.
+    expect(readRuntimeVersion(root)).toBe(1);
+    expect(fs.existsSync(path.join(root, 'repos', 'app', 'git'))).toBe(false);
+    expect(fs.existsSync(flatWt)).toBe(true);
+    expect(fs.existsSync(path.join(root, 'works', 'feat', 'wt', 'app'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'works', 'feat', 'hooks'))).toBe(false);
+
+    // A real run afterwards still works (dry run left nothing half-done).
+    const real = migrateRuntime(root);
+    expect(real.dryRun).toBe(false);
+    expect(readRuntimeVersion(root)).toBe(2);
+    expect(fs.existsSync(path.join(root, 'works', 'feat', 'wt', 'app'))).toBe(true);
+  });
+
+  it('migrateRuntime --dry-run on an already-current runtime is a clean no-op', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const plan = migrateRuntime(root, { dryRun: true });
+    expect(plan.applied).toEqual([]);
+    expect(plan.changed).toEqual([]);
+    expect(plan.dryRun).toBe(true);
+  });
+
   it('migrateRuntime rejects a runtime newer than the CLI supports', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);

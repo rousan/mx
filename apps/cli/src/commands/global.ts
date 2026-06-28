@@ -85,13 +85,28 @@ export function runGlobal(positionals: string[], flags: Flags): void {
       // The one runtime command allowed to run on a version-mismatched runtime —
       // its whole job is upgrading an older one up to this CLI's version.
       const root = requireRuntime({ runtime: flags.runtime, allowVersionMismatch: true });
-      const res = migrateRuntime(root);
+      const res = migrateRuntime(root, { dryRun: flags.dryRun });
       emit(() => {
         if (res.applied.length === 0) {
           console.log(`${check()} Runtime already at v${res.to} — nothing to migrate.`);
           return;
         }
         const steps = res.applied.map((a) => `v${a.from}→v${a.to}`).join(', ');
+        if (res.dryRun) {
+          // Dry run: describe the plan and make the no-op explicit, so the user
+          // can review before letting migrate touch an old runtime.
+          console.log(
+            `${dim('[dry run]')} Would migrate runtime ${bold(`v${res.from}→v${res.to}`)} ${dim(`(${steps})`)}`,
+          );
+          if (res.changed.length === 0) {
+            console.log(`  ${dim('(no path changes — version stamp only)')}`);
+          } else {
+            for (const p of res.changed) console.log(`  ${dim(`+ ${p}`)}`);
+          }
+          console.log();
+          console.log(`  ${dim('No changes were made. Re-run without --dry-run to apply.')}`);
+          return;
+        }
         console.log(
           `${check()} Migrated runtime ${bold(`v${res.from}→v${res.to}`)} ${dim(`(${steps})`)}`,
         );
