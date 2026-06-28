@@ -19,26 +19,33 @@ Prints a contextual hint about `$MX_RUNTIME`:
 
 ### `mx status [--all] [--porcelain]` (aliases: `mx s`, `mx st`)
 
-Show the runtime overview: path, context entry count, repos, works.
+Show the runtime overview: path + version, context entry count, repos, works. The header shows the runtime layout version (`mx vN`); repos and works each show their folder path (home-collapsed to `~`). Porcelain output includes a top-level `version` field.
 
 By default shows **active works only**; pass `--all` to include archived. The works section header still says `(N active, M archived)` even when archived are hidden so you know they exist.
 
 Layout:
 
 ```
-  mx · /Users/rousan/mx
+  mx v2 · /Users/rousan/mx
 
   context  (4)
 
   repos
-    • analytics      main  ~/mx/repos/analytics
-    • app            main  ~/mx/repos/app
+    • analytics
+        ~/mx/repos/analytics
+        main  git@github.com:acme/analytics.git
+
+    • app
+        ~/mx/repos/app
+        main  git@github.com:acme/app.git
 
   works  (4 active, 2 archived — pass --all to show)
     • auth-rotation
+        ~/mx/works/auth-rotation
         (no worktrees)
 
     • checkout-revamp
+        ~/mx/works/checkout-revamp
         app     [checkout-flow]  web:3000  api:3001
         worker  [checkout-flow]  billing-worker:3002
 
@@ -128,12 +135,21 @@ Also stamps the per-repo scripts `hydrate.sh` and `health.sh` into the container
 
 ### `mx repo ls [--porcelain]`
 
-List all pristine clones, one per row, with bullet markers. The path shown is the repo container; human output collapses `$HOME` to `~`, porcelain adds an absolute `path` field per repo:
+List all pristine clones in the same clean shape as `mx work ls`: bold name, dim container path, dim `branch  remote`, a blank line between entries. Human output collapses `$HOME` to `~`; porcelain adds an absolute `path` field per repo.
 
 ```
-• analytics      main  ~/mx/repos/analytics
-• app            main  ~/mx/repos/app
+• analytics
+  ~/mx/repos/analytics
+  main  git@github.com:acme/analytics.git
+
+• app
+  ~/mx/repos/app
+  main  git@github.com:acme/app.git
 ```
+
+### `mx repo -n <name> path`
+
+Print the absolute path to the repo's container (`repos/<repo>`). Plain output, for shell substitution: `cd "$(mx repo -n app path)"`. Errors `NO_REPO` if the repo doesn't exist.
 
 ### `mx repo -n <name> fetch`
 

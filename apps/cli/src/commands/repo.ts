@@ -58,16 +58,27 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
           console.log(dim('no repos yet — `mx repo add <git-url>`'));
           return;
         }
-        const nameW = Math.max(...repos.map((r) => r.name.length));
-        const branchW = Math.max(...repos.map((r) => r.branch.length));
-        for (const r of repos) {
-          const name = r.name.padEnd(nameW);
-          const branch = dim(r.branch.padEnd(branchW));
-          const remote = dim(r.remote ?? '(no remote)');
-          console.log(`• ${name}  ${branch}  ${remote}`);
+        // Same clean shape as `mx work ls`: bold name, dim path, dim detail,
+        // a blank line between entries.
+        for (let i = 0; i < repos.length; i++) {
+          if (i > 0) console.log();
+          const r = repos[i];
+          console.log(`• ${bold(r.name)}`);
           console.log(`  ${dim(tildify(r.path))}`);
+          console.log(`  ${dim(`${r.branch}  ${r.remote ?? '(no remote)'}`)}`);
         }
       }, repos);
+      return;
+    }
+    case 'path': {
+      const name = need(
+        flags.name || ctxRepo,
+        'which repo? pass -n <name> or run inside a repo (mx repo -n <name> path)',
+      );
+      // Raw path — meant for shell substitution, no styling. repoInfo throws
+      // NO_REPO if the repo doesn't exist.
+      const res = repoInfo(root, name);
+      emit(() => console.log(res.path), { name: res.name, path: res.path });
       return;
     }
     case 'fetch': {
