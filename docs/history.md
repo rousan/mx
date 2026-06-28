@@ -2,6 +2,10 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 2.1.1 — 2026-06-28
+
+Docs/comment cleanup only — no behavior change. Fixed lingering `mx status` references (renamed to `mx info` in 2.1.0) in code comments and the CLAUDE.md command list, and corrected `docs/architecture.md`'s stale "no release workflow" claim (the CI release workflow has existed since 2.0.0).
+
 ## 2.1.0 — 2026-06-28
 
 CLI surface polish (runtime stays v2, no migration):
