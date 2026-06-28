@@ -53,7 +53,8 @@ Re-sync the runtime with the current mx version (this is the command formerly ca
 
 - re-stamps `<runtime>/CLAUDE.md` from `templates/CLAUDE.md` (always rewritten, mx-owned)
 - stamps `<runtime>/context/INDEX.json` **only if missing** (existing index content is preserved)
-- backfills mx-owned structural directories across every work — currently `<work>/sessions/` for any work that pre-dates that scaffolding
+- backfills mx-owned structural directories across every work — `<work>/wt/`, `scripts/`, `files/`, `tmp/`, and `sessions/` for any work that pre-dates that scaffolding
+- stamps the per-work `CLAUDE.md`, **stamp-if-missing** (stamped once, then user-owned — see [The work folder](runtime-model.md#the-work-folder))
 - backfills per-repo `hydrate.sh` / `health.sh` in each repo container, **stamp-if-missing** and executable (see [Per-repo scripts](#per-repo-scripts))
 - generates each work's `.claude/settings.json` context-index hook, **stamp-if-missing** (see [Per-work context-index hook](#per-work-context-index-hook))
 - removes a stale `<runtime>/README.md` if one lingers (legacy cleanup)
@@ -92,7 +93,10 @@ It validates the **full migration chain** (`v_current → … → supported`) *b
 - errors `CLI_TOO_OLD` if the runtime is **newer** than this CLI supports (upgrade the CLI with `mx update` instead)
 - a friendly no-op if the runtime is already at the supported version
 
-The registered **v1 → v2** step moves each pristine clone from `repos/<repo>/` into `repos/<repo>/git/` and runs `git worktree repair` so existing worktrees relink to the moved clone.
+The registered **v1 → v2** step upgrades **both** the repo and work layouts in one pass:
+
+- moves each pristine clone from `repos/<repo>/` into `repos/<repo>/git/` and runs `git worktree repair` so existing worktrees relink to the moved clone;
+- restructures every work — moves its flat worktrees from `works/<work>/<repo>` into `works/<work>/wt/<repo>` (via `git worktree move`), creates the new `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/` folders, stamps the work `CLAUDE.md`, and rewrites the `.code-workspace` folder paths to `wt/<repo>`.
 
 ### `mx help`, `mx version` (or `--help` / `-h`, `--version` / `-v`)
 
@@ -207,7 +211,7 @@ Default is a documented no-op (no output). When present and producing output, it
 
 ### `mx work new <name> [--description <text>] [--open|-o]`
 
-Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, empty `sessions/`, and `.claude/settings.json` (the per-work context-index hook — see [Per-work context-index hook](#per-work-context-index-hook)). Prints the absolute path.
+Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `files/`, `tmp/`, and `sessions/`, the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)), and `.claude/settings.json` (the per-work context-index hook — see [Per-work context-index hook](#per-work-context-index-hook)). Prints the absolute path. All of these are **stamp-if-missing**.
 
 The name is immutable.
 
@@ -252,7 +256,7 @@ Update the work's description.
 
 ### `mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]`
 
-Create a git worktree of `<repo>` inside the work, on branch `<b>` (defaults to the work name). If the branch doesn't already exist, it's created.
+Create a git worktree of `<repo>` inside the work at `works/<name>/wt/<repo>`, on branch `<b>` (defaults to the work name). If the branch doesn't already exist, it's created. The worktree is also registered in `work.json` and added to the `.code-workspace` (folder path `wt/<repo>`, entry `name` = the repo name).
 
 `--base <ref>` is where the new branch forks from. Accepts any ref. A bare branch name resolves to a local branch or `origin/<name>` (with fallback). Resolved to a commit SHA before `git worktree add` so git's DWIM can't override `-b`. Omit `--base` to fork from the pristine clone's current HEAD.
 

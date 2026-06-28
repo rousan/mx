@@ -1,5 +1,4 @@
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { MxError } from './errors';
 import { exists, isGitRepo } from './fsutil';
 import { readJson, writeJson } from './json';
@@ -7,6 +6,8 @@ import { git, branchExists, isDirty, resolveBase } from './git';
 import {
   workDir,
   workspaceFile,
+  worktreesDir,
+  worktreePath,
   repoGitDir,
   readWork,
   writeWork,
@@ -38,7 +39,8 @@ function addFolderToWorkspace(root: string, name: string, repo: string): void {
   const file = workspaceFile(root, name);
   const ws: CodeWorkspace = exists(file) ? readJson(file) : { folders: [], settings: {} };
   ws.folders = ws.folders ?? [];
-  if (!ws.folders.some((f) => f.path === repo)) ws.folders.push({ name: repo, path: repo });
+  const rel = `wt/${repo}`; // worktrees live under the work's wt/ folder
+  if (!ws.folders.some((f) => f.path === rel)) ws.folders.push({ name: repo, path: rel });
   writeJson(file, ws);
 }
 
@@ -53,7 +55,7 @@ function removeFolderFromWorkspace(root: string, name: string, repo: string): vo
   const file = workspaceFile(root, name);
   if (!exists(file)) return;
   const ws: CodeWorkspace = readJson(file);
-  ws.folders = (ws.folders ?? []).filter((f) => f.path !== repo);
+  ws.folders = (ws.folders ?? []).filter((f) => f.path !== `wt/${repo}`);
   writeJson(file, ws);
 }
 
@@ -252,7 +254,8 @@ export function worktreeAdd(
   }
 
   const branch = opts.branch || name;
-  const dest = path.join(workDir(root, name), repo);
+  const dest = worktreePath(root, name, repo);
+  fs.mkdirSync(worktreesDir(root, name), { recursive: true }); // ensure wt/ exists
   if (branchExists(rp, branch)) {
     git(['-C', rp, 'worktree', 'add', dest, branch]);
   } else {
@@ -314,7 +317,7 @@ export function worktreeRemove(root: string, name: string, repo: string): Worktr
   const work = readWork(root, name);
   const wt = findWorktree(work, repo);
   if (!wt) throw new MxError(`work "${name}" has no worktree for ${repo}`, 'NO_WORKTREE');
-  const dest = path.join(workDir(root, name), repo);
+  const dest = worktreePath(root, name, repo);
   if (exists(dest) && isDirty(dest)) {
     throw new MxError(`worktree ${repo} has uncommitted changes — commit or discard them first`, 'DIRTY');
   }
@@ -379,7 +382,7 @@ export function workDestroy(
   const work = readWork(root, name);
   const dirty: string[] = [];
   for (const wt of work.worktrees ?? []) {
-    const dest = path.join(workDir(root, name), wt.repo);
+    const dest = worktreePath(root, name, wt.repo);
     if (exists(dest) && isDirty(dest)) dirty.push(wt.repo);
   }
   if (dirty.length) {
@@ -390,7 +393,7 @@ export function workDestroy(
   }
   const removed: string[] = [];
   for (const wt of work.worktrees ?? []) {
-    const dest = path.join(workDir(root, name), wt.repo);
+    const dest = worktreePath(root, name, wt.repo);
     if (exists(dest)) git(['-C', repoGitDir(root, wt.repo), 'worktree', 'remove', dest]); // keeps branch
     removed.push(wt.repo);
   }
@@ -432,7 +435,7 @@ export function archiveWork(root: string, name: string): ArchiveResult {
   }
   const dirty: string[] = [];
   for (const wt of work.worktrees ?? []) {
-    const dest = path.join(workDir(root, name), wt.repo);
+    const dest = worktreePath(root, name, wt.repo);
     if (exists(dest) && isDirty(dest)) dirty.push(wt.repo);
   }
   if (dirty.length) {
@@ -443,7 +446,7 @@ export function archiveWork(root: string, name: string): ArchiveResult {
   }
   const removed: string[] = [];
   for (const wt of work.worktrees ?? []) {
-    const dest = path.join(workDir(root, name), wt.repo);
+    const dest = worktreePath(root, name, wt.repo);
     if (exists(dest)) git(['-C', repoGitDir(root, wt.repo), 'worktree', 'remove', dest]); // keeps branch
     removed.push(wt.repo);
   }
@@ -530,7 +533,8 @@ export function unarchiveWork(
 
   const restored: UnarchiveRestoredWorktree[] = [];
   for (const d of desired) {
-    const dest = path.join(workDir(root, name), d.repo);
+    const dest = worktreePath(root, name, d.repo);
+    fs.mkdirSync(worktreesDir(root, name), { recursive: true });
     git(['-C', repoGitDir(root, d.repo), 'worktree', 'add', dest, d.branch]);
     addFolderToWorkspace(root, name, d.repo);
     restored.push({ repo: d.repo, branch: d.branch, path: dest, ports: d.ports });

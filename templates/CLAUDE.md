@@ -63,11 +63,16 @@ mx/
 └── works/                  # one folder per feature/work
     └── feature-a/
         ├── work.json       # manifest — owned by `mx`, do not hand-edit
-        ├── feature-a.code-workspace
+        ├── feature-a.code-workspace  # owned by `mx` (folder paths point at wt/<repo>)
+        ├── CLAUDE.md       # work-specific rules — stamped once, then yours to edit (mx never overwrites)
         ├── .claude/settings.json   # SessionStart hook → loads context/INDEX.json
-        ├── sessions/       # session summaries (see § Session summaries)
-        ├── repo-a/         # worktree of repo-a on this feature's branch
-        └── repo-b/         # worktree of repo-b on this feature's branch
+        ├── wt/             # ALL worktrees live here
+        │   ├── repo-a/     # worktree of repo-a on this feature's branch
+        │   └── repo-b/     # worktree of repo-b on this feature's branch
+        ├── scripts/        # ad-hoc per-work scripts
+        ├── files/          # artifacts worth keeping (agent/user drop zone)
+        ├── tmp/            # throwaway scratch — may be deleted at any time
+        └── sessions/       # session summaries (see § Session summaries)
 ```
 
 - `repos/<repo>/git` are **source-of-truth clones** — read-only reference. Worktrees fork from them
@@ -75,7 +80,28 @@ mx/
 - `repos/<repo>/hydrate.sh` and `repos/<repo>/health.sh` are mx-owned per-repo hooks you may customize:
   `hydrate.sh` runs automatically after `mx work … worktree add <repo>` (cwd = the new worktree); `health.sh`
   augments `mx repo health`. Edit their bodies if a repo needs custom worktree hydrate or health output.
-- `works/<feature>/<repo>` are **worktrees**, each on its own feature branch. All work happens here.
+- `works/<feature>/wt/<repo>` are **worktrees**, each on its own feature branch. All work happens here.
+- `works/<feature>/CLAUDE.md` is **work-specific guidance** that loads alongside this runtime
+  `CLAUDE.md` for any session started in the work folder (Claude Code walks up from the session's cwd).
+  mx stamps it once (an explanatory comment, otherwise empty) and then **never touches it** — it's where
+  you and the user record rules specific to this work.
+- `works/<feature>/{scripts,files,tmp}/` are the only places to put non-mx files in a work — see
+  § The work folder holds mx-native files only.
+
+## The work folder holds mx-native files only
+
+**Never create ad-hoc files directly in the work-folder root.** The root is reserved for mx-native
+files (`work.json`, the `.code-workspace`, the work `CLAUDE.md`, `.claude/`) and the mx-owned
+subfolders. When you or the user need to write anything else, use one of these, never the root:
+
+- **`files/`** — artifacts worth keeping: notes, exports, scratch docs, downloads you want to survive.
+- **`tmp/`** — throwaway scratch. Its contents may be deleted at **any** time, with no guarantees —
+  never rely on anything here persisting.
+- **`scripts/`** — ad-hoc scripts for this work.
+
+The one exception: a runtime file a session legitimately needs to create at the work root for tooling
+to work (e.g. an MCP connection file like `.<something>-mcp`) is fine. The rule targets *ad-hoc*
+user/agent files — notes, downloads, temp outputs — not necessary tooling files.
 
 ## work.json (per-work manifest, owned by mx)
 
@@ -99,8 +125,10 @@ mx/
 1. You are launched from a **work folder** (`works/<feature>/`), not a single repo. There is no "main repo."
 2. Read the work's state with `mx work -n <feature> info --porcelain` to learn its repos, branches, and ports.
 3. When you edit a repo's worktree, follow that repo's own `CLAUDE.md`, linters, and conventions —
-   its instructions live inside the worktree and apply.
-4. The work root is **not** a git repo. Run build/test/git commands from inside the relevant worktree.
+   its instructions live inside the worktree and apply. The work's own `CLAUDE.md` (at the work-folder
+   root) also loads for sessions started here — read it for rules specific to this work.
+4. The work root is **not** a git repo. Run build/test/git commands from inside the relevant worktree
+   (`works/<feature>/wt/<repo>`).
 5. If several sessions share one work, the user gives each a lane (usually one repo). Stay in your lane.
 
 ## Context registry — shared memory across every feature in this runtime
@@ -219,8 +247,8 @@ clarity; dropping it works while you're inside the work.
   ```
   mx work -n <feature> worktree add <repo> [--branch <b>] [--base <ref>]
   ```
-  This creates the worktree from the pristine clone, registers it in `work.json`, and adds it to the
-  workspace — all at once. Never run `git worktree add` yourself.
+  This creates the worktree from the pristine clone at `works/<feature>/wt/<repo>`, registers it in
+  `work.json`, and adds it to the workspace — all at once. Never run `git worktree add` yourself.
   - `--branch <b>` is the **new** branch to create (defaults to the work name; if it already exists, it's reused).
   - `--base <ref>` is where to **fork from** — any ref. A bare branch name (e.g. `main`,
     `migration-to-mt-service-from-cf`) resolves to that local branch or, failing that, `origin/<name>`.
@@ -244,8 +272,13 @@ clarity; dropping it works while you're inside the work.
 4. **Creating a worktree requires the user in the loop** — only when they explicitly tell you to in this session.
 5. **Don't destroy anything unless asked.** Worktrees stay until the user confirms the feature is merged.
    Teardown keeps feature branches; never delete them.
+6. **Never create ad-hoc files in the work-folder root.** Keepable artifacts go in `files/`, throwaway
+   scratch in `tmp/`, scripts in `scripts/`. The root is mx-native only (only exception: a tooling
+   file a session genuinely needs there, e.g. an MCP connection file). See § The work folder holds
+   mx-native files only.
 
 ## The one rule that matters most
 
-`repos/` is read-only reference; real work lives in worktrees under `works/<feature>/`; and `mx`
-owns the manifest. If a repo you need has no worktree yet, ask before adding one — then add it with `mx`.
+`repos/` is read-only reference; real work lives in worktrees under `works/<feature>/wt/<repo>`; and
+`mx` owns the manifest. If a repo you need has no worktree yet, ask before adding one — then add it
+with `mx`.

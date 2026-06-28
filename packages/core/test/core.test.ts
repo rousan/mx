@@ -141,14 +141,20 @@ describe('discoverRuntime', () => {
 describe('inferContext', () => {
   it('infers work and repo from the cwd', () => {
     const root = tmp();
-    fs.mkdirSync(path.join(root, 'works', 'feat', 'repoA'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'works', 'feat', 'wt', 'repoA'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'works', 'feat', 'scripts'), { recursive: true });
     fs.mkdirSync(path.join(root, 'repos', 'repoX'), { recursive: true });
 
     process.chdir(path.join(root, 'works', 'feat'));
     expect(inferContext(root)).toEqual({ work: 'feat', repo: null });
 
-    process.chdir(path.join(root, 'works', 'feat', 'repoA'));
+    // Worktrees live under <work>/wt/<repo> — that's where a repo is inferred.
+    process.chdir(path.join(root, 'works', 'feat', 'wt', 'repoA'));
     expect(inferContext(root)).toEqual({ work: 'feat', repo: 'repoA' });
+
+    // A non-wt work subdir (scripts/, files/, tmp/, sessions/) implies no repo.
+    process.chdir(path.join(root, 'works', 'feat', 'scripts'));
+    expect(inferContext(root)).toEqual({ work: 'feat', repo: null });
 
     process.chdir(path.join(root, 'repos', 'repoX'));
     expect(inferContext(root)).toEqual({ work: null, repo: 'repoX' });
@@ -397,7 +403,7 @@ describe('archive / unarchive / destroy lifecycle', () => {
 
   it('archive removes worktrees, empties .code-workspace folders, sets isArchived + archived_at', () => {
     const { root, workName } = fixture();
-    const wtDir = path.join(root, 'works', workName, 'app');
+    const wtDir = path.join(root, 'works', workName, 'wt', 'app');
     const wsFile = path.join(root, 'works', workName, `${workName}.code-workspace`);
     expect(fs.existsSync(wtDir)).toBe(true);
     expect(JSON.parse(fs.readFileSync(wsFile, 'utf8')).folders).toHaveLength(1);
@@ -421,7 +427,7 @@ describe('archive / unarchive / destroy lifecycle', () => {
 
   it('archive refuses on uncommitted changes', () => {
     const { root, workName } = fixture();
-    const wt = path.join(root, 'works', workName, 'app');
+    const wt = path.join(root, 'works', workName, 'wt', 'app');
     fs.writeFileSync(path.join(wt, 'dirty.txt'), 'unstaged work');
     expect(() => archiveWork(root, workName)).toThrow(/uncommitted changes/);
     // Work remains active.
@@ -434,7 +440,7 @@ describe('archive / unarchive / destroy lifecycle', () => {
     const res = unarchiveWork(root, workName);
     expect(res.restored).toHaveLength(1);
     expect(res.restored[0]).toMatchObject({ repo: 'app', branch: 'feat' });
-    expect(fs.existsSync(path.join(root, 'works', workName, 'app'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'works', workName, 'wt', 'app'))).toBe(true);
 
     const wsFile = path.join(root, 'works', workName, `${workName}.code-workspace`);
     expect(JSON.parse(fs.readFileSync(wsFile, 'utf8')).folders).toHaveLength(1);
@@ -662,9 +668,13 @@ describe('runtime versioning + migrate', () => {
     runGit(src, ['commit', '-qm', 'init']);
     const flat = path.join(root, 'repos', 'app');
     execFileSync('git', ['clone', '-q', src, flat], { stdio: 'ignore' });
-    const wt = path.join(root, 'works', 'feat', 'app');
-    fs.mkdirSync(path.join(root, 'works', 'feat'), { recursive: true });
-    runGit(flat, ['worktree', 'add', '-q', '-b', 'feat', wt]);
+    seedWork(root, {
+      name: 'feat',
+      description: '',
+      worktrees: [{ repo: 'app', branch: 'feat', ports: {} }],
+    });
+    const flatWt = path.join(root, 'works', 'feat', 'app');
+    runGit(flat, ['worktree', 'add', '-q', '-b', 'feat', flatWt]);
     writeRuntimeVersion(root, 1);
 
     const res = migrateRuntime(root);
@@ -673,8 +683,11 @@ describe('runtime versioning + migrate', () => {
     expect(res.applied).toEqual([{ from: 1, to: 2 }]);
     expect(readRuntimeVersion(root)).toBe(2);
     expect(fs.existsSync(path.join(root, 'repos', 'app', 'git', '.git'))).toBe(true);
-    // The pre-existing worktree relinked.
-    const branch = execFileSync('git', ['-C', wt, 'rev-parse', '--abbrev-ref', 'HEAD'], {
+    // The worktree moved into wt/ and relinked; the flat path is gone.
+    const movedWt = path.join(root, 'works', 'feat', 'wt', 'app');
+    expect(fs.existsSync(flatWt)).toBe(false);
+    expect(fs.existsSync(movedWt)).toBe(true);
+    const branch = execFileSync('git', ['-C', movedWt, 'rev-parse', '--abbrev-ref', 'HEAD'], {
       encoding: 'utf8',
     }).trim();
     expect(branch).toBe('feat');

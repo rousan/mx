@@ -327,7 +327,7 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
       const repo = need(positionals[3], 'usage: mx work -n <name> worktree hydrate <repo>');
       const wt = worktreeList(root, name).find((w) => w.repo === repo);
       if (!wt) throw new MxError(`work "${name}" has no worktree for ${repo}`, 'NO_WORKTREE');
-      const worktreePath = path.join(workPath(root, name).path, repo);
+      const worktreePath = path.join(workPath(root, name).path, 'wt', repo);
       const outcome = runWorktreeHydrate(
         { root, work: name, repo, worktreePath, branch: wt.branch },
         flags.porcelain,

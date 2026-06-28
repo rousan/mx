@@ -28,10 +28,14 @@ mx manages a **runtime**: a single folder somewhere on disk (default `~/mx`, ove
 │   └── health.sh                # augments `mx repo health` (customizable)
 └── works/<feature>/             # one folder per parallel feature
     ├── work.json                # manifest (owned by mx)
-    ├── <feature>.code-workspace # VS Code workspace (owned by mx)
+    ├── <feature>.code-workspace # VS Code workspace (owned by mx; folder paths → wt/<repo>)
+    ├── CLAUDE.md                # work-specific rules (stamped once, then user-owned)
     ├── .claude/settings.json    # SessionStart hook → loads context/INDEX.json
-    ├── sessions/                # per-session summaries (one .md each)
-    └── <repo>/                  # git worktree on the feature branch
+    ├── wt/<repo>/               # all worktrees live here, on the feature branch
+    ├── scripts/                 # ad-hoc per-work scripts
+    ├── files/                   # keepable artifacts (agent/user drop zone)
+    ├── tmp/                     # throwaway scratch (deletable at any time)
+    └── sessions/                # per-session summaries (one .md each)
 ```
 
 Two things to internalize:

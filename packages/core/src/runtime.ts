@@ -117,6 +117,27 @@ export const workspaceFile = (root: string, name: string): string =>
   path.join(workDir(root, name), `${name}.code-workspace`);
 
 /**
+ * Path to a work's `wt/` directory, which holds all of its worktrees.
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ * @returns Absolute path to `works/<name>/wt`.
+ */
+export const worktreesDir = (root: string, name: string): string =>
+  path.join(workDir(root, name), 'wt');
+
+/**
+ * Path to a single worktree inside a work (`works/<name>/wt/<repo>`).
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ * @param repo - Repo name.
+ * @returns Absolute path to the worktree directory.
+ */
+export const worktreePath = (root: string, name: string, repo: string): string =>
+  path.join(worktreesDir(root, name), repo);
+
+/**
  * The runtime layout version this build of mx supports. A runtime's `VERSION`
  * file must match this for commands to run; `mx migrate` upgrades older
  * runtimes up to it. Tracks the CLI major version (CLI 2.x ⇄ runtime v2).
@@ -285,6 +306,70 @@ export function migrateRepoLayout(root: string): string[] {
 }
 
 /**
+ * Migrate works from the legacy flat worktree layout (`works/<work>/<repo>`) to
+ * the container layout (`works/<work>/wt/<repo>`). Each worktree is relocated
+ * with `git worktree move` (falling back to a plain move + `git worktree
+ * repair`), and the work's `.code-workspace` folder paths are rewritten from
+ * `<repo>` to `wt/<repo>`. Archived works (no worktree dirs on disk) and
+ * already-migrated worktrees are skipped.
+ *
+ * Run after `migrateRepoLayout` so each repo's clone is already at its container
+ * `git/` and worktrees are relinked to it.
+ *
+ * @param root - Runtime root.
+ * @returns Absolute paths relocated/rewritten this run.
+ */
+export function migrateWorkLayout(root: string): string[] {
+  const changed: string[] = [];
+  for (const name of listWorkNames(root)) {
+    let work: Work;
+    try {
+      work = readWork(root, name);
+    } catch {
+      continue;
+    }
+    const wd = workDir(root, name);
+    const wtDir = path.join(wd, 'wt');
+    for (const wt of work.worktrees ?? []) {
+      const flat = path.join(wd, wt.repo);
+      const dest = path.join(wtDir, wt.repo);
+      if (exists(dest) || !exists(flat)) continue; // already moved, or archived
+      fs.mkdirSync(wtDir, { recursive: true });
+      try {
+        git(['-C', repoGitDir(root, wt.repo), 'worktree', 'move', flat, dest]);
+      } catch {
+        // Fallback: relocate the directory and re-link via repair.
+        fs.renameSync(flat, dest);
+        try {
+          git(['-C', repoGitDir(root, wt.repo), 'worktree', 'repair', dest]);
+        } catch {
+          /* best-effort */
+        }
+      }
+      changed.push(dest);
+    }
+    // Rewrite workspace folder paths "<repo>" -> "wt/<repo>".
+    const wsFile = workspaceFile(root, name);
+    if (exists(wsFile)) {
+      const ws = readJson<{ folders?: { name?: string; path: string }[] }>(wsFile);
+      const repos = new Set((work.worktrees ?? []).map((w) => w.repo));
+      let touched = false;
+      for (const f of ws.folders ?? []) {
+        if (f.path && !f.path.startsWith('wt/') && repos.has(f.path)) {
+          f.path = `wt/${f.path}`;
+          touched = true;
+        }
+      }
+      if (touched) {
+        writeJson(wsFile, ws);
+        changed.push(wsFile);
+      }
+    }
+  }
+  return changed;
+}
+
+/**
  * Names of works present under `works/` (those with a `work.json`).
  *
  * @param root - Runtime root.
@@ -367,7 +452,9 @@ export function inferContext(root: string): InferredContext {
     return rel.split(path.sep);
   };
   const w = segmentsUnder(worksDir(root));
-  if (w) return { work: w[0], repo: w[1] ?? null };
+  // Worktrees live under <work>/wt/<repo>, so the repo is the third segment;
+  // other work subdirs (scripts/, files/, tmp/, sessions/) imply no repo.
+  if (w) return { work: w[0], repo: w[1] === 'wt' ? (w[2] ?? null) : null };
   const r = segmentsUnder(reposDir(root));
   if (r) return { work: null, repo: r[0] };
   return { work: null, repo: null };
@@ -456,10 +543,25 @@ export interface SyncResult {
 export function ensureWorkScaffolding(root: string, workName: string): string[] {
   const created: string[] = [];
   const wd = workDir(root, workName);
-  const sessions = path.join(wd, 'sessions');
-  if (!exists(sessions)) {
-    fs.mkdirSync(sessions, { recursive: true });
-    created.push(sessions);
+  // mx-owned work subdirectories. `wt/` holds worktrees; the rest separate
+  // user/agent scratch from the mx-native work root (see the work CLAUDE.md):
+  //   scripts/ — ad-hoc per-work scripts
+  //   files/   — artifacts to keep
+  //   tmp/     — throwaway scratch (may be deleted anytime)
+  //   sessions/— session summaries
+  for (const d of ['wt', 'scripts', 'files', 'tmp', 'sessions']) {
+    const p = path.join(wd, d);
+    if (!exists(p)) {
+      fs.mkdirSync(p, { recursive: true });
+      created.push(p);
+    }
+  }
+  // Work-specific CLAUDE.md (stamp-if-missing; user-editable). Loads alongside
+  // the runtime CLAUDE.md for sessions started in this work folder.
+  const claudeMd = path.join(wd, 'CLAUDE.md');
+  if (!exists(claudeMd)) {
+    fs.writeFileSync(claudeMd, workClaudeMd(workName));
+    created.push(claudeMd);
   }
   // Per-work Claude Code settings: a SessionStart hook that loads the runtime's
   // context-registry index into every session launched in this work folder.
@@ -473,6 +575,30 @@ export function ensureWorkScaffolding(root: string, workName: string): string[] 
     created.push(settings);
   }
   return created;
+}
+
+/**
+ * Default contents for a work's `CLAUDE.md` — an explanatory comment and
+ * otherwise empty, so it adds no active rules until the user fills it in.
+ *
+ * @param name - Work name (interpolated into the guidance).
+ * @returns The default work `CLAUDE.md` text.
+ */
+function workClaudeMd(name: string): string {
+  return `<!--
+Work-specific CLAUDE.md for "${name}".
+
+This file loads alongside the runtime's CLAUDE.md (the mx rules) for every Claude
+session started in this work folder. Put rules and context specific to THIS work
+here: what you're building, conventions, gotchas, which repo is your lane, etc.
+mx never overwrites this file after creating it — it's yours to edit.
+
+Keep ad-hoc files OUT of the work root (it holds mx-native files). Use:
+  files/    artifacts worth keeping
+  tmp/      throwaway scratch — may be deleted at any time, no guarantees
+  scripts/  ad-hoc scripts for this work
+-->
+`;
 }
 
 /**

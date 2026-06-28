@@ -17,6 +17,9 @@ import {
   readRuntimeVersion,
   writeRuntimeVersion,
   migrateRepoLayout,
+  migrateWorkLayout,
+  ensureWorkScaffolding,
+  listWorkNames,
 } from './runtime';
 
 /**
@@ -40,16 +43,20 @@ interface MigrationStep {
 /**
  * Migration registry, keyed by *from* version.
  *
- * v1 → v2: pristine repos move from the flat `repos/<name>` layout to the
- * container layout `repos/<name>/git` (with `git worktree repair` relinking any
- * existing worktrees).
+ * v1 → v2: two layout changes. (a) Pristine repos move from flat `repos/<name>`
+ * to the container `repos/<name>/git`. (b) Each work's worktrees move from flat
+ * `works/<work>/<repo>` into `works/<work>/wt/<repo>`, and the new per-work
+ * scaffolding (`scripts/`, `files/`, `tmp/`, `CLAUDE.md`, `.claude/`) is created.
  */
 const STEPS: Record<number, MigrationStep> = {
   1: {
     from: 1,
     to: 2,
     run: (root) => {
-      const changed = migrateRepoLayout(root);
+      const changed: string[] = [];
+      changed.push(...migrateRepoLayout(root)); // repos/<repo> -> repos/<repo>/git
+      changed.push(...migrateWorkLayout(root)); // worktrees -> works/<work>/wt/<repo>
+      for (const work of listWorkNames(root)) changed.push(...ensureWorkScaffolding(root, work));
       writeRuntimeVersion(root, 2);
       return changed;
     },
