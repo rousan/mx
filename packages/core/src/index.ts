@@ -11,6 +11,8 @@ export type { Work, Worktree, RepoSummary, RuntimeOpts, InferredContext } from '
 export {
   reposDir,
   worksDir,
+  runtimeBinDir,
+  listRuntimeBins,
   repoPath,
   repoGitDir,
   repoHydrateScript,
@@ -43,12 +45,12 @@ export {
   readRuntimeVersion,
   writeRuntimeVersion,
 } from './runtime';
-export type { InitResult, SyncResult, MxConfig, WorkHookEvent } from './runtime';
+export type { InitResult, SyncResult, MxConfig, WorkHookEvent, RuntimeBin } from './runtime';
 
 export { migrateRuntime } from './migrations';
 export type { MigrateResult, AppliedMigration } from './migrations';
 
-export { stampClaudeMd, removeStaleRuntimeReadme, stampRepoScripts } from './templates';
+export { stampClaudeMd, removeStaleRuntimeReadme, stampRepoScripts, stampRuntimeBins } from './templates';
 
 export {
   repoNameFromUrl,

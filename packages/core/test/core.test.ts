@@ -19,6 +19,8 @@ import {
   writeRuntimeVersion,
   RUNTIME_VERSION,
   repoGitDir,
+  runtimeBinDir,
+  listRuntimeBins,
   workHookScript,
   WORK_HOOK_EVENTS,
   readWork,
@@ -556,6 +558,50 @@ describe('per-work context-index hook', () => {
   });
 });
 
+describe('runtime bin directory', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+
+  it('initRuntime stamps bin/ with the shipped utility bins, executable', () => {
+    const root = path.join(tmp(), 'rt');
+    const res = initRuntime(root, TEMPLATES_DIR);
+    const binDir = runtimeBinDir(root);
+    expect(res.created).toContain(binDir);
+    const bins = listRuntimeBins(root);
+    const names = bins.map((b) => b.name);
+    // Whatever ships in templates/bin should land here (currently dcs + lcs).
+    expect(names).toContain('dcs');
+    expect(names).toContain('lcs');
+    expect(names).toEqual([...names].sort()); // sorted
+    expect(bins.every((b) => b.executable)).toBe(true);
+  });
+
+  it('listRuntimeBins is empty when there is no bin/ directory', () => {
+    const root = tmp(); // bare dir, never inited
+    expect(listRuntimeBins(root)).toEqual([]);
+  });
+
+  it('syncRuntime backfills bin/ and never clobbers an existing bin', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const binDir = runtimeBinDir(root);
+    // Simulate a pre-bin runtime: remove bin/ entirely.
+    fs.rmSync(binDir, { recursive: true, force: true });
+    expect(fs.existsSync(binDir)).toBe(false);
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    expect(res.updated).toContain(path.join(binDir, 'dcs'));
+    expect(fs.existsSync(path.join(binDir, 'dcs'))).toBe(true);
+
+    // Stamp-if-missing: a user edit to a shipped bin + a user-added bin both
+    // survive a second sync untouched.
+    fs.writeFileSync(path.join(binDir, 'dcs'), '#!/usr/bin/env bash\necho mine\n');
+    fs.writeFileSync(path.join(binDir, 'mytool'), '#!/usr/bin/env bash\n');
+    const res2 = syncRuntime(root, TEMPLATES_DIR);
+    expect(res2.updated).not.toContain(path.join(binDir, 'dcs'));
+    expect(fs.readFileSync(path.join(binDir, 'dcs'), 'utf8')).toBe('#!/usr/bin/env bash\necho mine\n');
+    expect(fs.existsSync(path.join(binDir, 'mytool'))).toBe(true);
+  });
+});
+
 describe('repoNew (local repo)', () => {
   const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
 
@@ -613,35 +659,15 @@ describe('repoNew (local repo)', () => {
   });
 });
 
-describe('per-work bin directory', () => {
+describe('work scaffolding has no per-work bin/', () => {
   const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
 
-  it('workNew creates an empty bin/ directory', () => {
+  it('workNew does not create a per-work bin/ (use scripts/ instead)', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
     const res = workNew(root, 'feat');
-    const bin = path.join(res.path, 'bin');
-    expect(fs.statSync(bin).isDirectory()).toBe(true);
-    expect(fs.readdirSync(bin)).toEqual([]); // starts empty
-  });
-
-  it('syncRuntime backfills bin/ for an existing work, preserving its contents', () => {
-    const root = path.join(tmp(), 'rt');
-    initRuntime(root, TEMPLATES_DIR);
-    workNew(root, 'feat');
-    const bin = path.join(root, 'works', 'feat', 'bin');
-    // Simulate a pre-bin work: remove bin/, then verify sync recreates it.
-    fs.rmSync(bin, { recursive: true, force: true });
-    expect(fs.existsSync(bin)).toBe(false);
-    const res = syncRuntime(root, TEMPLATES_DIR);
-    expect(res.updated).toContain(bin);
-    expect(fs.existsSync(bin)).toBe(true);
-
-    // Non-destructive: a binary already in bin/ survives a second sync.
-    fs.writeFileSync(path.join(bin, 'tool'), 'x');
-    const res2 = syncRuntime(root, TEMPLATES_DIR);
-    expect(res2.updated).not.toContain(bin);
-    expect(fs.existsSync(path.join(bin, 'tool'))).toBe(true);
+    expect(fs.existsSync(path.join(res.path, 'bin'))).toBe(false);
+    expect(fs.existsSync(path.join(res.path, 'scripts'))).toBe(true);
   });
 });
 

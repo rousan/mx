@@ -60,7 +60,7 @@ Re-sync the runtime with the current mx version (this is the command formerly ca
 
 - re-stamps `<runtime>/CLAUDE.md` from `templates/CLAUDE.md` (always rewritten, mx-owned)
 - stamps `<runtime>/context/INDEX.json` **only if missing** (existing index content is preserved)
-- backfills mx-owned structural directories across every work — `<work>/wt/`, `scripts/`, `bin/`, `files/`, `tmp/`, `hooks/`, and `sessions/` for any work that pre-dates that scaffolding (plus the per-repo `hydrate.sh`/`health.sh`, the work `CLAUDE.md`, `.claude/settings.json`, and the lifecycle hook scripts — all stamp-if-missing)
+- backfills the runtime `bin/` and its shipped utility bins, and mx-owned structural directories across every work — `<work>/wt/`, `scripts/`, `files/`, `tmp/`, `hooks/`, and `sessions/` for any work that pre-dates that scaffolding (plus the per-repo `hydrate.sh`/`health.sh`, the work `CLAUDE.md`, `.claude/settings.json`, and the lifecycle hook scripts — all stamp-if-missing)
 - stamps the per-work `CLAUDE.md`, **stamp-if-missing** (stamped once, then user-owned — see [The work folder](runtime-model.md#the-work-folder))
 - backfills per-repo `hydrate.sh` / `health.sh` in each repo container, **stamp-if-missing** and executable (see [Per-repo scripts](#per-repo-scripts))
 - generates each work's `.claude/settings.json` context-index hook, **stamp-if-missing** (see [Per-work context-index hook](#per-work-context-index-hook))
@@ -245,7 +245,7 @@ Default is a documented no-op (no output). When present and producing output, it
 
 ### `mx work new <name> [--description <text>] [--open|-o]`
 
-Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `bin/`, `files/`, `tmp/`, `hooks/`, and `sessions/`, the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)), `.claude/settings.json` (the per-work context-index hook — see [Per-work context-index hook](#per-work-context-index-hook)), and the lifecycle hook scripts in `hooks/` (see [Work lifecycle hooks](#work-lifecycle-hooks)). Prints the absolute path. All of these are **stamp-if-missing**.
+Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `files/`, `tmp/`, `hooks/`, and `sessions/`, the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)), `.claude/settings.json` (the per-work context-index hook — see [Per-work context-index hook](#per-work-context-index-hook)), and the lifecycle hook scripts in `hooks/` (see [Work lifecycle hooks](#work-lifecycle-hooks)). Prints the absolute path. All of these are **stamp-if-missing**.
 
 The name is immutable.
 
@@ -381,6 +381,19 @@ mx: refusing to destroy "feat" — destroy is permanent and removes the work fol
 ```
 
 With `--force`, prints a loud irreversibility warning to stderr before executing.
+
+### `mx bin ls` · `mx bin path` (alias `mx bins`)
+
+Manage the runtime-wide `bin/` directory — utility executables shared across every work, meant to be on your `PATH`. mx ships some (currently `dcs` and `lcs` — delete / list Claude Code sessions by name) and you can drop your own in; any executable file is picked up.
+
+- **`mx bin ls`** (or bare `mx bin`) — list the bins, each tagged `mx` (shipped) or `user` (yours), with a warning on any that aren't executable, plus a note on whether `bin/` is currently on your `PATH`. Porcelain returns `{ "dir", "onPath", "bins": [{ "name", "path", "executable", "shipped" }] }`.
+- **`mx bin path`** — print the absolute `bin/` directory, for wiring it onto `PATH`:
+
+  ```
+  export PATH="$(mx bin path):$PATH"
+  ```
+
+The directory is created by `mx init` and backfilled by `mx sync`; mx-shipped bins are **stamp-if-missing** (your edits and your own bins are never clobbered). This is distinct from a work's `scripts/` folder (scoped to one work) — `bin/` is runtime-wide.
 
 ## Per-work context-index hook
 

@@ -24,7 +24,7 @@ Repos (pristine clones):
   mx repo -n <name> rm                   refuses if any work uses it
 
 Works (features):
-  mx work new <name> [--description <t>] [-o|--open]    creates folder + empty work.json + sessions/; -o opens a fullscreen Terminal (cd'd in) + editor on the workspace (macOS)
+  mx work new <name> [--description <t>] [-o|--open]    creates folder + empty work.json + sessions/; -o opens a fullscreen Terminal cd'd into the work folder (macOS)
   mx work ls [--all|--archived] [--porcelain]           default: active only; --all includes archived; --archived shows archived only
   mx work -n <name> info [--porcelain]
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
@@ -40,6 +40,10 @@ Works (features):
   mx work -n <name> archive [--yes|-y]                  removes worktrees; keeps folder + work.json + sessions; prompts for confirmation (use --yes to skip)
   mx work -n <name> unarchive [<repo>=<branch>...]      re-creates worktrees from work.json; override per-repo branch if recorded one is missing
   mx work -n <name> destroy --force                     PERMANENT: deletes the work folder including session summaries (branches kept). Prefer archive.
+
+Bin (runtime-wide utility executables in <runtime>/bin, meant for PATH):
+  mx bin ls   (alias mx bins)                           list bins (mx-shipped + your own); shows whether bin/ is on PATH
+  mx bin path                                           print the bin/ dir: export PATH="$(mx bin path):$PATH"
 
 The -n <name> selector may be omitted when your cwd implies it: inside a work folder or
 worktree (works/<work>/...) the work is inferred; inside repos/<repo>/... the repo is inferred.

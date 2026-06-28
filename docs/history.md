@@ -2,9 +2,17 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
-## 2.6.0 — 2026-06-29
+## 2.7.0 — 2026-06-29
 
-**`-o`/`--open` now opens only the Terminal.** Previously `mx work new -o`, `mx work open`, and `mx repo new --quick -o` launched a fullscreen Terminal **and** a fullscreen editor (Cursor → VS Code) on the work's `.code-workspace`. The editor launch is dropped — `-o` just opens a fullscreen Terminal `cd`'d into the work folder; open your editor yourself. The `.code-workspace` file is still generated, so you can open it whenever you like. `openWorkLayout` lost its `workspace` parameter. Minor — no runtime-layout change.
+Three changes in one release: a runtime-wide `bin/`, removal of the redundant per-work `bin/`, and `-o` opening only the Terminal.
+
+**Runtime-wide `bin/` for utility executables.** New **`<runtime>/bin/`** — a single directory of utility executables shared across every work, meant to be on your `PATH`. mx ships `dcs` (delete a Claude Code session by `/rename` name or id) and `lcs` (list all Claude Code sessions), stamped from the CLI's bundled `templates/bin/` on `mx init` and backfilled by `mx sync` (**stamp-if-missing**, so your edits and your own bins are never clobbered). Drop your own executables in too. New **`mx bin`** (alias `mx bins`): `mx bin ls` lists the bins (tagged mx-shipped vs user-added, flags non-executable ones, and reports whether `bin/` is on `PATH`); `mx bin path` prints the directory for `export PATH="$(mx bin path):$PATH"`. New `runtimeBinDir` / `listRuntimeBins` and `stampRuntimeBins` in `@mx/core`, `commands/bin.ts` in the CLI.
+
+**Removed the per-work `bin/`** added in 2.3.0 — it was redundant with each work's `scripts/`. New works no longer get a `bin/`; `ensureWorkScaffolding` dropped it. Existing empty per-work `bin/` directories are left as-is (sync is non-destructive); you can delete them by hand.
+
+**`-o`/`--open` now opens only the Terminal.** Previously `mx work new -o`, `mx work open`, and `mx repo new --quick -o` launched a fullscreen Terminal **and** a fullscreen editor (Cursor → VS Code) on the work's `.code-workspace`. The editor launch is dropped — `-o` just opens a fullscreen Terminal `cd`'d into the work folder; open your editor yourself. The `.code-workspace` file is still generated, so you can open it whenever you like. `openWorkLayout` lost its `workspace` parameter.
+
+Minor — no runtime-layout change.
 
 ## 2.5.0 — 2026-06-28
 
@@ -18,7 +26,7 @@ What each release brought. Reverse-chronological. Dates reflect when the corresp
 
 ## 2.3.0 — 2026-06-28
 
-**Per-work `bin/` directory.** Every work now gets a `bin/` folder alongside `scripts/`, `files/`, `tmp/`, and `hooks/` — a place for executables and binaries a session builds or downloads (compiled tools, fetched CLIs, helper binaries). It starts empty and is owned by the user/agent; mx just creates the directory. `mx work new` creates it and `mx sync` backfills it (stamp-if-missing) on existing v2 runtimes — no migration or version bump needed, so it ships as a minor. Added by listing `bin` in `ensureWorkScaffolding`; `inferContext` treats it like the other non-`wt/` work subdirs (implies the work, no repo).
+**Per-work `bin/` directory.** _(Reverted in 2.7.0 — redundant with `scripts/`.)_ Every work now gets a `bin/` folder alongside `scripts/`, `files/`, `tmp/`, and `hooks/` — a place for executables and binaries a session builds or downloads (compiled tools, fetched CLIs, helper binaries). It starts empty and is owned by the user/agent; mx just creates the directory. `mx work new` creates it and `mx sync` backfills it (stamp-if-missing) on existing v2 runtimes — no migration or version bump needed, so it ships as a minor. Added by listing `bin` in `ensureWorkScaffolding`; `inferContext` treats it like the other non-`wt/` work subdirs (implies the work, no repo).
 
 ## 2.2.0 — 2026-06-28
 

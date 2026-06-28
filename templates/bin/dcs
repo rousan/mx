@@ -1,0 +1,166 @@
+#!/usr/bin/env node
+"use strict";
+
+/**
+ * Delete a Claude Code session by its /rename name or its session id.
+ *
+ * Sessions live at ~/.claude/projects/<project>/<id>.jsonl with an optional
+ * sidecar dir <id>/. The /rename name is stored inside the transcript as the
+ * latest line of {"type":"custom-title","customTitle":...}. This script
+ * resolves a name to its session(s): a unique match is deleted after
+ * confirmation, an ambiguous name lists the candidate ids so it can be re-run
+ * with an id.
+ */
+
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const readline = require("readline");
+
+/**
+ * Read the current (last) /rename custom title from a transcript file.
+ * Returns null when the session was never renamed or the file is unreadable.
+ */
+function readCustomTitle(file) {
+  let name = null;
+  let data;
+  try {
+    data = fs.readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+  for (const line of data.split("\n")) {
+    if (!line.includes('"custom-title"')) continue;
+    try {
+      const o = JSON.parse(line);
+      if (o && o.type === "custom-title") name = o.customTitle;
+    } catch {
+      /* skip malformed lines */
+    }
+  }
+  return name;
+}
+
+/**
+ * Format a byte count as a short human-readable string (e.g. "402.2 KB").
+ */
+function humanSize(bytes) {
+  const units = ["B", "KB", "MB", "GB"];
+  let n = bytes;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${i === 0 ? n : n.toFixed(1)} ${units[i]}`;
+}
+
+/**
+ * Prompt the user on the terminal and resolve to true only for y / yes.
+ */
+function confirm(question) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(question, (answer) => {
+      rl.close();
+      const a = String(answer).trim().toLowerCase();
+      resolve(a === "y" || a === "yes");
+    });
+  });
+}
+
+async function main() {
+  // Parse args: a single positional <name|session-id>, plus an optional
+  // -y/--yes flag (in any position) that skips the confirmation prompt.
+  const argv = process.argv.slice(2);
+  let assumeYes = false;
+  const positionals = [];
+  for (const a of argv) {
+    if (a === "-y" || a === "--yes") assumeYes = true;
+    else positionals.push(a);
+  }
+  const query = positionals[0];
+  if (!query || !query.trim()) {
+    console.error("usage: dcs [-y|--yes] <name|session-id>");
+    return 1;
+  }
+
+  const root = path.join(os.homedir(), ".claude", "projects");
+  let projects = [];
+  try {
+    projects = fs.readdirSync(root);
+  } catch {
+    console.error(`No Claude projects directory at ${root}`);
+    return 1;
+  }
+
+  const matches = [];
+  for (const proj of projects) {
+    const dir = path.join(root, proj);
+    let files = [];
+    try {
+      files = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const f of files) {
+      if (!f.endsWith(".jsonl")) continue;
+      const file = path.join(dir, f);
+      const sid = f.slice(0, -".jsonl".length);
+      const name = readCustomTitle(file);
+      if (sid === query || name === query) matches.push({ sid, file, name, proj });
+    }
+  }
+
+  // Dedup by session id.
+  const seen = new Set();
+  const uniq = [];
+  for (const m of matches) {
+    if (seen.has(m.sid)) continue;
+    seen.add(m.sid);
+    uniq.push(m);
+  }
+
+  if (uniq.length === 0) {
+    console.log(`No session found for ${JSON.stringify(query)}.`);
+    return 1;
+  }
+  // Annotate each match with modified time and size for display.
+  for (const m of uniq) {
+    const st = fs.statSync(m.file);
+    m.mtime = st.mtime.toISOString().slice(0, 16).replace("T", " ");
+    m.size = st.size;
+  }
+
+  if (uniq.length > 1) {
+    console.log(`Multiple sessions match ${JSON.stringify(query)}. Re-run with one of these ids:`);
+    // Newest first, so the most recent session is easiest to spot.
+    uniq.sort((a, b) => (a.mtime < b.mtime ? 1 : -1));
+    for (const m of uniq) {
+      console.log(
+        `  ${m.sid}   ${m.mtime}   ${humanSize(m.size).padStart(7)}   project=${m.proj}`
+      );
+    }
+    return 2;
+  }
+
+  const { sid, file, name, proj, mtime, size } = uniq[0];
+  console.log("About to delete:");
+  console.log(`  id       ${sid}`);
+  console.log(`  name     ${JSON.stringify(name)}`);
+  console.log(`  project  ${proj}`);
+  console.log(`  modified ${mtime}    size ${humanSize(size)}`);
+
+  if (!assumeYes && !(await confirm("Delete? [y/N] "))) {
+    console.log("Aborted.");
+    return 0;
+  }
+
+  fs.rmSync(file);
+  const side = path.join(path.dirname(file), sid);
+  if (fs.existsSync(side)) fs.rmSync(side, { recursive: true, force: true });
+  console.log(`Deleted session ${sid} (${JSON.stringify(name)}, ${humanSize(size)})`);
+  return 0;
+}
+
+main().then((code) => process.exit(code));

@@ -10,6 +10,7 @@ import {
   stampContextIndex,
   removeStaleRuntimeReadme,
   stampRepoScripts,
+  stampRuntimeBins,
 } from './templates';
 import type { Work, Worktree, RuntimeOpts, InferredContext } from './types';
 
@@ -43,6 +44,47 @@ export const reposDir = (root: string): string => path.join(root, 'repos');
  * @returns Absolute path.
  */
 export const worksDir = (root: string): string => path.join(root, 'works');
+
+/**
+ * Path to a runtime's `bin/` directory — runtime-wide utility executables mx
+ * ships (and the user can add to) that are meant to be put on `PATH`. Distinct
+ * from a work's own `works/<work>/bin/` (per-work executables).
+ *
+ * @param root - Runtime root.
+ * @returns Absolute path to `<root>/bin`.
+ */
+export const runtimeBinDir = (root: string): string => path.join(root, 'bin');
+
+/**
+ * One executable in the runtime `bin/` directory.
+ */
+export interface RuntimeBin {
+  /** File name (the command name once `bin/` is on `PATH`). */
+  name: string;
+  /** Absolute path to the file. */
+  path: string;
+  /** Whether the file currently has an executable bit set. */
+  executable: boolean;
+}
+
+/**
+ * List the runtime `bin/` directory's entries (regular files only, hidden
+ * files skipped), sorted by name. Empty when the directory doesn't exist.
+ *
+ * @param root - Runtime root.
+ * @returns One entry per bin, sorted by name.
+ */
+export function listRuntimeBins(root: string): RuntimeBin[] {
+  const dir = runtimeBinDir(root);
+  if (!exists(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((n) => !n.startsWith('.'))
+    .map((n) => ({ name: n, full: path.join(dir, n), st: fs.statSync(path.join(dir, n)) }))
+    .filter((e) => e.st.isFile())
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((e) => ({ name: e.name, path: e.full, executable: (e.st.mode & 0o111) !== 0 }));
+}
 
 /**
  * Path to a pristine clone under `repos/`.
@@ -571,6 +613,7 @@ export function initRuntime(target0: string, templatesDir: string): InitResult {
   created.push(stampClaudeMd(target, templatesDir));
   const ctxIndex = stampContextIndex(target, templatesDir);
   if (ctxIndex) created.push(ctxIndex);
+  created.push(...stampRuntimeBins(target, templatesDir));
   removeStaleRuntimeReadme(target);
   return { runtime: target, created };
 }
@@ -610,13 +653,12 @@ export function ensureWorkScaffolding(
   const wd = workDir(root, workName);
   // mx-owned work subdirectories. `wt/` holds worktrees; the rest separate
   // user/agent scratch from the mx-native work root (see the work CLAUDE.md):
-  //   scripts/ — ad-hoc per-work scripts
-  //   bin/     — executables/binaries a session builds or fetches
+  //   scripts/ — ad-hoc per-work scripts (also fine for per-work binaries)
   //   files/   — artifacts to keep
   //   tmp/     — throwaway scratch (may be deleted anytime)
   //   sessions/— session summaries
   //   hooks/   — per-work lifecycle hook scripts (archive/unarchive)
-  for (const d of ['wt', 'scripts', 'bin', 'files', 'tmp', 'sessions', 'hooks']) {
+  for (const d of ['wt', 'scripts', 'files', 'tmp', 'sessions', 'hooks']) {
     const p = path.join(wd, d);
     if (!exists(p)) {
       if (!dry) fs.mkdirSync(p, { recursive: true });
@@ -790,6 +832,8 @@ export function syncRuntime(root: string, templatesDir: string): SyncResult {
   for (const repo of listRepoNames(root)) {
     updated.push(...stampRepoScripts(repoPath(root, repo), templatesDir));
   }
+  // Backfill the runtime bin/ directory and any mx-shipped utility bins.
+  updated.push(...stampRuntimeBins(root, templatesDir));
   removeStaleRuntimeReadme(root);
   return { runtime: root, updated };
 }

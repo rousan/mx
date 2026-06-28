@@ -53,6 +53,7 @@ mx/
 ├── .mx-root                # empty marker: "this is the mx root"
 ├── mx.json                 # runtime config: { "version": 2 }
 ├── CLAUDE.md               # this file (installed by the mx CLI)
+├── bin/                    # runtime-wide utility executables (put on PATH); mx ships some, add your own (see § Runtime bin)
 ├── context/                # shared memory across all features (see § Context registry)
 │   ├── INDEX.json          # single source of truth — metadata for every entry
 │   └── <path>.md           # body-only entries; nested folders allowed
@@ -69,8 +70,7 @@ mx/
         ├── wt/             # ALL worktrees live here
         │   ├── repo-a/     # worktree of repo-a on this feature's branch
         │   └── repo-b/     # worktree of repo-b on this feature's branch
-        ├── scripts/        # ad-hoc per-work scripts
-        ├── bin/            # executables/binaries a session builds or fetches
+        ├── scripts/        # ad-hoc per-work scripts (also fine for per-work binaries)
         ├── files/          # artifacts worth keeping (agent/user drop zone)
         ├── tmp/            # throwaway scratch — may be deleted at any time
         ├── hooks/          # per-work lifecycle hooks (see § Work lifecycle hooks)
@@ -92,8 +92,25 @@ mx/
 - `works/<feature>/hooks/` holds **per-work lifecycle hooks** — mx-owned scripts mx runs around
   `mx work archive`/`unarchive`. mx stamps documented no-op scripts you customize (see § Work
   lifecycle hooks).
-- `works/<feature>/{scripts,bin,files,tmp}/` are the only places to put non-mx files in a work — see
+- `works/<feature>/{scripts,files,tmp}/` are the only places to put non-mx files in a work — see
   § The work folder holds mx-native files only.
+- `bin/` (at the runtime root) holds **runtime-wide utility executables** meant for your `PATH` — mx
+  ships a few and you can add your own. List them with `mx bin ls`. See § Runtime bin.
+
+## Runtime bin
+
+`<runtime>/bin/` is a single directory of utility executables shared across every work. mx ships some
+(e.g. `dcs` / `lcs` for listing and deleting Claude Code sessions by name) and **you can drop your own
+in** — any executable file works. It's meant to be on your `PATH`:
+
+```
+export PATH="$(mx bin path):$PATH"   # add to your shell rc once
+mx bin ls                            # list bins (mx-shipped + your own), and whether bin/ is on PATH
+```
+
+mx-shipped bins are stamped **only if missing** (so your edits and additions are never clobbered) and
+backfilled by `mx sync`. This is distinct from a work's own `scripts/` folder, which is for scripts
+scoped to that one work; `bin/` is runtime-wide and command-like.
 
 ## Work lifecycle hooks
 
@@ -131,9 +148,8 @@ subfolders. When you or the user need to write anything else, use one of these, 
 - **`files/`** — artifacts worth keeping: notes, exports, scratch docs, downloads you want to survive.
 - **`tmp/`** — throwaway scratch. Its contents may be deleted at **any** time, with no guarantees —
   never rely on anything here persisting.
-- **`scripts/`** — ad-hoc scripts for this work.
-- **`bin/`** — executables and binaries this work needs: tools you compile, CLIs you download, helper
-  binaries. Add it to `PATH` for the work if useful. Starts empty.
+- **`scripts/`** — ad-hoc scripts for this work (also where any per-work helper binary goes — there is
+  no per-work `bin/`; runtime-wide tools live in the runtime's `bin/`, see § Runtime bin).
 
 The one exception: a runtime file a session legitimately needs to create at the work root for tooling
 to work (e.g. an MCP connection file like `.<something>-mcp`) is fine. The rule targets *ad-hoc*
@@ -313,7 +329,7 @@ clarity; dropping it works while you're inside the work.
 5. **Don't destroy anything unless asked.** Worktrees stay until the user confirms the feature is merged.
    Teardown keeps feature branches; never delete them.
 6. **Never create ad-hoc files in the work-folder root.** Keepable artifacts go in `files/`, throwaway
-   scratch in `tmp/`, scripts in `scripts/`, executables/binaries in `bin/`. The root is mx-native only (only exception: a tooling
+   scratch in `tmp/`, scripts (and per-work binaries) in `scripts/`. The root is mx-native only (only exception: a tooling
    file a session genuinely needs there, e.g. an MCP connection file). See § The work folder holds
    mx-native files only.
 

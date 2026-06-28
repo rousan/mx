@@ -39,7 +39,7 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 
 | command | does |
 |---|---|
-| `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `mx.json`, `CLAUDE.md`) |
+| `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `bin/`, `.mx-root`, `mx.json`, `CLAUDE.md`) |
 | `mx info [--all] [--porcelain]` | list repos, works, worktrees, ports |
 | `mx sync` | re-stamp the runtime's mx-owned files (`CLAUDE.md`, per-repo/per-work scaffolding) from the current CLI — same-major, non-destructive |
 | `mx update` | self-update the CLI within its major (`npm i -g`); flags a newer major if one exists |
@@ -55,6 +55,7 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 | `mx work -n <name> port set\|unset\|ls <repo> <service> [<port>]` | allocate/release ports |
 | `mx work -n <name> archive [--yes]` / `unarchive` | soft-delete / restore a work (keeps branches); runs the work's `hooks/{pre,post}-{archive,unarchive}.sh` (a `pre-*` non-zero exit aborts) |
 | `mx work -n <name> destroy --force` | permanently remove the work folder (keeps branches) |
+| `mx bin ls` / `mx bin path` (alias `mx bins`) | list the runtime's `bin/` utility executables (mx-shipped + your own); `path` prints the dir for `export PATH="$(mx bin path):$PATH"` |
 
 ## License
 
