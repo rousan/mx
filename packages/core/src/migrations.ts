@@ -32,12 +32,16 @@ interface MigrationStep {
   to: number;
   /**
    * Apply the step. Must be deterministic and idempotent-safe, and is
-   * responsible for writing the new `VERSION` on success.
+   * responsible for writing the new `VERSION` on success. When `dryRun` is set
+   * it must mutate nothing (not even `VERSION`) and only return the paths it
+   * would change.
    *
    * @param root - Runtime root.
-   * @returns Paths changed by the step (for reporting).
+   * @param opts - Step options.
+   * @param opts.dryRun - When set, plan only — no mutations.
+   * @returns Paths changed (or that would change) by the step.
    */
-  run: (root: string) => string[];
+  run: (root: string, opts: { dryRun: boolean }) => string[];
 }
 
 /**
@@ -52,12 +56,14 @@ const STEPS: Record<number, MigrationStep> = {
   1: {
     from: 1,
     to: 2,
-    run: (root) => {
+    run: (root, { dryRun }) => {
       const changed: string[] = [];
-      changed.push(...migrateRepoLayout(root)); // repos/<repo> -> repos/<repo>/git
-      changed.push(...migrateWorkLayout(root)); // worktrees -> works/<work>/wt/<repo>
-      for (const work of listWorkNames(root)) changed.push(...ensureWorkScaffolding(root, work));
-      writeRuntimeVersion(root, 2);
+      changed.push(...migrateRepoLayout(root, { dryRun })); // repos/<repo> -> repos/<repo>/git
+      changed.push(...migrateWorkLayout(root, { dryRun })); // worktrees -> works/<work>/wt/<repo>
+      for (const work of listWorkNames(root)) {
+        changed.push(...ensureWorkScaffolding(root, work, { dryRun }));
+      }
+      if (!dryRun) writeRuntimeVersion(root, 2);
       return changed;
     },
   },
@@ -83,8 +89,10 @@ export interface MigrateResult {
   to: number;
   /** Steps applied in order (empty when already up to date). */
   applied: AppliedMigration[];
-  /** Paths changed across all applied steps. */
+  /** Paths changed across all applied steps (or that *would* change in a dry run). */
   changed: string[];
+  /** True when this was a dry run — nothing was actually mutated. */
+  dryRun: boolean;
 }
 
 /**
@@ -96,13 +104,21 @@ export interface MigrateResult {
  * - Any gap in the migration chain → throws `NO_MIGRATION` **before** any step
  *   runs, so the runtime is never left partially migrated.
  *
+ * With `opts.dryRun`, the same validation runs (so an impossible migration still
+ * errors up front) but no step mutates anything — the returned `changed` list is
+ * exactly what a real run would do. Lets a user preview a migration before it
+ * touches an old runtime.
+ *
  * @param root - Runtime root.
- * @returns The from/to versions, the steps applied, and the paths changed.
+ * @param opts - Migration options.
+ * @param opts.dryRun - When set, plan only — validate and report, no mutations.
+ * @returns The from/to versions, the steps applied, the paths changed, and `dryRun`.
  */
-export function migrateRuntime(root: string): MigrateResult {
+export function migrateRuntime(root: string, opts: { dryRun?: boolean } = {}): MigrateResult {
+  const dryRun = opts.dryRun === true;
   const from = readRuntimeVersion(root);
   if (from === RUNTIME_VERSION) {
-    return { from, to: RUNTIME_VERSION, applied: [], changed: [] };
+    return { from, to: RUNTIME_VERSION, applied: [], changed: [], dryRun };
   }
   if (from > RUNTIME_VERSION) {
     throw new MxError(
@@ -111,7 +127,7 @@ export function migrateRuntime(root: string): MigrateResult {
       'CLI_TOO_OLD',
     );
   }
-  // Validate the full chain exists before mutating anything.
+  // Validate the full chain exists before mutating anything (same in dry run).
   for (let v = from; v < RUNTIME_VERSION; v++) {
     if (!STEPS[v]) {
       throw new MxError(
@@ -125,8 +141,8 @@ export function migrateRuntime(root: string): MigrateResult {
   const changed: string[] = [];
   for (let v = from; v < RUNTIME_VERSION; v++) {
     const step = STEPS[v];
-    changed.push(...step.run(root));
+    changed.push(...step.run(root, { dryRun }));
     applied.push({ from: step.from, to: step.to });
   }
-  return { from, to: RUNTIME_VERSION, applied, changed };
+  return { from, to: RUNTIME_VERSION, applied, changed, dryRun };
 }

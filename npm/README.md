@@ -43,7 +43,7 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 | `mx info [--all] [--porcelain]` | list repos, works, worktrees, ports |
 | `mx sync` | re-stamp the runtime's mx-owned files (`CLAUDE.md`, per-repo/per-work scaffolding) from the current CLI — same-major, non-destructive |
 | `mx update` | self-update the CLI within its major (`npm i -g`); flags a newer major if one exists |
-| `mx migrate` | upgrade an older-version runtime to the version this CLI supports (the only command allowed on a version-mismatched runtime) |
+| `mx migrate [--dry-run]` | upgrade an older-version runtime to the version this CLI supports (the only command allowed on a version-mismatched runtime); `--dry-run` previews the plan without changing anything |
 | `mx repo add <git-url> [--name <n>]` | clone a pristine repo (into `repos/<repo>/git`; stamps its `hydrate.sh`/`health.sh`) |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
 | `mx repo health` / `mx repo -n <name> health` | local-only health check (augmented by the repo's `health.sh`) |

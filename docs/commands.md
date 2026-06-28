@@ -90,7 +90,7 @@ A newer major is available: @roulabs/mx@3.
 
 Crossing a major is always a deliberate user action — `mx update` never does it automatically (a new major implies a runtime migration). `mx update` is **not** subject to the version gate: you may need it precisely because your runtime is a newer major than the CLI on `$PATH`. If `npm` is missing or the install fails, it prints the manual command for you to run instead.
 
-### `mx migrate`
+### `mx migrate [--dry-run]`
 
 **Upgrade an older runtime** to the version this CLI supports. This is the only runtime-touching command allowed when the runtime's `mx.json` doesn't match (see [Runtime versioning](#runtime-versioning)).
 
@@ -104,6 +104,8 @@ The registered **v1 → v2** step upgrades **both** the repo and work layouts in
 
 - moves each pristine clone from `repos/<repo>/` into `repos/<repo>/git/` and runs `git worktree repair` so existing worktrees relink to the moved clone;
 - restructures every work — moves its flat worktrees from `works/<work>/<repo>` into `works/<work>/wt/<repo>` (via `git worktree move`), creates the new `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/` folders, stamps the work `CLAUDE.md`, and rewrites the `.code-workspace` folder paths to `wt/<repo>`.
+
+**`--dry-run`** previews the migration without touching anything: it runs the same up-front validation (so an impossible migration still errors `NO_MIGRATION` / `CLI_TOO_OLD`), then prints every path it *would* move, stamp, or create and ends with "No changes were made." Nothing is moved and the runtime's `mx.json` version is left untouched, so you can review the plan before letting migrate run against an old runtime. In `--porcelain` mode the result object carries `"dryRun": true` and the planned paths in `changed`. Run it again without the flag to apply.
 
 ### `mx help`, `mx version` (or `--help` / `-h`, `--version` / `-v`)
 

@@ -8,7 +8,7 @@ Global:
   mx info [--all] [--porcelain]          show runtime version, repos, works, ports (active only by default; --all to include archived; alias: mx i)
   mx sync                                re-stamp runtime files (CLAUDE.md, scaffolding) from current templates — same-major, non-breaking
   mx update                              self-update the mx CLI within its major (npm i -g); flags a newer major if one exists
-  mx migrate                             upgrade an older-version runtime to the version this CLI supports (the only command allowed on a mismatched runtime)
+  mx migrate [--dry-run]                 upgrade an older-version runtime to the version this CLI supports (the only command allowed on a mismatched runtime); --dry-run previews the plan without changing anything
   mx help | version
 
 Repos (pristine clones):

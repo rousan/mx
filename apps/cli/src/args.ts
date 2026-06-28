@@ -23,6 +23,8 @@ export interface Flags {
   open: boolean;
   /** Skip running a repo's `hydrate.sh` after `worktree add`. */
   noHydrate: boolean;
+  /** Plan only, mutate nothing (currently: `mx migrate --dry-run`). */
+  dryRun: boolean;
   /** Explicit runtime path from `--runtime`. */
   runtime?: string;
   /** Target name from `-n`/`--name`. */
@@ -79,6 +81,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     archived: false,
     open: false,
     noHydrate: false,
+    dryRun: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -100,6 +103,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       flags.open = true;
     } else if (a === '--no-hydrate') {
       flags.noHydrate = true;
+    } else if (a === '--dry-run') {
+      flags.dryRun = true;
     } else if (a.startsWith('--') && a.includes('=')) {
       const eq = a.indexOf('=');
       const key = VALUE_FLAGS[a.slice(0, eq)];
