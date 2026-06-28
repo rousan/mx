@@ -95,7 +95,7 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 | `mx repo new <name> [--quick] [-o]` | create a fresh **local** repo (no remote): `git init` on main + README + initial commit. `--quick` also makes a `dev-<name>` work + a `develop` worktree (a one-shot for quick experiments) |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
 | `mx repo health` / `mx repo -n <name> health` | local-only health check (on default branch? clean? in sync?), augmented by the repo's `health.sh` |
-| `mx work new <name> [--description <t>] [-o]` | create a work (prints its path); `-o` opens a fullscreen Terminal + editor (macOS) |
+| `mx work new <name> [--description <t>] [-o]` | create a work (prints its path); `-o` opens a fullscreen Terminal in the work folder (macOS) |
 | `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works (ls shows active only by default; `--all` includes archived; `--archived` shows archived only) |
 | `mx work -n <name> worktree add\|ls\|rm\|hydrate <repo> [--no-hydrate]` | manage worktrees; `add` runs the repo's `hydrate.sh` (skip with `--no-hydrate`), `hydrate` re-runs it |
 | `mx work -n <name> port set\|unset\|ls <repo> <service> [<port>]` | allocate/release ports |
@@ -117,7 +117,7 @@ See **[docs/release.md](docs/release.md)** for the full runbook, the `NPM_TOKEN`
 - [x] Runtime versioning (`mx.json` + version gate) and `mx migrate`; container repo layout (`repos/<repo>/git`)
 - [x] Per-repo `hydrate.sh` (after `worktree add`) and `health.sh` (augments `mx repo health`)
 - [x] Per-work `SessionStart` hook loading the context-registry index
-- [x] `mx work new -o` — fullscreen Terminal + editor layout (macOS)
+- [x] `mx work new -o` — fullscreen Terminal in the work folder (macOS)
 - [x] Env-based runtime discovery (`--runtime` / `$MX_RUNTIME` / default `~/mx`)
 - [x] Per-service free-port allocation across all works (no fixed blocks)
 - [x] TypeScript pnpm monorepo (`@mx/core` + `apps/cli`), lint/test/build tooling

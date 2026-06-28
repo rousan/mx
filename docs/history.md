@@ -2,6 +2,10 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 2.6.0 — 2026-06-29
+
+**`-o`/`--open` now opens only the Terminal.** Previously `mx work new -o`, `mx work open`, and `mx repo new --quick -o` launched a fullscreen Terminal **and** a fullscreen editor (Cursor → VS Code) on the work's `.code-workspace`. The editor launch is dropped — `-o` just opens a fullscreen Terminal `cd`'d into the work folder; open your editor yourself. The `.code-workspace` file is still generated, so you can open it whenever you like. `openWorkLayout` lost its `workspace` parameter. Minor — no runtime-layout change.
+
 ## 2.5.0 — 2026-06-28
 
 **`mx repo new` — create a local repo, no remote.** The counterpart to `mx repo add` for quick experiments and throwaway apps you don't want to push anywhere: `mx repo new <name>` runs `git init` on `main`, writes a starter `README.md`, makes an initial commit (so `main` exists and worktrees can fork from it), and stamps the per-repo `hydrate.sh`/`health.sh` — removing the manual `mkdir` + `git init` + commit dance. The commit uses your git identity, falling back to a neutral `mx <mx@localhost>` only when none is configured.

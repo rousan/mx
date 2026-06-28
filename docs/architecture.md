@@ -43,7 +43,7 @@ Key files in `apps/cli/src/`:
 - `output.ts` — `emit(human, data)`, `fail(err)`, the monochrome style helpers (`dim`, `bold`), the plain glyphs (`check()` = ✓, `warn()` = ⚠), and `confirmYesNo()` (sync TTY prompt via `spawnSync('/bin/sh', ['-c', 'read REPLY'])`)
 - `paths.ts` — `templatesDir()` resolves `<pkg>/bin/mx.js` → `<pkg>/templates`
 - `selfupdate.ts` — `mx update`: self-updates the CLI within its major via `npm i -g @roulabs/mx@^<major>`, detects a newer major and prints the deliberate upgrade suggestion, falls back to printing the manual command if npm is missing or the install fails
-- `hydrate.ts` — runs the per-repo `hydrate.sh` hook (env + positional args, cwd = worktree) after `worktree add` and for `worktree hydrate`; classifies non-zero exits (warning when automatic, `HYDRATE_FAILED` when explicit). Also home to the macOS `mx work new -o` Terminal+editor open helper
+- `hydrate.ts` — runs the per-repo `hydrate.sh` hook (env + positional args, cwd = worktree) after `worktree add` and for `worktree hydrate`; classifies non-zero exits (warning when automatic, `HYDRATE_FAILED` when explicit). Also home to the macOS `mx work new -o` Terminal open helper
 - `workhooks.ts` — `runWorkHook(root, work, event, quiet)`: runs a per-work lifecycle hook (`hooks/<event>.sh`, cwd = work folder, env + positional args) if present, returning a `{ran, ok, missing}` outcome. `commands/work.ts` calls it around `archive`/`unarchive`: a `pre-*` non-zero exit aborts the op (`HOOK_FAILED`), a `post-*` non-zero exit only warns
 - `help.ts` — `mx help` text
 - `commands/global.ts` — `init`, `status`, `sync`, `update`, `migrate`, plus `renderStatus()`

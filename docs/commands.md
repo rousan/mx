@@ -139,7 +139,7 @@ Also stamps the per-repo scripts `hydrate.sh` and `health.sh` into the container
 
 Create a brand-new **local** repo (no remote) at `<runtime>/repos/<name>/git/`: `git init` on `main`, a starter `README.md`, and an initial commit (so `main` exists and worktrees can fork from it). Stamps `hydrate.sh`/`health.sh` like `add`. This is the counterpart to `add` for quick experiments and throwaway apps you don't want to push to a remote yet — no more manual `mkdir` + `git init` + commit dance. The initial commit uses your git identity, falling back to a neutral `mx <mx@localhost>` only if none is configured. Errors `EXISTS` if the repo already exists, `BAD_ARGS` on an invalid name (must be a single path segment).
 
-`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and runs the repo's `hydrate.sh` (skip with `--no-hydrate`). Pair with `-o`/`--open` to open the work's Terminal + editor layout (macOS), and `--description <t>` to set the work description. So a fresh experiment is one line:
+`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and runs the repo's `hydrate.sh` (skip with `--no-hydrate`). Pair with `-o`/`--open` to open the work in a fullscreen Terminal (macOS), and `--description <t>` to set the work description. So a fresh experiment is one line:
 
 ```
 mx repo new exp --quick -o     # repo "exp", work "dev-exp", worktree on "develop", opened
@@ -249,7 +249,7 @@ Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code
 
 The name is immutable.
 
-**`--open` / `-o` (macOS only)**: after creating the work, opens a fullscreen Terminal `cd`'d into the work folder plus a fullscreen editor (Cursor, falling back to VS Code) on the work's `.code-workspace`. You merge the two windows into Split View by hand. On non-macOS platforms this is downgraded to a warning (internally `UNSUPPORTED`) — the work is still created.
+**`--open` / `-o` (macOS only)**: after creating the work, opens a fullscreen Terminal `cd`'d into the work folder. (Open your editor yourself — it no longer launches one.) On non-macOS platforms this is downgraded to a warning (internally `UNSUPPORTED`) — the work is still created.
 
 ### `mx work ls [--all|--archived] [--porcelain]`
 
@@ -286,7 +286,7 @@ Plain output, no decoration.
 
 ### `mx work -n <name> open` (or `mx work -n <name> -o`)
 
-Open an **existing** work's dev layout — the same thing `mx work new -o` does at creation: a fullscreen Terminal `cd`'d into the work folder plus a fullscreen editor (Cursor, falling back to VS Code) on the work's `.code-workspace`. macOS only; on other platforms (or a window-management failure) it warns and is a no-op. `mx work -n <name> -o` is shorthand for `… open`.
+Open an **existing** work's dev layout — the same thing `mx work new -o` does at creation: a fullscreen Terminal `cd`'d into the work folder. macOS only; on other platforms (or a window-management failure) it warns and is a no-op. `mx work -n <name> -o` is shorthand for `… open`.
 
 ### `mx work -n <name> describe <text>`
 

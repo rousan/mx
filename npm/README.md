@@ -48,7 +48,7 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 | `mx repo new <name> [--quick] [-o]` | create a fresh local repo with no remote (git init on main + README + initial commit); `--quick` also makes a `dev-<name>` work + a `develop` worktree (quick-experiment one-shot) |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
 | `mx repo health` / `mx repo -n <name> health` | local-only health check (augmented by the repo's `health.sh`) |
-| `mx work new <name> [--description <t>] [-o]` | create a work; `-o` opens a fullscreen Terminal + editor (macOS) |
+| `mx work new <name> [--description <t>] [-o]` | create a work; `-o` opens a fullscreen Terminal in the work folder (macOS) |
 | `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works |
 | `mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]` | add a worktree (runs the repo's `hydrate.sh` unless `--no-hydrate`) |
 | `mx work -n <name> worktree ls\|rm\|hydrate <repo>` | list / remove / re-run hydrate for a worktree |

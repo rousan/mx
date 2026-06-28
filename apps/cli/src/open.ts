@@ -31,42 +31,26 @@ function aplStr(s: string): string {
 }
 
 /**
- * macOS-only: open a freshly-created work as a **fullscreen Terminal** (cd'd
- * into the work folder) plus a **fullscreen editor** (Cursor, falling back to
- * VS Code) on the work's `.code-workspace`. The two land as separate
- * fullscreen Spaces; the user merges them into Split View by hand.
+ * macOS-only: open a work as a **fullscreen Terminal** cd'd into the work
+ * folder. (It used to also launch a fullscreen editor on the work's
+ * `.code-workspace`; that was dropped — open your editor yourself.)
  *
  * Best-effort: window-management hiccups are surfaced as a thrown `MxError` for
  * the caller to downgrade to a warning (the work itself is already created).
  * Throws `UNSUPPORTED` up front on non-macOS platforms.
  *
  * @param workdir - Absolute path to the work folder.
- * @param workspace - Absolute path to the work's `.code-workspace` file.
  */
-export function openWorkLayout(workdir: string, workspace: string): void {
+export function openWorkLayout(workdir: string): void {
   if (process.platform !== 'darwin') {
     throw new MxError('-o/--open is only supported on macOS', 'UNSUPPORTED');
   }
 
-  // 1. Launch the editor on the workspace (prefer Cursor, fall back to VS Code).
-  //    `open -a` avoids depending on the `cursor`/`code` CLI being on PATH.
-  let editorProcess = 'Cursor';
-  try {
-    execFileSync('open', ['-a', 'Cursor', workspace], { stdio: 'ignore' });
-  } catch {
-    try {
-      execFileSync('open', ['-a', 'Visual Studio Code', workspace], { stdio: 'ignore' });
-      editorProcess = 'Code';
-    } catch {
-      editorProcess = ''; // no editor found — Terminal still opens
-    }
-  }
-
-  // 2. Open a new Terminal window cd'd into the work folder, then fullscreen it.
-  //    When the frontmost Terminal window is already fullscreen, macOS's "prefer
-  //    tabs in full screen" setting forces `do script` to open a TAB rather than
-  //    a window. Detect that (window count didn't grow) and detach the tab into
-  //    its own window via Window ▸ Move Tab to New Window before fullscreening.
+  // Open a new Terminal window cd'd into the work folder, then fullscreen it.
+  // When the frontmost Terminal window is already fullscreen, macOS's "prefer
+  // tabs in full screen" setting forces `do script` to open a TAB rather than a
+  // window. Detect that (window count didn't grow) and detach the tab into its
+  // own window via Window ▸ Move Tab to New Window before fullscreening.
   osascript(
     [
       'tell application "Terminal"',
@@ -91,31 +75,4 @@ export function openWorkLayout(workdir: string, workspace: string): void {
       'end tell',
     ].join('\n'),
   );
-
-  // 3. Fullscreen the editor. Cursor/VS Code are Electron apps whose windows are
-  //    NOT reliably exposed to the AppleScript accessibility tree (System Events
-  //    reports 0 windows), so setting AXFullScreen on a window doesn't work.
-  //    Instead activate the app and send its fullscreen shortcut Ctrl+Cmd+F
-  //    (workbench.action.toggleFullScreen → native macOS fullscreen), which
-  //    needs no window-level AX. key code 3 = "f".
-  if (editorProcess) {
-    const appName = editorProcess === 'Code' ? 'Visual Studio Code' : 'Cursor';
-    osascript(
-      [
-        `tell application "${appName}" to activate`,
-        // wait until the app is frontmost (cold launch can take a few seconds)
-        'tell application "System Events"',
-        '  set n to 0',
-        `  repeat until (exists process "${editorProcess}") and (frontmost of process "${editorProcess}" is true)`,
-        '    delay 0.3',
-        '    set n to n + 1',
-        '    if n > 40 then exit repeat',
-        '  end repeat',
-        'end tell',
-        // let the workbench finish loading so it accepts the keybinding
-        'delay 1.2',
-        'tell application "System Events" to key code 3 using {control down, command down}',
-      ].join('\n'),
-    );
-  }
 }

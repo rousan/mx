@@ -13,7 +13,6 @@ import {
   repoRemove,
   workNew,
   worktreeAdd,
-  workspaceFile,
   MxError,
 } from '@mx/core';
 import type { RepoHealth } from '@mx/core';
@@ -61,7 +60,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
       // Create a fresh local repo (no remote) — for quick experiments you don't
       // want to push anywhere. With --quick it also spins up a `dev-<name>` work
       // and a worktree on `develop`, so a throwaway app is one command (add -o to
-      // open it in Terminal + editor).
+      // open it in a Terminal).
       const name = need(
         positionals[2],
         'usage: mx repo new <name> [--quick] [-o] [--description <t>]',
@@ -98,7 +97,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
       let opened = false;
       if (flags.open) {
         try {
-          openWorkLayout(workRes.path, workspaceFile(root, workName));
+          openWorkLayout(workRes.path);
           opened = true;
         } catch (e) {
           const msg = e instanceof MxError ? e.message : String(e);
@@ -111,7 +110,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
         console.log(
           `${check()} added worktree ${bold(wtRes.repo)} ${dim(`[${wtRes.branch}]`)} ${dim(`→ ${wtRes.path}`)}`,
         );
-        if (opened) console.log(`${check()} opened ${dim('(Terminal + editor)')}`);
+        if (opened) console.log(`${check()} opened ${dim('(Terminal)')}`);
       }, { repo: res, work: workRes, worktree: wtRes, opened });
       return;
     }

@@ -28,7 +28,7 @@ Works (features):
   mx work ls [--all|--archived] [--porcelain]           default: active only; --all includes archived; --archived shows archived only
   mx work -n <name> info [--porcelain]
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
-  mx work -n <name> open  (or -o)                       open the work's fullscreen Terminal + editor layout (macOS)
+  mx work -n <name> open  (or -o)                       open the work in a fullscreen Terminal (macOS)
   mx work -n <name> describe <text>
   mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]   runs the repo's hydrate.sh after add unless --no-hydrate
   mx work -n <name> worktree ls [--porcelain]
