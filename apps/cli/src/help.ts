@@ -5,7 +5,7 @@ export const HELP = `mx — control panel for the mx runtime
 
 Global:
   mx init [path]                         scaffold/adopt a runtime (default ~/mx)
-  mx status [--all] [--porcelain]        show runtime, repos, works, ports (active only by default; --all to include archived; aliases: mx s, mx st)
+  mx info [--all] [--porcelain]          show runtime version, repos, works, ports (active only by default; --all to include archived; alias: mx i)
   mx sync                                re-stamp runtime files (CLAUDE.md, scaffolding) from current templates — same-major, non-breaking
   mx update                              self-update the mx CLI within its major (npm i -g); flags a newer major if one exists
   mx migrate                             upgrade an older-version runtime to the version this CLI supports (the only command allowed on a mismatched runtime)
@@ -14,7 +14,9 @@ Global:
 Repos (pristine clones):
   mx repo add <git-url> [--name <n>]     clone a repo into the runtime
   mx repo ls [--porcelain]
-  mx repo -n <name> fetch                git fetch (+ ff current branch)
+  mx repo -n <name> path                 print the repo container path (cd "$(mx repo -n <name> path)")
+  mx repo -n <name> fetch                git fetch (+ ff the checked-out and base branches)
+  mx repo fetch --all                    fetch every repo, one by one
   mx repo -n <name> info [--porcelain]
   mx repo health [--porcelain]           pure-local health summary for every pristine clone
   mx repo -n <name> health [--porcelain] detailed health for one pristine clone
@@ -25,6 +27,7 @@ Works (features):
   mx work ls [--all|--archived] [--porcelain]           default: active only; --all includes archived; --archived shows archived only
   mx work -n <name> info [--porcelain]
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
+  mx work -n <name> open  (or -o)                       open the work's fullscreen Terminal + editor layout (macOS)
   mx work -n <name> describe <text>
   mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]   runs the repo's hydrate.sh after add unless --no-hydrate
   mx work -n <name> worktree ls [--porcelain]

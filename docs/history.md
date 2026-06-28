@@ -2,6 +2,17 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 2.1.0 — 2026-06-28
+
+CLI surface polish (runtime stays v2, no migration):
+
+- **`mx status` → `mx info`** (alias `mx i`). Renamed for consistency with `repo info` / `work info`. The old `status`/`s`/`st` are removed — a **breaking CLI change**, but the runtime layout is unchanged, so per mx's "major = runtime-layout version" rule it ships as a minor.
+- **`mx info` shows more.** Header now includes the runtime version (`mx vN`); the repos and works sections show each entry's path; porcelain gains a top-level `version` field; the works-section `(N active, M archived)` count suffix was dropped.
+- **`mx repo ls`** restyled to match `mx work ls` (bold name / dim path / dim `branch  remote`, blank line between).
+- **`mx repo -n <name> path`** — print the repo container path (for shell substitution), mirroring `mx work … path`.
+- **`mx work -n <name> open`** (and `-o`) — open an existing work's fullscreen Terminal + editor layout (the same thing `mx work new -o` does at creation).
+- **`mx repo fetch`** now fast-forwards **both** the checked-out and base (origin default) branch, so a worktree forked from the base isn't stale. **`mx repo fetch --all`** (or `mx repo --all fetch`) fetches every repo one by one, continuing past individual failures.
+
 ## 2.0.0 — 2026-06-27
 
 **Runtime versioning + container repo layout — the first major.** Several intertwined changes that together cross to runtime **v2**:
@@ -13,9 +24,11 @@ What each release brought. Reverse-chronological. Dates reflect when the corresp
 - **`mx migrate` (new).** Upgrades an older runtime up to the supported version; validates the whole chain before mutating (`NO_MIGRATION` on a gap, `CLI_TOO_OLD` if the runtime is newer). The v1 → v2 step upgrades **both** layouts: it moves clones into `git/` (`git worktree repair`) **and** restructures every work — moving flat worktrees into `wt/` (`git worktree move`), creating the new scratch dirs, stamping the work `CLAUDE.md`, and rewriting the `.code-workspace` folder paths to `wt/<repo>`.
 - **Per-repo scripts (new).** `repos/<repo>/hydrate.sh` runs automatically after `worktree add` (cwd = new worktree; positional `$1`/`$2` + `MX_*` env; non-zero = warning); `--no-hydrate` skips it and `mx work … worktree hydrate <repo>` re-runs it (`HYDRATE_FAILED` on non-zero). `repos/<repo>/health.sh` augments `mx repo health` via a captured `extra` field, never affecting `healthy`/`issues`.
 - **Per-work context-index hook (new).** `mx work new` / `mx sync` generate `works/<feature>/.claude/settings.json`, a Claude Code `SessionStart` hook that loads `context/INDEX.json` into every session launched in the work folder.
-- **`mx work new -o` / `--open` (macOS).** Opens a fullscreen Terminal in the work folder plus a fullscreen editor (Cursor → VS Code) on the workspace; non-macOS downgrades to a warning (`UNSUPPORTED`).
+- **`mx work new -o` / `--open` (macOS).** Opens a fullscreen Terminal in the work folder plus a fullscreen editor (Cursor → VS Code) on the workspace; non-macOS downgrades to a warning (`UNSUPPORTED`). `mx work -n <name> open` (and `-o`) does the same for an existing work.
+- **`mx status` → `mx info` (rename).** The runtime overview is now `mx info` (alias `mx i`; the old `mx s`/`mx st` aliases removed), consistent with `repo info`/`work info`. Its header shows the runtime version (`mx vN`); the repos and works sections show each entry's path; `mx repo ls` adopts the same clean shape as `mx work ls`; the works-section count suffix was dropped. Adds `mx repo -n <name> path` and a top-level `version` field to the porcelain output.
 - **Listing paths.** `mx work ls` and `mx repo ls` show the folder path (human collapses `$HOME` to `~`; porcelain adds an absolute `path` field).
-- **New error codes:** `RUNTIME_VERSION_MISMATCH`, `CLI_TOO_OLD`, `NO_MIGRATION`, `BAD_VERSION`, `HYDRATE_FAILED`, `UNSUPPORTED`.
+- **`mx repo fetch`** now fast-forwards **both** the checked-out and base (origin default) branch, so a worktree forked from the base isn't stale; `mx repo fetch --all` (or `mx repo --all fetch`) fetches every repo one by one.
+- **New error codes:** `RUNTIME_VERSION_MISMATCH`, `CLI_TOO_OLD`, `NO_MIGRATION`, `BAD_VERSION`, `HYDRATE_FAILED`, `UNSUPPORTED`, `OSASCRIPT`.
 
 **Breaking:** the on-disk runtime layout changed (clones moved to `git/`; each work's worktrees moved to `wt/<repo>`) — existing runtimes must run `mx migrate` after upgrading the CLI, which restructures both repos and works in one step; `mx update` no longer means "re-stamp" (that's `mx sync` now).
 

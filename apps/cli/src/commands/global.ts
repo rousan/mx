@@ -10,7 +10,7 @@ import {
   MxError,
 } from '@mx/core';
 import type { StatusResult } from '@mx/core';
-import { emit, dim, bold, check, warn } from '../output';
+import { emit, dim, bold, check, warn, tildify } from '../output';
 import { templatesDir } from '../paths';
 import { selfUpdate } from '../selfupdate';
 import type { SelfUpdateInfo } from '../selfupdate';
@@ -65,7 +65,7 @@ export function runGlobal(positionals: string[], flags: Flags): void {
       }, res);
       return;
     }
-    case 'status': {
+    case 'info': {
       const root = requireRuntime({ runtime: flags.runtime });
       // Default: active works only. --all expands the works section.
       const data = statusRuntime(root, { includeArchived: flags.all });
@@ -157,7 +157,7 @@ function renderSelfUpdate(info: SelfUpdateInfo): void {
  */
 function renderStatus(data: StatusResult): void {
   console.log();
-  console.log(`  ${bold('mx')} ${dim('·')} ${data.runtime}`);
+  console.log(`  ${bold('mx')} ${dim(`v${data.version}`)} ${dim('·')} ${data.runtime}`);
   console.log();
 
   // --- context registry ----------------------------------------------------
@@ -165,17 +165,18 @@ function renderStatus(data: StatusResult): void {
   console.log();
 
   // --- repos ---------------------------------------------------------------
+  // Same clean shape as the works section / `mx repo ls`: bold name, dim path,
+  // dim branch+remote, a blank line between entries.
   console.log(`  ${bold('repos')}`);
   if (data.repos.length === 0) {
     console.log(`    ${dim('none yet — `mx repo add <git-url>`')}`);
   } else {
-    const nameW = Math.max(...data.repos.map((r) => r.name.length));
-    const branchW = Math.max(...data.repos.map((r) => r.branch.length));
-    for (const r of data.repos) {
-      const name = r.name.padEnd(nameW);
-      const branch = dim(r.branch.padEnd(branchW));
-      const remote = dim(r.remote ?? '(no remote)');
-      console.log(`    • ${name}  ${branch}  ${remote}`);
+    for (let i = 0; i < data.repos.length; i++) {
+      if (i > 0) console.log();
+      const r = data.repos[i];
+      console.log(`    • ${bold(r.name)}`);
+      console.log(`        ${dim(tildify(r.path))}`);
+      console.log(`        ${dim(`${r.branch}  ${r.remote ?? '(no remote)'}`)}`);
     }
   }
   console.log();
@@ -187,11 +188,7 @@ function renderStatus(data: StatusResult): void {
   const visibleArchived = data.works.filter((w) => w.isArchived === true);
   const visibleActive = data.works.filter((w) => w.isArchived !== true);
   const hiddenArchived = data.archivedWorksCount - visibleArchived.length;
-  const worksCount =
-    data.archivedWorksCount > 0
-      ? dim(`(${visibleActive.length} active, ${data.archivedWorksCount} archived${hiddenArchived > 0 ? ` — pass --all to show` : ''})`)
-      : dim(`(${data.works.length})`);
-  console.log(`  ${bold('works')}  ${worksCount}`);
+  console.log(`  ${bold('works')}`);
 
   if (data.works.length === 0) {
     const empty =
@@ -228,6 +225,7 @@ function renderStatus(data: StatusResult): void {
     // the eye lands on active works first. The bullet is the list marker.
     const styledName = w.isArchived === true ? dim(w.name) : bold(w.name);
     console.log(`    • ${styledName}${chip}`);
+    console.log(`        ${dim(tildify(w.path))}`);
 
     if (wts.length === 0) {
       console.log(`        ${dim('(no worktrees)')}`);

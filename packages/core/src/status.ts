@@ -4,6 +4,7 @@ import { listWorksInfo } from './works';
 import type { ListWorksOpts } from './works';
 import { exists } from './fsutil';
 import { readJson } from './json';
+import { readRuntimeVersion } from './runtime';
 import type { RepoSummary } from './types';
 import type { WorkSummary } from './works';
 
@@ -30,6 +31,8 @@ export type StatusWork = WorkSummary;
 export interface StatusResult {
   /** Absolute runtime path. */
   runtime: string;
+  /** Runtime layout version (from `mx.json`; 1 for a legacy runtime). */
+  version: number;
   /** Context-registry summary. */
   context: StatusContext;
   /** Summaries of pristine clones. */
@@ -92,6 +95,7 @@ export function statusRuntime(root: string, opts: ListWorksOpts = {}): StatusRes
       : all.filter((w) => w.isArchived !== true);
   return {
     runtime: root,
+    version: readRuntimeVersion(root),
     context: { entries: countContextEntries(root) },
     repos: listReposInfo(root),
     works,

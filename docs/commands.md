@@ -17,28 +17,35 @@ Prints a contextual hint about `$MX_RUNTIME`:
 - If the target is the default `~/mx` and `$MX_RUNTIME` is unset: notes that no setup is needed.
 - Otherwise: gives the `export MX_RUNTIME="…"` line to add to your shell config.
 
-### `mx status [--all] [--porcelain]` (aliases: `mx s`, `mx st`)
+### `mx info [--all] [--porcelain]` (alias: `mx i`)
 
-Show the runtime overview: path, context entry count, repos, works.
+Show the runtime overview: path + version, context entry count, repos, works. The header shows the runtime layout version (`mx vN`); repos and works each show their folder path (home-collapsed to `~`). Porcelain output includes a top-level `version` field.
 
-By default shows **active works only**; pass `--all` to include archived. The works section header still says `(N active, M archived)` even when archived are hidden so you know they exist.
+By default shows **active works only**; pass `--all` to include archived.
 
 Layout:
 
 ```
-  mx · /Users/rousan/mx
+  mx v2 · /Users/rousan/mx
 
   context  (4)
 
   repos
-    • analytics      main  ~/mx/repos/analytics
-    • app            main  ~/mx/repos/app
+    • analytics
+        ~/mx/repos/analytics
+        main  git@github.com:acme/analytics.git
 
-  works  (4 active, 2 archived — pass --all to show)
+    • app
+        ~/mx/repos/app
+        main  git@github.com:acme/app.git
+
+  works
     • auth-rotation
+        ~/mx/works/auth-rotation
         (no worktrees)
 
     • checkout-revamp
+        ~/mx/works/checkout-revamp
         app     [checkout-flow]  web:3000  api:3001
         worker  [checkout-flow]  billing-worker:3002
 
@@ -128,16 +135,29 @@ Also stamps the per-repo scripts `hydrate.sh` and `health.sh` into the container
 
 ### `mx repo ls [--porcelain]`
 
-List all pristine clones, one per row, with bullet markers. The path shown is the repo container; human output collapses `$HOME` to `~`, porcelain adds an absolute `path` field per repo:
+List all pristine clones in the same clean shape as `mx work ls`: bold name, dim container path, dim `branch  remote`, a blank line between entries. Human output collapses `$HOME` to `~`; porcelain adds an absolute `path` field per repo.
 
 ```
-• analytics      main  ~/mx/repos/analytics
-• app            main  ~/mx/repos/app
+• analytics
+  ~/mx/repos/analytics
+  main  git@github.com:acme/analytics.git
+
+• app
+  ~/mx/repos/app
+  main  git@github.com:acme/app.git
 ```
 
-### `mx repo -n <name> fetch`
+### `mx repo -n <name> path`
 
-Run `git fetch --all --prune --tags`, then best-effort fast-forward **only the currently checked-out branch** (not the base/default branch, not any other branch). Reports the branch and the list of branches now on origin.
+Print the absolute path to the repo's container (`repos/<repo>`). Plain output, for shell substitution: `cd "$(mx repo -n app path)"`. Errors `NO_REPO` if the repo doesn't exist.
+
+### `mx repo -n <name> fetch` · `mx repo fetch --all`
+
+Run `git fetch --all --prune --tags`, then best-effort fast-forward **both** the currently checked-out branch **and** the base (origin default, e.g. `main`) branch to their upstreams — fast-forward-only, so divergent/upstream-less branches are left untouched. When the base *is* the checked-out branch, only one ff happens. Fast-forwarding the base keeps `worktree add --base <b>` correct (it resolves the local branch first, so a stale local `main` would otherwise yield stale worktrees).
+
+`--all` (`mx repo fetch --all`, or `mx repo --all fetch`) fetches **every** repo, one by one, continuing past any individual failure (failures are reported with `⚠`).
+
+Reports the branch and the list of branches now on origin (an array, one per repo, with `--all`).
 
 ### `mx repo -n <name> info [--porcelain]`
 
@@ -249,6 +269,10 @@ cd "$(mx work -n feat path)"
 ```
 
 Plain output, no decoration.
+
+### `mx work -n <name> open` (or `mx work -n <name> -o`)
+
+Open an **existing** work's dev layout — the same thing `mx work new -o` does at creation: a fullscreen Terminal `cd`'d into the work folder plus a fullscreen editor (Cursor, falling back to VS Code) on the work's `.code-workspace`. macOS only; on other platforms (or a window-management failure) it warns and is a no-op. `mx work -n <name> -o` is shorthand for `… open`.
 
 ### `mx work -n <name> describe <text>`
 

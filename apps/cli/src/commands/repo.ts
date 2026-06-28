@@ -58,22 +58,59 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
           console.log(dim('no repos yet — `mx repo add <git-url>`'));
           return;
         }
-        const nameW = Math.max(...repos.map((r) => r.name.length));
-        const branchW = Math.max(...repos.map((r) => r.branch.length));
-        for (const r of repos) {
-          const name = r.name.padEnd(nameW);
-          const branch = dim(r.branch.padEnd(branchW));
-          const remote = dim(r.remote ?? '(no remote)');
-          console.log(`• ${name}  ${branch}  ${remote}`);
+        // Same clean shape as `mx work ls`: bold name, dim path, dim detail,
+        // a blank line between entries.
+        for (let i = 0; i < repos.length; i++) {
+          if (i > 0) console.log();
+          const r = repos[i];
+          console.log(`• ${bold(r.name)}`);
           console.log(`  ${dim(tildify(r.path))}`);
+          console.log(`  ${dim(`${r.branch}  ${r.remote ?? '(no remote)'}`)}`);
         }
       }, repos);
       return;
     }
-    case 'fetch': {
+    case 'path': {
       const name = need(
         flags.name || ctxRepo,
-        'which repo? pass -n <name> or run inside a repo (mx repo -n <name> fetch)',
+        'which repo? pass -n <name> or run inside a repo (mx repo -n <name> path)',
+      );
+      // Raw path — meant for shell substitution, no styling. repoInfo throws
+      // NO_REPO if the repo doesn't exist.
+      const res = repoInfo(root, name);
+      emit(() => console.log(res.path), { name: res.name, path: res.path });
+      return;
+    }
+    case 'fetch': {
+      // `mx repo fetch --all` (or `mx repo --all fetch`): fetch every repo,
+      // one by one, continuing past any individual failure.
+      if (flags.all) {
+        const names = listReposInfo(root).map((r) => r.name);
+        if (names.length === 0) {
+          emit(() => console.log(dim('no repos yet — `mx repo add <git-url>`')), []);
+          return;
+        }
+        const out: unknown[] = [];
+        const lines: string[] = [];
+        for (const n of names) {
+          try {
+            const r = repoFetch(root, n);
+            out.push(r);
+            lines.push(
+              `${check()} ${bold(r.name)} ${dim(`— ${r.remoteBranches.length} branch(es) on origin, now on ${r.branch}`)}`,
+            );
+          } catch (e) {
+            const msg = e instanceof MxError ? e.message : String(e);
+            out.push({ name: n, error: msg });
+            lines.push(`${warn()} ${bold(n)} ${dim(`— ${msg}`)}`);
+          }
+        }
+        emit(() => lines.forEach((l) => console.log(l)), out);
+        return;
+      }
+      const name = need(
+        flags.name || ctxRepo,
+        'which repo? pass -n <name>, run inside a repo, or use --all (mx repo -n <name> fetch)',
       );
       const res = repoFetch(root, name);
       emit(

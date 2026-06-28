@@ -44,7 +44,7 @@ pnpm install
 pnpm build                     # populates npm/ (bin/mx.js + templates/ + LICENSE)
 export MX_RUNTIME="$PWD/.mx"   # a gitignored dev runtime in this repo
 pnpm mx init                   # = node npm/bin/mx.js init
-pnpm mx status
+pnpm mx info
 ```
 
 `mx` reflects **built** output: after changing CLI/core code, `pnpm build` (or keep `pnpm dev` running). Templates live at `/templates` and are copied into `npm/templates/` at build, so editing them requires a rebuild to take effect.
@@ -122,7 +122,7 @@ There are two `mx` binaries available inside a self-hosted worktree, and they mu
 
 | binary | what it runs | use for |
 |---|---|---|
-| `mx` (on `$PATH`) | the **globally installed** `@roulabs/mx` — published version | productive runtime operations: `mx s`, `mx work archive feat`, etc. **Safe** against the productive runtime. |
+| `mx` (on `$PATH`) | the **globally installed** `@roulabs/mx` — published version | productive runtime operations: `mx i`, `mx work archive feat`, etc. **Safe** against the productive runtime. |
 | `pnpm mx ...` or `node npm/bin/mx.js ...` | the **locally-built** CLI from your in-progress code | **testing only** — must always be pointed at a sandbox runtime, never the productive one. |
 
 The hard rule: **the locally-built CLI never sees the productive runtime.** Before any test, set `$MX_RUNTIME` to a sandbox:
@@ -214,7 +214,7 @@ Implemented in `apps/cli` over `@mx/core`. Each command resolves the runtime via
 
 **Global**
 - **`mx init [path]`** — scaffold/adopt a runtime (target = path arg, else `$MX_RUNTIME`, else `~/mx`): create `repos/`, `works/`, `.mx-root`; stamp `mx.json`, `CLAUDE.md`; stamp `context/INDEX.json` (only if missing — context is user data). Refuses to adopt a runtime whose `mx.json` differs (→ `mx migrate`, or upgrade the CLI). Idempotent; no clone; no pointer written.
-- **`mx status [--all] [--porcelain]`** — runtime path, repos + branches, works + worktrees + ports. Active works only by default; `--all` includes archived. Aliases: `mx s`, `mx st`.
+- **`mx info [--all] [--porcelain]`** — runtime path, repos + branches, works + worktrees + ports. Active works only by default; `--all` includes archived. Alias: `mx i`.
 - **`mx sync`** — (formerly `mx update`) re-stamp the runtime `CLAUDE.md`; stamp `context/INDEX.json` only if missing; backfill the per-work dirs (`wt/`, `scripts/`, `files/`, `tmp/`, `sessions/`), per-repo `hydrate.sh`/`health.sh`, the per-work `CLAUDE.md`, and per-work `.claude/settings.json` (stamp-if-missing). Never modifies user data. Version-gated.
 - **`mx update`** — self-update the CLI within its major (`npm i -g @roulabs/mx@^<major>`); suggests a deliberate major upgrade if one exists. Not version-gated.
 - **`mx migrate`** — upgrade an older runtime to the supported version (the only runtime command allowed on a version mismatch); validates the chain first (`NO_MIGRATION` / `CLI_TOO_OLD`). v1→v2 moves clones into `git/` (`git worktree repair`) **and** restructures every work: flat worktrees into `wt/`, creates `scripts/`/`files/`/`tmp/`, stamps the work `CLAUDE.md`, rewrites `.code-workspace` paths to `wt/<repo>`.
@@ -222,7 +222,7 @@ Implemented in `apps/cli` over `@mx/core`. Each command resolves the runtime via
 
 The version gate: every runtime-touching command first checks the runtime `mx.json` against the version the CLI supports (CLI major ⇄ runtime version); a mismatch refuses with `RUNTIME_VERSION_MISMATCH`, allowing only `mx migrate`, `mx update`, `mx help`, `mx version`.
 
-**Repos** (clones live at `repos/<repo>/git/`, inside a per-repo container) — `mx repo`: `add <git-url> [--name <n>]` (only command that clones; also stamps `hydrate.sh`/`health.sh`) · `ls` (shows container path; porcelain `path`) · `-n <name> fetch` (fast-forwards only the checked-out branch) · `-n <name> info` · `health` (all repos, ✓/⚠ one-liner each) / `-n <name> health` (detail block: default branch, current branch, uncommitted, untracked, ahead/behind, last fetched, worktrees-in-works, plus captured `health.sh` `extra`) · `-n <name> rm` (refuses if any work uses it). Health checks are purely local — they don't fetch; run `mx repo -n <name> fetch` first if you want a fresh comparison against origin.
+**Repos** (clones live at `repos/<repo>/git/`, inside a per-repo container) — `mx repo`: `add <git-url> [--name <n>]` (only command that clones; also stamps `hydrate.sh`/`health.sh`) · `ls` (shows container path; porcelain `path`) · `-n <name> fetch` (fast-forwards the checked-out **and** base branches; `mx repo fetch --all` fetches every repo) · `-n <name> info` · `health` (all repos, ✓/⚠ one-liner each) / `-n <name> health` (detail block: default branch, current branch, uncommitted, untracked, ahead/behind, last fetched, worktrees-in-works, plus captured `health.sh` `extra`) · `-n <name> rm` (refuses if any work uses it). Health checks are purely local — they don't fetch; run `mx repo -n <name> fetch` first if you want a fresh comparison against origin.
 
 **Works** — `mx work`: `new <name> [--description <t>] [--open|-o]` (creates folder, empty `work.json`, the per-work dirs `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/`, the work `CLAUDE.md`, and `.claude/settings.json` context-index hook; prints path; `-o` opens Terminal+editor on macOS) · `ls [--all|--archived]` (default: active only; shows folder path / porcelain `path`) · `-n <name> info` · `describe <t>` · `path` · `worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]` (runs the repo's `hydrate.sh` after add unless `--no-hydrate`) / `ls` / `rm <repo>` / `setup <repo>` (re-run `hydrate.sh`; `HYDRATE_FAILED` on non-zero) · `port set <repo> <service> [<port>]` / `unset` / `ls` · `archive` (removes worktrees, keeps folder + manifest + sessions + branches; recoverable via `unarchive`; prompts for confirmation — pass `--yes`/`-y` to skip; required for `--porcelain` and non-TTY callers) · `unarchive [<repo>=<branch>...]` (re-creates worktrees from `work.json`; positional `repo=branch` overrides per-repo when a recorded branch is missing) · `destroy --force` (PERMANENT: deletes the work folder including session summaries; branches still kept). `--base` resolves to a commit SHA (trying the ref, then `origin/<ref>`) so a bare branch name forks correctly; `worktree rm` / `archive` / `destroy` refuse on uncommitted changes; ports are unique across **all** works (no blocks). `archive` flips `isArchived: true` and stamps `archived_at` in `work.json`; `unarchive` clears them.
 

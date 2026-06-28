@@ -32,9 +32,8 @@ export function main(): void {
   const { positionals, flags } = parseArgs(process.argv.slice(2));
   setPorcelain(flags.porcelain);
 
-  // Shortcut aliases — `mx s` / `mx st` map to `mx status`. Users hit this
-  // command very often; saving the keystrokes pays off.
-  if (positionals[0] === 's' || positionals[0] === 'st') positionals[0] = 'status';
+  // Shortcut alias — `mx i` maps to `mx info` (the runtime overview, hit often).
+  if (positionals[0] === 'i') positionals[0] = 'info';
 
   try {
     if (flags.version || positionals[0] === 'version') {
@@ -48,7 +47,7 @@ export function main(): void {
 
     switch (positionals[0]) {
       case 'init':
-      case 'status':
+      case 'info':
       case 'sync':
       case 'update':
       case 'migrate':
