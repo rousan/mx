@@ -587,11 +587,12 @@ export function ensureWorkScaffolding(root: string, workName: string): string[] 
   // mx-owned work subdirectories. `wt/` holds worktrees; the rest separate
   // user/agent scratch from the mx-native work root (see the work CLAUDE.md):
   //   scripts/ — ad-hoc per-work scripts
+  //   bin/     — executables/binaries a session builds or fetches
   //   files/   — artifacts to keep
   //   tmp/     — throwaway scratch (may be deleted anytime)
   //   sessions/— session summaries
   //   hooks/   — per-work lifecycle hook scripts (archive/unarchive)
-  for (const d of ['wt', 'scripts', 'files', 'tmp', 'sessions', 'hooks']) {
+  for (const d of ['wt', 'scripts', 'bin', 'files', 'tmp', 'sessions', 'hooks']) {
     const p = path.join(wd, d);
     if (!exists(p)) {
       fs.mkdirSync(p, { recursive: true });

@@ -31,6 +31,7 @@ What an mx runtime looks like on disk, the contracts mx owns, and the data shape
         │   ├── repo-a/              # git worktree on the feature branch
         │   └── repo-b/              # git worktree on the feature branch
         ├── scripts/                 # ad-hoc per-work scripts
+        ├── bin/                     # executables/binaries a session builds or fetches
         ├── files/                   # keepable artifacts (agent/user drop zone)
         ├── tmp/                     # throwaway scratch (deletable at any time)
         ├── hooks/                   # per-work lifecycle hooks (see § Per-work lifecycle hooks)
@@ -84,6 +85,7 @@ A work folder (`works/<feature>/`) is more than a flat bag of worktrees. Its sha
 - **`wt/`** — **all** worktrees live here, one per repo at `wt/<repo>` (each on the feature branch). This is the only place worktrees go; `mx work … worktree add` creates them here, and the `.code-workspace` folder entries point at `wt/<repo>` (the entry `name` stays the bare repo name).
 - **`CLAUDE.md`** — work-specific Claude rules. mx stamps it once (an explanatory comment, otherwise empty) and **never overwrites it** afterward. It loads **alongside** the runtime's `CLAUDE.md` for any session started in the work folder, because Claude Code walks up from the session's cwd collecting `CLAUDE.md` files. Put rules specific to this one work here.
 - **`scripts/`** — ad-hoc scripts for this work.
+- **`bin/`** — executables and binaries this work needs: tools you compile, CLIs you download, helper binaries. Starts empty; add it to `PATH` for the work if useful.
 - **`files/`** — artifacts worth keeping: notes, exports, scratch docs, downloads meant to survive.
 - **`tmp/`** — throwaway scratch; its contents may be deleted at **any** time with no guarantees.
 - **`hooks/`** — per-work lifecycle hook scripts (see [Per-work lifecycle hooks](#per-work-lifecycle-hooks-hooks)).
@@ -91,11 +93,11 @@ A work folder (`works/<feature>/`) is more than a flat bag of worktrees. Its sha
 
 ### The work folder root holds mx-native files only
 
-The work-folder **root** is reserved for mx-native files (`work.json`, the `.code-workspace`, the work `CLAUDE.md`, `.claude/`) and the mx-owned subfolders above. Sessions and users must **not** create ad-hoc files directly in the root — keepable artifacts go in `files/`, throwaway scratch in `tmp/`, scripts in `scripts/`. The one exception is a runtime file a session legitimately needs at the root for tooling to work (e.g. an MCP connection file like `.<something>-mcp`); the rule targets ad-hoc user/agent files (notes, downloads, temp outputs), not necessary tooling files. The runtime `CLAUDE.md` states this rule for feature sessions.
+The work-folder **root** is reserved for mx-native files (`work.json`, the `.code-workspace`, the work `CLAUDE.md`, `.claude/`) and the mx-owned subfolders above. Sessions and users must **not** create ad-hoc files directly in the root — keepable artifacts go in `files/`, throwaway scratch in `tmp/`, scripts in `scripts/`, executables/binaries in `bin/`. The one exception is a runtime file a session legitimately needs at the root for tooling to work (e.g. an MCP connection file like `.<something>-mcp`); the rule targets ad-hoc user/agent files (notes, downloads, temp outputs), not necessary tooling files. The runtime `CLAUDE.md` states this rule for feature sessions.
 
 ### `inferContext` and the `wt/` segment
 
-Because worktrees now live under `wt/`, a repo is inferred from the **third** path segment of a work path: `works/<work>/wt/<repo>/…` implies both the work and the repo. Other work subdirs (`scripts/`, `files/`, `tmp/`, `hooks/`, `sessions/`) imply the work but **no** repo.
+Because worktrees now live under `wt/`, a repo is inferred from the **third** path segment of a work path: `works/<work>/wt/<repo>/…` implies both the work and the repo. Other work subdirs (`scripts/`, `bin/`, `files/`, `tmp/`, `hooks/`, `sessions/`) imply the work but **no** repo.
 
 ## `work.json` schema
 
@@ -189,11 +191,11 @@ Distillation, **not** a transcript. Capture the substance so a future agent can 
 
 | owned by | what |
 |---|---|
-| **mx** (programmatic) | `.mx-root` marker, `mx.json`, `repos/<repo>/` container incl. `git/` (created by `repo add` clone; touched only by `repo fetch`/`repo rm`/`migrate`), `works/<feature>/` (created by `work new`), `work.json`, `.code-workspace`, the per-work directories `wt/` / `scripts/` / `files/` / `tmp/` / `hooks/` / `sessions/` (directories only — their contents are agent/user-written), `context/INDEX.json` (only the starter empty array is stamped; subsequent edits are by the agent) |
+| **mx** (programmatic) | `.mx-root` marker, `mx.json`, `repos/<repo>/` container incl. `git/` (created by `repo add` clone; touched only by `repo fetch`/`repo rm`/`migrate`), `works/<feature>/` (created by `work new`), `work.json`, `.code-workspace`, the per-work directories `wt/` / `scripts/` / `bin/` / `files/` / `tmp/` / `hooks/` / `sessions/` (directories only — their contents are agent/user-written), `context/INDEX.json` (only the starter empty array is stamped; subsequent edits are by the agent) |
 | **mx-stamped templates** (rewritten / stamped on `mx sync`) | `<runtime>/CLAUDE.md` (always rewritten), `<runtime>/context/INDEX.json` (only if missing — never overwrites user content), `repos/<repo>/{hydrate.sh,health.sh}` (stamp-if-missing), `works/<feature>/CLAUDE.md` (stamp-if-missing — stamped once, then user-owned), `works/<feature>/.claude/settings.json` (stamp-if-missing), `works/<feature>/hooks/{pre,post}-{archive,unarchive}.sh` (stamp-if-missing no-ops) |
-| **The user / agent** (mx never touches after stamping) | All worktree code, the contents of `wt/` / `scripts/` / `files/` / `tmp/`, `context/<path>.md` body files, `INDEX.json` content after init, `sessions/*.md` files, the work `CLAUDE.md` after it's stamped, the bodies of `hydrate.sh` / `health.sh` / `.claude/settings.json` / the work `hooks/*.sh` once stamped |
+| **The user / agent** (mx never touches after stamping) | All worktree code, the contents of `wt/` / `scripts/` / `bin/` / `files/` / `tmp/`, `context/<path>.md` body files, `INDEX.json` content after init, `sessions/*.md` files, the work `CLAUDE.md` after it's stamped, the bodies of `hydrate.sh` / `health.sh` / `.claude/settings.json` / the work `hooks/*.sh` once stamped |
 
-`mx sync` is non-destructive: it re-stamps the mx-owned generated content (runtime `CLAUDE.md`), backfills mx-owned structural directories and stamp-if-missing files (the per-work `wt/`/`scripts/`/`files/`/`tmp/`/`hooks/`/`sessions/` directories, per-repo `hydrate.sh`/`health.sh`, the per-work `CLAUDE.md`, per-work `.claude/settings.json`, the per-work lifecycle hook scripts `hooks/{pre,post}-{archive,unarchive}.sh`), and removes a stale `<runtime>/README.md` if one lingers. It never overwrites user-edited content in the "user / agent owns" column. (`mx update` is now a separate command that self-updates the CLI — see [commands](commands.md#mx-update).)
+`mx sync` is non-destructive: it re-stamps the mx-owned generated content (runtime `CLAUDE.md`), backfills mx-owned structural directories and stamp-if-missing files (the per-work `wt/`/`scripts/`/`bin/`/`files/`/`tmp/`/`hooks/`/`sessions/` directories, per-repo `hydrate.sh`/`health.sh`, the per-work `CLAUDE.md`, per-work `.claude/settings.json`, the per-work lifecycle hook scripts `hooks/{pre,post}-{archive,unarchive}.sh`), and removes a stale `<runtime>/README.md` if one lingers. It never overwrites user-edited content in the "user / agent owns" column. (`mx update` is now a separate command that self-updates the CLI — see [commands](commands.md#mx-update).)
 
 ## Discovery: `--runtime` / `$MX_RUNTIME` / `~/mx`
 
@@ -207,6 +209,6 @@ No pointer file is written anywhere in the source tree — runtimes are entirely
 
 ## `inferContext` — cwd → work / repo
 
-When you're inside `<runtime>/works/<work>/...`, `mx work info` (etc.) infer the work from the cwd. A repo is inferred only from a worktree path `<runtime>/works/<work>/wt/<repo>/...` (the segment after `wt/`); the other work subdirs (`scripts/`, `files/`, `tmp/`, `hooks/`, `sessions/`) imply the work but no repo. Same for `<runtime>/repos/<repo>/...` inferring the repo. So you can drop `-n <name>` in most contexts.
+When you're inside `<runtime>/works/<work>/...`, `mx work info` (etc.) infer the work from the cwd. A repo is inferred only from a worktree path `<runtime>/works/<work>/wt/<repo>/...` (the segment after `wt/`); the other work subdirs (`scripts/`, `bin/`, `files/`, `tmp/`, `hooks/`, `sessions/`) imply the work but no repo. Same for `<runtime>/repos/<repo>/...` inferring the repo. So you can drop `-n <name>` in most contexts.
 
 Implementation: `inferContext(root)` in `runtime.ts` does a `realpath` comparison so symlinked runtime roots (e.g. macOS `/tmp` → `/private/tmp`) still match.

@@ -70,6 +70,7 @@ mx/
         │   ├── repo-a/     # worktree of repo-a on this feature's branch
         │   └── repo-b/     # worktree of repo-b on this feature's branch
         ├── scripts/        # ad-hoc per-work scripts
+        ├── bin/            # executables/binaries a session builds or fetches
         ├── files/          # artifacts worth keeping (agent/user drop zone)
         ├── tmp/            # throwaway scratch — may be deleted at any time
         ├── hooks/          # per-work lifecycle hooks (see § Work lifecycle hooks)
@@ -91,7 +92,7 @@ mx/
 - `works/<feature>/hooks/` holds **per-work lifecycle hooks** — mx-owned scripts mx runs around
   `mx work archive`/`unarchive`. mx stamps documented no-op scripts you customize (see § Work
   lifecycle hooks).
-- `works/<feature>/{scripts,files,tmp}/` are the only places to put non-mx files in a work — see
+- `works/<feature>/{scripts,bin,files,tmp}/` are the only places to put non-mx files in a work — see
   § The work folder holds mx-native files only.
 
 ## Work lifecycle hooks
@@ -131,6 +132,8 @@ subfolders. When you or the user need to write anything else, use one of these, 
 - **`tmp/`** — throwaway scratch. Its contents may be deleted at **any** time, with no guarantees —
   never rely on anything here persisting.
 - **`scripts/`** — ad-hoc scripts for this work.
+- **`bin/`** — executables and binaries this work needs: tools you compile, CLIs you download, helper
+  binaries. Add it to `PATH` for the work if useful. Starts empty.
 
 The one exception: a runtime file a session legitimately needs to create at the work root for tooling
 to work (e.g. an MCP connection file like `.<something>-mcp`) is fine. The rule targets *ad-hoc*
@@ -306,7 +309,7 @@ clarity; dropping it works while you're inside the work.
 5. **Don't destroy anything unless asked.** Worktrees stay until the user confirms the feature is merged.
    Teardown keeps feature branches; never delete them.
 6. **Never create ad-hoc files in the work-folder root.** Keepable artifacts go in `files/`, throwaway
-   scratch in `tmp/`, scripts in `scripts/`. The root is mx-native only (only exception: a tooling
+   scratch in `tmp/`, scripts in `scripts/`, executables/binaries in `bin/`. The root is mx-native only (only exception: a tooling
    file a session genuinely needs there, e.g. an MCP connection file). See § The work folder holds
    mx-native files only.
 
