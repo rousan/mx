@@ -6,6 +6,7 @@ import {
   workInfo,
   workDescribe,
   workPath,
+  workspaceFile,
   worktreeAdd,
   worktreeList,
   worktreeRemove,
@@ -17,7 +18,10 @@ import {
   portList,
   MxError,
 } from '@mx/core';
-import { emit, dim, bold, check, warn, confirmYesNo } from '../output';
+import * as path from 'node:path';
+import { emit, dim, bold, check, warn, confirmYesNo, tildify } from '../output';
+import { openWorkLayout } from '../open';
+import { runWorktreeHydrate } from '../hydrate';
 import type { Flags } from '../args';
 
 /**
@@ -44,12 +48,22 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
 
   if (action === 'new') {
     const root = requireRuntime({ runtime: flags.runtime });
-    const name = need(positionals[2], 'usage: mx work new <name> [--description <text>]');
+    const name = need(positionals[2], 'usage: mx work new <name> [--description <text>] [-o|--open]');
     const res = workNew(root, name, flags.description ?? '');
     emit(() => {
       console.log(`${check()} created work ${bold(res.name)}`);
       console.log(`  ${dim(res.path)}`);
     }, res);
+    if (flags.open) {
+      // Best-effort: the work is already created, so a window-management
+      // failure (or a non-macOS host) is a warning, never a hard error.
+      try {
+        openWorkLayout(res.path, workspaceFile(root, res.name));
+      } catch (e) {
+        const msg = e instanceof MxError ? e.message : String(e);
+        process.stderr.write(`${warn()} ${dim(`could not open layout: ${msg}`)}\n`);
+      }
+    }
     return;
   }
 
@@ -87,6 +101,7 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         // marker.
         const styledName = w.isArchived === true ? dim(w.name) : bold(w.name);
         console.log(`• ${styledName}${chip}`);
+        console.log(`  ${dim(tildify(w.path))}`);
 
         if (w.description) {
           console.log(`  ${dim(`— ${w.description}`)}`);
@@ -250,7 +265,7 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
     case 'add': {
       const repo = need(
         positionals[3],
-        'usage: mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>]',
+        'usage: mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]',
       );
       const res = worktreeAdd(root, name, repo, { branch: flags.branch, base: flags.base });
       emit(
@@ -260,6 +275,19 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
           ),
         res,
       );
+      // Run the repo's hydrate hook for the new worktree (unless opted out). The
+      // worktree already exists, so a failure is a warning, not a hard error.
+      if (!flags.noHydrate) {
+        const outcome = runWorktreeHydrate(
+          { root, work: name, repo: res.repo, worktreePath: res.path, branch: res.branch, base: flags.base },
+          flags.porcelain,
+        );
+        if (outcome.ran && !outcome.ok && !flags.porcelain) {
+          process.stderr.write(
+            `${warn()} ${dim(`hydrate.sh for ${res.repo} exited non-zero — worktree kept. Re-run: mx work -n ${name} worktree hydrate ${res.repo}`)}\n`,
+          );
+        }
+      }
       return;
     }
     case 'ls': {
@@ -292,6 +320,32 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
           ),
         res,
       );
+      return;
+    }
+    case 'hydrate': {
+      // Re-run a repo's hydrate.sh against its existing worktree on demand.
+      const repo = need(positionals[3], 'usage: mx work -n <name> worktree hydrate <repo>');
+      const wt = worktreeList(root, name).find((w) => w.repo === repo);
+      if (!wt) throw new MxError(`work "${name}" has no worktree for ${repo}`, 'NO_WORKTREE');
+      const worktreePath = path.join(workPath(root, name).path, 'wt', repo);
+      const outcome = runWorktreeHydrate(
+        { root, work: name, repo, worktreePath, branch: wt.branch },
+        flags.porcelain,
+      );
+      if (outcome.missing) {
+        emit(
+          () => console.log(dim(`no hydrate.sh for ${repo} — nothing to run`)),
+          { work: name, repo, ran: false },
+        );
+        return;
+      }
+      if (!outcome.ok) throw new MxError(`hydrate.sh for ${repo} exited non-zero`, 'HYDRATE_FAILED');
+      emit(() => console.log(`${check()} hydrated ${bold(repo)}`), {
+        work: name,
+        repo,
+        ran: true,
+        ok: true,
+      });
       return;
     }
     default:

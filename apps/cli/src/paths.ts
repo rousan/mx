@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,4 +18,19 @@ export function templatesDir(): string {
   if (process.env.MX_TEMPLATES_DIR) return process.env.MX_TEMPLATES_DIR;
   const here = path.dirname(fileURLToPath(import.meta.url));
   return path.join(here, '..', 'templates');
+}
+
+/**
+ * This CLI's version, read from the installed package's `package.json`
+ * (`<pkg>/bin/mx.js` → `<pkg>/package.json`). Used by `mx update` to pin the
+ * self-update to the current major and to detect newer majors.
+ *
+ * @returns The semver string (e.g. `"2.0.0"`).
+ */
+export function cliVersion(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const pkg = JSON.parse(readFileSync(path.join(here, '..', 'package.json'), 'utf8')) as {
+    version: string;
+  };
+  return pkg.version;
 }

@@ -1,7 +1,8 @@
 import * as path from 'node:path';
 import {
   initRuntime,
-  updateRuntime,
+  syncRuntime,
+  migrateRuntime,
   requireRuntime,
   discoverRuntime,
   defaultRuntime,
@@ -9,8 +10,10 @@ import {
   MxError,
 } from '@mx/core';
 import type { StatusResult } from '@mx/core';
-import { emit, dim, bold, check } from '../output';
+import { emit, dim, bold, check, warn } from '../output';
 import { templatesDir } from '../paths';
+import { selfUpdate } from '../selfupdate';
+import type { SelfUpdateInfo } from '../selfupdate';
 import type { Flags } from '../args';
 
 /**
@@ -69,17 +72,71 @@ export function runGlobal(positionals: string[], flags: Flags): void {
       emit(() => renderStatus(data), data);
       return;
     }
-    case 'update': {
+    case 'sync': {
       const root = requireRuntime({ runtime: flags.runtime });
-      const res = updateRuntime(root, templatesDir());
+      const res = syncRuntime(root, templatesDir());
       emit(() => {
-        console.log(`${check()} Updated runtime at ${bold(res.runtime)}`);
+        console.log(`${check()} Synced runtime at ${bold(res.runtime)}`);
         for (const p of res.updated) console.log(`  ${dim(`+ ${p}`)}`);
       }, res);
       return;
     }
+    case 'migrate': {
+      // The one runtime command allowed to run on a version-mismatched runtime —
+      // its whole job is upgrading an older one up to this CLI's version.
+      const root = requireRuntime({ runtime: flags.runtime, allowVersionMismatch: true });
+      const res = migrateRuntime(root);
+      emit(() => {
+        if (res.applied.length === 0) {
+          console.log(`${check()} Runtime already at v${res.to} — nothing to migrate.`);
+          return;
+        }
+        const steps = res.applied.map((a) => `v${a.from}→v${a.to}`).join(', ');
+        console.log(
+          `${check()} Migrated runtime ${bold(`v${res.from}→v${res.to}`)} ${dim(`(${steps})`)}`,
+        );
+        for (const p of res.changed) console.log(`  ${dim(`~ ${p}`)}`);
+      }, res);
+      return;
+    }
+    case 'update': {
+      // Self-update the CLI within its current major; report a newer major if one
+      // exists (crossing a major is a deliberate user action + `mx migrate`).
+      const info = selfUpdate(flags.porcelain);
+      emit(() => renderSelfUpdate(info), info);
+      return;
+    }
     default:
       throw new MxError(`unknown command: ${positionals[0]}`, 'BAD_ARGS');
+  }
+}
+
+/**
+ * Render the outcome of `mx update` (CLI self-update): what happened within the
+ * current major, plus a suggestion when a newer major exists.
+ *
+ * @param info - The self-update summary.
+ */
+function renderSelfUpdate(info: SelfUpdateInfo): void {
+  const curMajor = Number.parseInt(info.current.split('.')[0], 10) || 0;
+  const manual = `npm i -g ${info.package}@^${curMajor}`;
+  if (!info.npmAvailable) {
+    console.log(`${warn()} npm not found — update manually: ${bold(manual)}`);
+  } else if (info.installFailed) {
+    console.log(`${warn()} self-update failed — try: ${bold(manual)}`);
+  } else if (info.updated) {
+    console.log(
+      `${check()} Updated mx to ${bold(`v${info.latestInMajor}`)} ${dim(`(was v${info.current})`)}`,
+    );
+  } else {
+    console.log(`${check()} mx is up to date ${dim(`(v${info.current}, latest in v${curMajor}.x)`)}`);
+  }
+  if (info.newMajor) {
+    console.log();
+    console.log(`${warn()} A new major release ${bold(`mx v${info.newMajor}`)} is available.`);
+    console.log(
+      `  ${dim(`Upgrade (optional): npm i -g ${info.package}@${info.newMajor}, then `)}${bold('mx migrate')}`,
+    );
   }
 }
 

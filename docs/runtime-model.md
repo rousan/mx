@@ -7,22 +7,76 @@ What an mx runtime looks like on disk, the contracts mx owns, and the data shape
 ```
 <runtime>/  (e.g. ~/mx, or wherever $MX_RUNTIME points)
 ├── .mx-root                     # empty marker file — "this is the mx root"
+├── mx.json                      # runtime config: { "version": 2 } (absent = legacy v1)
 ├── CLAUDE.md                    # stamped from templates/CLAUDE.md; rules for feature sessions
 ├── context/                     # shared memory across all features (see § Context registry below)
 │   ├── INDEX.json               # single source of truth for entry metadata
 │   └── <path>.md                # body-only entries (nested folders allowed)
-├── repos/                       # pristine clones — READ-ONLY reference for worktrees
+├── repos/                       # one container per repo
 │   ├── repo-a/
+│   │   ├── git/                 # the pristine clone — READ-ONLY reference for worktrees
+│   │   ├── hydrate.sh             # runs after `worktree add` (customizable)
+│   │   └── health.sh            # augments `mx repo health` (customizable)
 │   └── repo-b/
+│       ├── git/
+│       ├── hydrate.sh
+│       └── health.sh
 └── works/                       # one folder per parallel feature
     └── feature-a/
         ├── work.json                # per-work manifest (owned by mx; never hand-edit)
-        ├── feature-a.code-workspace # VS Code workspace (owned by mx)
-        ├── sessions/                # one .md per session (see § Session summaries below)
-        │   └── 2026-06-12-14-30-flaky-checkout-rca.md
-        ├── repo-a/                  # git worktree on the feature branch
-        └── repo-b/                  # git worktree on the feature branch
+        ├── feature-a.code-workspace # VS Code workspace (owned by mx; folder paths → wt/<repo>)
+        ├── CLAUDE.md                # work-specific rules (stamped once, then user-owned)
+        ├── .claude/settings.json    # SessionStart hook → loads context/INDEX.json
+        ├── wt/                      # all worktrees live here
+        │   ├── repo-a/              # git worktree on the feature branch
+        │   └── repo-b/              # git worktree on the feature branch
+        ├── scripts/                 # ad-hoc per-work scripts
+        ├── files/                   # keepable artifacts (agent/user drop zone)
+        ├── tmp/                     # throwaway scratch (deletable at any time)
+        └── sessions/                # one .md per session (see § Session summaries below)
+            └── 2026-06-12-14-30-flaky-checkout-rca.md
 ```
+
+## Runtime versioning
+
+`<runtime>/mx.json` holds an integer for the runtime's on-disk layout version (currently `2`). An **absent** file means a legacy **v1** runtime.
+
+A given CLI supports exactly one runtime version, with the mapping **CLI major ⇄ runtime version** (CLI 2.x ⇄ v2). Before any runtime-touching command, mx compares the runtime's `mx.json` against the version it supports; on a mismatch it refuses with `RUNTIME_VERSION_MISMATCH`. The only commands allowed on a mismatched runtime are `mx migrate`, `mx update` (self-update the CLI — doesn't touch the runtime), `mx help`, and `mx version`.
+
+- **Runtime older than the CLI** → run `mx migrate` to upgrade it. The registered v1 → v2 step upgrades both the repo and work layouts: it moves each clone into `repos/<repo>/git/` (`git worktree repair`), and restructures every work — moving its flat worktrees into `wt/` (`git worktree move`), creating the new `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/` folders, stamping the work `CLAUDE.md`, and rewriting the `.code-workspace` folder paths to `wt/<repo>`. `mx migrate` validates the whole chain before mutating; a missing step errors `NO_MIGRATION`.
+- **Runtime newer than the CLI** → upgrade the CLI (`mx update`, then `npm i -g @roulabs/mx@<N>` for a new major). `mx migrate` against a newer runtime errors `CLI_TOO_OLD`.
+
+`mx init` stamps `mx.json` on a fresh runtime and refuses to adopt an existing runtime whose version differs. A malformed `mx.json` errors `BAD_VERSION`.
+
+## Per-repo scripts (`hydrate.sh`, `health.sh`)
+
+Each repo container at `repos/<repo>/` holds two mx-owned-but-user-customizable hooks alongside the `git/` clone. Both are stamped on `mx repo add` and backfilled stamp-if-missing (executable) by `mx sync`.
+
+- **`hydrate.sh`** (default: `echo "Setup is done"`) runs automatically after `mx work … worktree add <repo>`, with the new worktree as cwd. Context arrives as positional args (`$1` = worktree path, `$2` = branch) and env vars (`MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_RUNTIME`). A non-zero exit on the automatic run is a warning (worktree kept). Skip with `worktree add --no-hydrate`; re-run explicitly with `mx work … worktree hydrate <repo>` (non-zero exit then errors `HYDRATE_FAILED`). Typical uses: copy a `.env`, allocate + wire a port, install deps.
+- **`health.sh`** (default: documented no-op) runs during `mx repo health` with the git clone as cwd; env: `MX_REPO`, `MX_REPO_PATH`, `MX_GIT_DIR`, `MX_RUNTIME`. Its stdout is captured into the `extra` field; a missing/empty/failing hook yields `extra: null` and never affects `healthy` / `issues`.
+
+## Per-work context-index hook (`.claude/settings.json`)
+
+`mx work new` and `mx sync` generate `works/<feature>/.claude/settings.json` — a Claude Code `SessionStart` hook that prints the runtime's `context/INDEX.json` into every session launched in the work folder, so the context-registry catalog loads deterministically (CLAUDE.md prose alone was unreliable). It's per-work because Claude Code reads `.claude/settings.json` only from the session's launch directory, and mx sessions launch in the work folder. Stamp-if-missing — user edits are preserved.
+
+## The work folder
+
+A work folder (`works/<feature>/`) is more than a flat bag of worktrees. Its shape:
+
+- **`wt/`** — **all** worktrees live here, one per repo at `wt/<repo>` (each on the feature branch). This is the only place worktrees go; `mx work … worktree add` creates them here, and the `.code-workspace` folder entries point at `wt/<repo>` (the entry `name` stays the bare repo name).
+- **`CLAUDE.md`** — work-specific Claude rules. mx stamps it once (an explanatory comment, otherwise empty) and **never overwrites it** afterward. It loads **alongside** the runtime's `CLAUDE.md` for any session started in the work folder, because Claude Code walks up from the session's cwd collecting `CLAUDE.md` files. Put rules specific to this one work here.
+- **`scripts/`** — ad-hoc scripts for this work.
+- **`files/`** — artifacts worth keeping: notes, exports, scratch docs, downloads meant to survive.
+- **`tmp/`** — throwaway scratch; its contents may be deleted at **any** time with no guarantees.
+- **`sessions/`** — session summaries (see [Session summaries](#session-summaries)).
+
+### The work folder root holds mx-native files only
+
+The work-folder **root** is reserved for mx-native files (`work.json`, the `.code-workspace`, the work `CLAUDE.md`, `.claude/`) and the mx-owned subfolders above. Sessions and users must **not** create ad-hoc files directly in the root — keepable artifacts go in `files/`, throwaway scratch in `tmp/`, scripts in `scripts/`. The one exception is a runtime file a session legitimately needs at the root for tooling to work (e.g. an MCP connection file like `.<something>-mcp`); the rule targets ad-hoc user/agent files (notes, downloads, temp outputs), not necessary tooling files. The runtime `CLAUDE.md` states this rule for feature sessions.
+
+### `inferContext` and the `wt/` segment
+
+Because worktrees now live under `wt/`, a repo is inferred from the **third** path segment of a work path: `works/<work>/wt/<repo>/…` implies both the work and the repo. Other work subdirs (`scripts/`, `files/`, `tmp/`, `sessions/`) imply the work but **no** repo.
 
 ## `work.json` schema
 
@@ -116,11 +170,11 @@ Distillation, **not** a transcript. Capture the substance so a future agent can 
 
 | owned by | what |
 |---|---|
-| **mx** (programmatic) | `.mx-root` marker, `repos/<repo>/` (created by `repo add` clone; touched only by `repo fetch`/`repo rm`), `works/<feature>/` (created by `work new`), `work.json`, `.code-workspace`, `sessions/` (directory only — files are agent-written), `context/INDEX.json` (only the starter empty array is stamped; subsequent edits are by the agent) |
-| **mx-stamped templates** (rewritten on `mx update`) | `<runtime>/CLAUDE.md` (always rewritten), `<runtime>/context/INDEX.json` (only if missing — never overwrites user content) |
-| **The user / agent** (mx never touches) | All worktree code, `context/<path>.md` body files, `INDEX.json` content after init, `sessions/*.md` files |
+| **mx** (programmatic) | `.mx-root` marker, `mx.json`, `repos/<repo>/` container incl. `git/` (created by `repo add` clone; touched only by `repo fetch`/`repo rm`/`migrate`), `works/<feature>/` (created by `work new`), `work.json`, `.code-workspace`, the per-work directories `wt/` / `scripts/` / `files/` / `tmp/` / `sessions/` (directories only — their contents are agent/user-written), `context/INDEX.json` (only the starter empty array is stamped; subsequent edits are by the agent) |
+| **mx-stamped templates** (rewritten / stamped on `mx sync`) | `<runtime>/CLAUDE.md` (always rewritten), `<runtime>/context/INDEX.json` (only if missing — never overwrites user content), `repos/<repo>/{hydrate.sh,health.sh}` (stamp-if-missing), `works/<feature>/CLAUDE.md` (stamp-if-missing — stamped once, then user-owned), `works/<feature>/.claude/settings.json` (stamp-if-missing) |
+| **The user / agent** (mx never touches after stamping) | All worktree code, the contents of `wt/` / `scripts/` / `files/` / `tmp/`, `context/<path>.md` body files, `INDEX.json` content after init, `sessions/*.md` files, the work `CLAUDE.md` after it's stamped, the bodies of `hydrate.sh` / `health.sh` / `.claude/settings.json` once stamped |
 
-`mx update` is non-destructive: it re-stamps the mx-owned generated content (runtime `CLAUDE.md`), backfills mx-owned structural directories that are missing (e.g. `<work>/sessions/` for works that pre-date that scaffolding), and removes a stale `<runtime>/README.md` if one lingers. It never modifies anything in the "user / agent owns" column.
+`mx sync` is non-destructive: it re-stamps the mx-owned generated content (runtime `CLAUDE.md`), backfills mx-owned structural directories and stamp-if-missing files (the per-work `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/` directories, per-repo `hydrate.sh`/`health.sh`, the per-work `CLAUDE.md`, per-work `.claude/settings.json`), and removes a stale `<runtime>/README.md` if one lingers. It never overwrites user-edited content in the "user / agent owns" column. (`mx update` is now a separate command that self-updates the CLI — see [commands](commands.md#mx-update).)
 
 ## Discovery: `--runtime` / `$MX_RUNTIME` / `~/mx`
 
@@ -134,6 +188,6 @@ No pointer file is written anywhere in the source tree — runtimes are entirely
 
 ## `inferContext` — cwd → work / repo
 
-When you're inside `<runtime>/works/<work>/...`, `mx work info` (etc.) infer the work from the cwd. Same for `<runtime>/repos/<repo>/...` inferring the repo. So you can drop `-n <name>` in most contexts.
+When you're inside `<runtime>/works/<work>/...`, `mx work info` (etc.) infer the work from the cwd. A repo is inferred only from a worktree path `<runtime>/works/<work>/wt/<repo>/...` (the segment after `wt/`); the other work subdirs (`scripts/`, `files/`, `tmp/`, `sessions/`) imply the work but no repo. Same for `<runtime>/repos/<repo>/...` inferring the repo. So you can drop `-n <name>` in most contexts.
 
 Implementation: `inferContext(root)` in `runtime.ts` does a `realpath` comparison so symlinked runtime roots (e.g. macOS `/tmp` → `/private/tmp`) still match.

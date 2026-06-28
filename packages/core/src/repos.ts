@@ -1,9 +1,18 @@
+import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { MxError } from './errors';
 import { exists, isGitRepo } from './fsutil';
 import { git, gitQuiet, currentBranch, remoteUrl, remoteBranchList } from './git';
-import { repoPath, listRepoNames, listWorkNames, readWork, findWorktree } from './runtime';
+import {
+  repoPath,
+  repoGitDir,
+  repoHealthScript,
+  listRepoNames,
+  listWorkNames,
+  readWork,
+  findWorktree,
+} from './runtime';
 import type { RepoSummary } from './types';
 
 /**
@@ -41,10 +50,13 @@ export interface RepoAddResult {
  */
 export function repoAdd(root: string, url: string, name0?: string): RepoAddResult {
   const name = name0 || repoNameFromUrl(url);
-  const dest = repoPath(root, name);
-  if (exists(dest)) throw new MxError(`repo already exists: ${name}`, 'EXISTS');
-  git(['clone', url, dest], { stdio: ['ignore', 'inherit', 'inherit'] });
-  return { name, path: dest, remote: remoteUrl(dest), branch: currentBranch(dest) };
+  const container = repoPath(root, name);
+  if (exists(container)) throw new MxError(`repo already exists: ${name}`, 'EXISTS');
+  const gitdir = repoGitDir(root, name);
+  // Container holds the clone (git/) plus mx-owned per-repo tooling.
+  fs.mkdirSync(container, { recursive: true });
+  git(['clone', url, gitdir], { stdio: ['ignore', 'inherit', 'inherit'] });
+  return { name, path: container, remote: remoteUrl(gitdir), branch: currentBranch(gitdir) };
 }
 
 /**
@@ -56,8 +68,10 @@ export function repoAdd(root: string, url: string, name0?: string): RepoAddResul
 export function listReposInfo(root: string): RepoSummary[] {
   return listRepoNames(root).map((name) => ({
     name,
-    branch: currentBranch(repoPath(root, name)),
-    remote: remoteUrl(repoPath(root, name)),
+    // path is the container; branch/remote come from the git/ clone.
+    path: repoPath(root, name),
+    branch: currentBranch(repoGitDir(root, name)),
+    remote: remoteUrl(repoGitDir(root, name)),
   }));
 }
 
@@ -75,14 +89,20 @@ export interface RepoFetchResult {
 
 /**
  * Fetch all branches/tags from origin, prune deleted ones, and best-effort
- * fast-forward the checked-out branch.
+ * fast-forward the pristine clone's **currently checked-out branch** to its
+ * upstream.
+ *
+ * Only the current branch is fast-forwarded — not the base/default branch, nor
+ * any other local branch — and only when it's a clean fast-forward with an
+ * upstream, so divergent or upstream-less branches are left untouched (no
+ * working-tree churn).
  *
  * @param root - Runtime root.
  * @param name - Repo name.
  * @returns The repo's branch and the list of branches now on origin.
  */
 export function repoFetch(root: string, name: string): RepoFetchResult {
-  const rp = repoPath(root, name);
+  const rp = repoGitDir(root, name);
   if (!isGitRepo(rp)) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
   // Update every branch's remote-tracking ref, pull in new branches and tags,
   // and prune ones deleted on origin.
@@ -116,12 +136,12 @@ export interface RepoInfoResult {
  * @returns The repo's details.
  */
 export function repoInfo(root: string, name: string): RepoInfoResult {
-  const rp = repoPath(root, name);
+  const rp = repoGitDir(root, name);
   if (!isGitRepo(rp)) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
   const usedBy = listWorkNames(root).filter((w) => findWorktree(readWork(root, w), name));
   return {
     name,
-    path: rp,
+    path: repoPath(root, name), // the container (repo home)
     branch: currentBranch(rp),
     remote: remoteUrl(rp),
     worktreesInWorks: usedBy,
@@ -160,6 +180,12 @@ export interface RepoHealth {
   healthy: boolean;
   /** Human-readable description of each issue; empty when `healthy`. */
   issues: string[];
+  /**
+   * Captured stdout of the repo's `health.sh` augmentation hook (trimmed), or
+   * null when there's no script, it produced no output, or it failed. Purely
+   * informational — it doesn't affect `healthy`/`issues`.
+   */
+  extra: string | null;
 }
 
 /**
@@ -243,6 +269,41 @@ function lastFetched(rp: string): string | null {
 }
 
 /**
+ * Run a repo's `health.sh` augmentation hook and capture its stdout.
+ *
+ * Runs with the repo's git clone as the working directory; repo context is
+ * passed via `MX_*` env vars. Returns the trimmed output, or null when there's
+ * no script, it produced nothing, or it exited non-zero (best-effort — a broken
+ * hook never breaks the health report).
+ *
+ * @param root - Runtime root.
+ * @param name - Repo name.
+ * @returns Trimmed hook stdout, or null.
+ */
+function runHealthScript(root: string, name: string): string | null {
+  const script = repoHealthScript(root, name);
+  if (!exists(script)) return null;
+  try {
+    const out = execFileSync(script, [], {
+      cwd: repoGitDir(root, name),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      env: {
+        ...process.env,
+        MX_RUNTIME: root,
+        MX_REPO: name,
+        MX_REPO_PATH: repoPath(root, name),
+        MX_GIT_DIR: repoGitDir(root, name),
+      },
+    });
+    const trimmed = out.trim();
+    return trimmed.length ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Compute a `RepoHealth` snapshot for a single pristine clone.
  *
  * Purely local — no network. The "behind origin" check compares against the
@@ -253,7 +314,7 @@ function lastFetched(rp: string): string | null {
  * @returns The health snapshot.
  */
 export function repoHealth(root: string, name: string): RepoHealth {
-  const rp = repoPath(root, name);
+  const rp = repoGitDir(root, name);
   if (!isGitRepo(rp)) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
 
   const defaultBranch = originDefaultBranch(rp);
@@ -289,7 +350,7 @@ export function repoHealth(root: string, name: string): RepoHealth {
 
   return {
     name,
-    path: rp,
+    path: repoPath(root, name), // the container (repo home)
     defaultBranch,
     currentBranch: current,
     isOnDefault,
@@ -301,6 +362,7 @@ export function repoHealth(root: string, name: string): RepoHealth {
     worktreesInWorks,
     healthy: issues.length === 0,
     issues,
+    extra: runHealthScript(root, name),
   };
 }
 
@@ -332,8 +394,7 @@ export interface RepoRemoveResult {
  * @returns The removed repo name.
  */
 export function repoRemove(root: string, name: string): RepoRemoveResult {
-  const rp = repoPath(root, name);
-  if (!isGitRepo(rp)) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
+  if (!isGitRepo(repoGitDir(root, name))) throw new MxError(`no such repo: ${name}`, 'NO_REPO');
   const usedBy = listWorkNames(root).filter((w) => findWorktree(readWork(root, w), name));
   if (usedBy.length) {
     throw new MxError(
@@ -341,6 +402,7 @@ export function repoRemove(root: string, name: string): RepoRemoveResult {
       'IN_USE',
     );
   }
-  fs.rmSync(rp, { recursive: true, force: true });
+  // Remove the whole container (clone + any per-repo tooling).
+  fs.rmSync(repoPath(root, name), { recursive: true, force: true });
   return { name, removed: true };
 }

@@ -60,3 +60,33 @@ export function stampContextIndex(targetDir: string, templatesDir: string): stri
   fs.copyFileSync(src, dest);
   return dest;
 }
+
+/**
+ * mx-owned per-repo script files, copied into a repo's container
+ * (`repos/<name>/`) from `<templatesDir>/repo/<file>`. User-customizable once
+ * stamped, so each is written only when missing.
+ */
+const REPO_SCRIPTS = ['hydrate.sh', 'health.sh'] as const;
+
+/**
+ * Stamp mx-owned per-repo scripts (e.g. `hydrate.sh`) into a repo container,
+ * **only those not already present** (they're user-editable after creation).
+ * Each newly-stamped script is made executable.
+ *
+ * @param containerDir - The repo's container directory (`repos/<name>`).
+ * @param templatesDir - Directory containing the `repo/<script>` templates.
+ * @returns Absolute paths of scripts newly stamped this call.
+ */
+export function stampRepoScripts(containerDir: string, templatesDir: string): string[] {
+  const created: string[] = [];
+  for (const name of REPO_SCRIPTS) {
+    const dest = path.join(containerDir, name);
+    if (exists(dest)) continue;
+    const src = path.join(templatesDir, 'repo', name);
+    if (!exists(src)) throw new MxError(`missing template: ${src}`, 'NO_TEMPLATE');
+    fs.copyFileSync(src, dest);
+    fs.chmodSync(dest, 0o755);
+    created.push(dest);
+  }
+  return created;
+}

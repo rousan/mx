@@ -12,9 +12,14 @@ export {
   reposDir,
   worksDir,
   repoPath,
+  repoGitDir,
+  repoHydrateScript,
+  repoHealthScript,
   workDir,
   workManifest,
   workspaceFile,
+  worktreesDir,
+  worktreePath,
   defaultRuntime,
   discoverRuntime,
   requireRuntime,
@@ -25,12 +30,22 @@ export {
   findWorktree,
   inferContext,
   initRuntime,
-  updateRuntime,
+  syncRuntime,
+  migrateRepoLayout,
+  migrateWorkLayout,
   ensureWorkScaffolding,
+  RUNTIME_VERSION,
+  mxConfigFile,
+  readMxConfig,
+  readRuntimeVersion,
+  writeRuntimeVersion,
 } from './runtime';
-export type { InitResult, UpdateResult } from './runtime';
+export type { InitResult, SyncResult, MxConfig } from './runtime';
 
-export { stampClaudeMd, removeStaleRuntimeReadme } from './templates';
+export { migrateRuntime } from './migrations';
+export type { MigrateResult, AppliedMigration } from './migrations';
+
+export { stampClaudeMd, removeStaleRuntimeReadme, stampRepoScripts } from './templates';
 
 export {
   repoNameFromUrl,

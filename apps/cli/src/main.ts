@@ -49,7 +49,9 @@ export function main(): void {
     switch (positionals[0]) {
       case 'init':
       case 'status':
+      case 'sync':
       case 'update':
+      case 'migrate':
         return runGlobal(positionals, flags);
       case 'repo':
         return dispatchRepo(positionals, flags);

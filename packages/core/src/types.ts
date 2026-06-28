@@ -39,6 +39,8 @@ export interface Work {
 export interface RepoSummary {
   /** Repo directory name under `repos/`. */
   name: string;
+  /** Absolute path to the pristine clone under `repos/`. */
+  path: string;
   /** Current checked-out branch of the pristine clone. */
   branch: string;
   /** Origin remote URL, or null when none is configured. */
@@ -51,6 +53,11 @@ export interface RepoSummary {
 export interface RuntimeOpts {
   /** Explicit runtime path from a `--runtime` flag, if provided. */
   runtime?: string;
+  /**
+   * Skip the runtime-version gate. Only `mx migrate` sets this — it must be
+   * able to operate on an older-version runtime in order to upgrade it.
+   */
+  allowVersionMismatch?: boolean;
 }
 
 /**

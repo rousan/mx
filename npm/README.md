@@ -2,7 +2,9 @@
 
 **mx** ("multiplexer") runs several features in parallel across shared repos using git worktrees. Each feature gets an isolated environment — its own worktrees, branches, and ports — so you switch between features instantly without stashing or branch-juggling.
 
-mx manages a **runtime**: a single `mx/` folder holding pristine repo clones (`repos/`) and one folder per feature (`works/`), each with git worktrees on its own branch. mx owns the per-work manifest (`work.json`) and a VS Code workspace file; you drive everything through `mx` commands.
+mx manages a **runtime**: a single `mx/` folder holding pristine repo clones (each in a per-repo container at `repos/<repo>/git`) and one folder per feature (`works/`), each with its git worktrees under `wt/<repo>` on their own branches. mx owns the per-work manifest (`work.json`) and a VS Code workspace file; you drive everything through `mx` commands.
+
+The runtime is **versioned** (an integer in `<runtime>/mx.json`). A given CLI supports exactly one runtime version — CLI major ⇄ runtime version (CLI 2.x ⇄ runtime v2). After a major CLI upgrade, run `mx migrate` once to bring an existing runtime up to date.
 
 ## Install
 
@@ -37,16 +39,21 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 
 | command | does |
 |---|---|
-| `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `CLAUDE.md`) |
-| `mx status [--porcelain]` | list repos, works, worktrees, ports |
-| `mx update` | re-stamp the runtime's `CLAUDE.md` |
-| `mx repo add <git-url> [--name <n>]` | clone a pristine repo |
+| `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `mx.json`, `CLAUDE.md`) |
+| `mx status [--all] [--porcelain]` | list repos, works, worktrees, ports |
+| `mx sync` | re-stamp the runtime's mx-owned files (`CLAUDE.md`, per-repo/per-work scaffolding) from the current CLI — same-major, non-destructive |
+| `mx update` | self-update the CLI within its major (`npm i -g`); flags a newer major if one exists |
+| `mx migrate` | upgrade an older-version runtime to the version this CLI supports (the only command allowed on a version-mismatched runtime) |
+| `mx repo add <git-url> [--name <n>]` | clone a pristine repo (into `repos/<repo>/git`; stamps its `hydrate.sh`/`health.sh`) |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
-| `mx work new <name> [--description <t>]` | create a work |
-| `mx work ls` / `mx work -n <name> info\|describe\|path` | manage works |
-| `mx work -n <name> worktree add\|ls\|rm <repo> [--branch <b>] [--base <ref>]` | manage worktrees |
+| `mx repo health` / `mx repo -n <name> health` | local-only health check (augmented by the repo's `health.sh`) |
+| `mx work new <name> [--description <t>] [-o]` | create a work; `-o` opens a fullscreen Terminal + editor (macOS) |
+| `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works |
+| `mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]` | add a worktree (runs the repo's `hydrate.sh` unless `--no-hydrate`) |
+| `mx work -n <name> worktree ls\|rm\|hydrate <repo>` | list / remove / re-run hydrate for a worktree |
 | `mx work -n <name> port set\|unset\|ls <repo> <service> [<port>]` | allocate/release ports |
-| `mx work -n <name> destroy` | remove worktrees + work folder (keeps branches) |
+| `mx work -n <name> archive [--yes]` / `unarchive` | soft-delete / restore a work (keeps branches) |
+| `mx work -n <name> destroy --force` | permanently remove the work folder (keeps branches) |
 
 ## License
 

@@ -2,6 +2,8 @@ import {
   requireRuntime,
   inferContext,
   repoAdd,
+  repoPath,
+  stampRepoScripts,
   listReposInfo,
   repoFetch,
   repoInfo,
@@ -11,7 +13,8 @@ import {
   MxError,
 } from '@mx/core';
 import type { RepoHealth } from '@mx/core';
-import { emit, dim, bold, check, warn } from '../output';
+import { emit, dim, bold, check, warn, tildify } from '../output';
+import { templatesDir } from '../paths';
 import type { Flags } from '../args';
 
 /**
@@ -43,6 +46,8 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
     case 'add': {
       const url = need(positionals[2], 'usage: mx repo add <git-url> [--name <n>]');
       const res = repoAdd(root, url, flags.name);
+      // Stamp the repo's mx-owned scripts (hydrate.sh, health.sh) into its container.
+      stampRepoScripts(repoPath(root, res.name), templatesDir());
       emit(() => console.log(`${check()} cloned ${bold(res.name)} ${dim(`→ ${res.path}`)}`), res);
       return;
     }
@@ -60,6 +65,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
           const branch = dim(r.branch.padEnd(branchW));
           const remote = dim(r.remote ?? '(no remote)');
           console.log(`• ${name}  ${branch}  ${remote}`);
+          console.log(`  ${dim(tildify(r.path))}`);
         }
       }, repos);
       return;
@@ -242,5 +248,12 @@ function renderHealthDetail(h: RepoHealth): void {
     const marker = r.marker ? `  ${r.marker}` : '   ';
     const hint = r.hint ? `  ${dim(r.hint)}` : '';
     console.log(`  ${label}  ${value}${marker}${hint}`);
+  }
+
+  // Repo-specific augmentation from the repo's health.sh, if any.
+  if (h.extra) {
+    console.log();
+    console.log(`  ${dim('health.sh')}`);
+    for (const line of h.extra.split('\n')) console.log(`    ${dim(line)}`);
   }
 }

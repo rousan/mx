@@ -11,7 +11,14 @@ import {
   inferContext,
   discoverRuntime,
   initRuntime,
-  updateRuntime,
+  syncRuntime,
+  migrateRepoLayout,
+  migrateRuntime,
+  requireRuntime,
+  readRuntimeVersion,
+  writeRuntimeVersion,
+  RUNTIME_VERSION,
+  repoGitDir,
   readWork,
   writeWork,
   workNew,
@@ -21,7 +28,10 @@ import {
   workDestroy,
   listWorksInfo,
   repoAdd,
+  repoFetch,
+  repoInfo,
   repoHealth,
+  stampRepoScripts,
   listRepoHealth,
   statusRuntime,
 } from '../src/index';
@@ -131,14 +141,20 @@ describe('discoverRuntime', () => {
 describe('inferContext', () => {
   it('infers work and repo from the cwd', () => {
     const root = tmp();
-    fs.mkdirSync(path.join(root, 'works', 'feat', 'repoA'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'works', 'feat', 'wt', 'repoA'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'works', 'feat', 'scripts'), { recursive: true });
     fs.mkdirSync(path.join(root, 'repos', 'repoX'), { recursive: true });
 
     process.chdir(path.join(root, 'works', 'feat'));
     expect(inferContext(root)).toEqual({ work: 'feat', repo: null });
 
-    process.chdir(path.join(root, 'works', 'feat', 'repoA'));
+    // Worktrees live under <work>/wt/<repo> — that's where a repo is inferred.
+    process.chdir(path.join(root, 'works', 'feat', 'wt', 'repoA'));
     expect(inferContext(root)).toEqual({ work: 'feat', repo: 'repoA' });
+
+    // A non-wt work subdir (scripts/, files/, tmp/, sessions/) implies no repo.
+    process.chdir(path.join(root, 'works', 'feat', 'scripts'));
+    expect(inferContext(root)).toEqual({ work: 'feat', repo: null });
 
     process.chdir(path.join(root, 'repos', 'repoX'));
     expect(inferContext(root)).toEqual({ work: null, repo: 'repoX' });
@@ -174,19 +190,19 @@ describe('context registry stamping', () => {
     expect(res.created).not.toContain(path.join(runtime, 'context', 'INDEX.json'));
   });
 
-  it('updateRuntime creates context/INDEX.json when the runtime has no context/ yet', () => {
+  it('syncRuntime creates context/INDEX.json when the runtime has no context/ yet', () => {
     const runtime = path.join(tmp(), 'rt');
     initRuntime(runtime, TEMPLATES_DIR);
     // Simulate an "old" runtime without the context registry.
     fs.rmSync(path.join(runtime, 'context'), { recursive: true, force: true });
-    const res = updateRuntime(runtime, TEMPLATES_DIR);
+    const res = syncRuntime(runtime, TEMPLATES_DIR);
     const indexPath = path.join(runtime, 'context', 'INDEX.json');
     expect(fs.existsSync(indexPath)).toBe(true);
     expect(res.updated).toContain(indexPath);
     expect(JSON.parse(fs.readFileSync(indexPath, 'utf8'))).toEqual([]);
   });
 
-  it('updateRuntime preserves an existing context/INDEX.json', () => {
+  it('syncRuntime preserves an existing context/INDEX.json', () => {
     const runtime = path.join(tmp(), 'rt');
     initRuntime(runtime, TEMPLATES_DIR);
     const existing = [
@@ -194,12 +210,12 @@ describe('context registry stamping', () => {
     ];
     const indexPath = path.join(runtime, 'context', 'INDEX.json');
     fs.writeFileSync(indexPath, JSON.stringify(existing));
-    const res = updateRuntime(runtime, TEMPLATES_DIR);
+    const res = syncRuntime(runtime, TEMPLATES_DIR);
     expect(JSON.parse(fs.readFileSync(indexPath, 'utf8'))).toEqual(existing);
     expect(res.updated).not.toContain(indexPath);
   });
 
-  it('updateRuntime backfills missing per-work sessions/ without touching user data', () => {
+  it('syncRuntime backfills missing per-work sessions/ without touching user data', () => {
     const runtime = path.join(tmp(), 'rt');
     initRuntime(runtime, TEMPLATES_DIR);
     // Create two works; simulate a "pre-v1.2.0" state by removing sessions/.
@@ -218,7 +234,7 @@ describe('context registry stamping', () => {
     const manifestSnapshot = fs.readFileSync(manifestA, 'utf8');
     const workspaceSnapshot = fs.readFileSync(workspaceA, 'utf8');
 
-    const res = updateRuntime(runtime, TEMPLATES_DIR);
+    const res = syncRuntime(runtime, TEMPLATES_DIR);
     expect(fs.existsSync(sessionsA)).toBe(true);
     expect(fs.existsSync(sessionsB)).toBe(true);
     expect(res.updated).toContain(sessionsA);
@@ -309,7 +325,7 @@ describe('context registry stamping', () => {
     expect(statusRuntime(runtime).context.entries).toBe(0);
   });
 
-  it('updateRuntime does not re-create per-work sessions/ that already exists', () => {
+  it('syncRuntime does not re-create per-work sessions/ that already exists', () => {
     const runtime = path.join(tmp(), 'rt');
     initRuntime(runtime, TEMPLATES_DIR);
     workNew(runtime, 'feat');
@@ -319,7 +335,7 @@ describe('context registry stamping', () => {
     fs.writeFileSync(note, '# preexisting note\n');
     const before = fs.readFileSync(note, 'utf8');
 
-    const res = updateRuntime(runtime, TEMPLATES_DIR);
+    const res = syncRuntime(runtime, TEMPLATES_DIR);
     expect(res.updated).not.toContain(sessions);
     expect(fs.readFileSync(note, 'utf8')).toBe(before);
   });
@@ -387,7 +403,7 @@ describe('archive / unarchive / destroy lifecycle', () => {
 
   it('archive removes worktrees, empties .code-workspace folders, sets isArchived + archived_at', () => {
     const { root, workName } = fixture();
-    const wtDir = path.join(root, 'works', workName, 'app');
+    const wtDir = path.join(root, 'works', workName, 'wt', 'app');
     const wsFile = path.join(root, 'works', workName, `${workName}.code-workspace`);
     expect(fs.existsSync(wtDir)).toBe(true);
     expect(JSON.parse(fs.readFileSync(wsFile, 'utf8')).folders).toHaveLength(1);
@@ -411,7 +427,7 @@ describe('archive / unarchive / destroy lifecycle', () => {
 
   it('archive refuses on uncommitted changes', () => {
     const { root, workName } = fixture();
-    const wt = path.join(root, 'works', workName, 'app');
+    const wt = path.join(root, 'works', workName, 'wt', 'app');
     fs.writeFileSync(path.join(wt, 'dirty.txt'), 'unstaged work');
     expect(() => archiveWork(root, workName)).toThrow(/uncommitted changes/);
     // Work remains active.
@@ -424,7 +440,7 @@ describe('archive / unarchive / destroy lifecycle', () => {
     const res = unarchiveWork(root, workName);
     expect(res.restored).toHaveLength(1);
     expect(res.restored[0]).toMatchObject({ repo: 'app', branch: 'feat' });
-    expect(fs.existsSync(path.join(root, 'works', workName, 'app'))).toBe(true);
+    expect(fs.existsSync(path.join(root, 'works', workName, 'wt', 'app'))).toBe(true);
 
     const wsFile = path.join(root, 'works', workName, `${workName}.code-workspace`);
     expect(JSON.parse(fs.readFileSync(wsFile, 'utf8')).folders).toHaveLength(1);
@@ -438,7 +454,7 @@ describe('archive / unarchive / destroy lifecycle', () => {
     const { root, workName } = fixture();
     archiveWork(root, workName);
     // Delete the feature branch from the pristine clone so unarchive can't find it.
-    runGit(path.join(root, 'repos', 'app'), ['branch', '-D', 'feat']);
+    runGit(path.join(root, 'repos', 'app', 'git'), ['branch', '-D', 'feat']);
     let err: unknown;
     try {
       unarchiveWork(root, workName);
@@ -456,9 +472,9 @@ describe('archive / unarchive / destroy lifecycle', () => {
     const { root, workName } = fixture();
     // Create a distinct branch in the pristine clone for the override.
     // (`main` is checked out there, so git won't allow a worktree-add of `main`.)
-    runGit(path.join(root, 'repos', 'app'), ['branch', 'alt']);
+    runGit(path.join(root, 'repos', 'app', 'git'), ['branch', 'alt']);
     archiveWork(root, workName);
-    runGit(path.join(root, 'repos', 'app'), ['branch', '-D', 'feat']);
+    runGit(path.join(root, 'repos', 'app', 'git'), ['branch', '-D', 'feat']);
     const res = unarchiveWork(root, workName, { app: 'alt' });
     expect(res.restored[0].branch).toBe('alt');
     const w = readWork(root, workName);
@@ -503,6 +519,302 @@ describe('archive / unarchive / destroy lifecycle', () => {
   });
 });
 
+describe('per-work context-index hook', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+
+  it('workNew stamps a .claude/settings.json SessionStart hook for the index', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const res = workNew(root, 'feat');
+    const settingsPath = path.join(res.path, '.claude', 'settings.json');
+    expect(fs.existsSync(settingsPath)).toBe(true);
+    const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    const cmd = s.hooks.SessionStart[0].hooks[0].command;
+    expect(cmd).toContain(path.join(root, 'context', 'INDEX.json'));
+  });
+
+  it('syncRuntime backfills the hook for an existing work, without clobbering edits', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    workNew(root, 'feat');
+    const settingsPath = path.join(root, 'works', 'feat', '.claude', 'settings.json');
+    // Simulate a pre-hook work: remove .claude, then verify sync recreates it.
+    fs.rmSync(path.join(root, 'works', 'feat', '.claude'), { recursive: true, force: true });
+    expect(fs.existsSync(settingsPath)).toBe(false);
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    expect(res.updated).toContain(settingsPath);
+    expect(fs.existsSync(settingsPath)).toBe(true);
+
+    // Non-clobbering: a user edit survives a second sync.
+    fs.writeFileSync(settingsPath, '{"hooks":{}}\n');
+    const res2 = syncRuntime(root, TEMPLATES_DIR);
+    expect(res2.updated).not.toContain(settingsPath);
+    expect(fs.readFileSync(settingsPath, 'utf8')).toBe('{"hooks":{}}\n');
+  });
+});
+
+describe('per-repo hydrate script', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+  const runGit = (cwd: string, args: string[]) =>
+    execFileSync('git', args, { cwd, stdio: 'ignore' });
+
+  function srcRepo(): string {
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    runGit(src, ['commit', '-qm', 'init', '--allow-empty']);
+    return src;
+  }
+
+  it('stampRepoScripts writes an executable hydrate.sh, idempotently', () => {
+    const dir = tmp();
+    const dest = path.join(dir, 'hydrate.sh');
+    const created = stampRepoScripts(dir, TEMPLATES_DIR);
+    expect(created).toContain(dest);
+    expect(fs.existsSync(dest)).toBe(true);
+    expect((fs.statSync(dest).mode & 0o111) !== 0).toBe(true); // has an exec bit
+    // Idempotent + non-clobbering: a second call stamps nothing.
+    expect(stampRepoScripts(dir, TEMPLATES_DIR)).toEqual([]);
+  });
+
+  it('syncRuntime backfills hydrate.sh + health.sh for existing repos', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, srcRepo(), 'app'); // core repoAdd clones only — no scripts yet
+    const hydrate = path.join(root, 'repos', 'app', 'hydrate.sh');
+    const health = path.join(root, 'repos', 'app', 'health.sh');
+    expect(fs.existsSync(hydrate)).toBe(false);
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    expect(res.updated).toContain(hydrate);
+    expect(res.updated).toContain(health);
+    expect(fs.existsSync(hydrate)).toBe(true);
+    expect(fs.existsSync(health)).toBe(true);
+  });
+
+  it('repoHealth.extra captures health.sh stdout (null when absent)', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, srcRepo(), 'app');
+    expect(repoHealth(root, 'app').extra).toBeNull(); // no health.sh yet
+    const hs = path.join(root, 'repos', 'app', 'health.sh');
+    fs.writeFileSync(hs, '#!/usr/bin/env bash\necho "node_modules: present"\n');
+    fs.chmodSync(hs, 0o755);
+    expect(repoHealth(root, 'app').extra).toBe('node_modules: present');
+  });
+});
+
+describe('runtime versioning + migrate', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+  const runGit = (cwd: string, args: string[]) =>
+    execFileSync('git', args, { cwd, stdio: 'ignore' });
+
+  it('readRuntimeVersion defaults to 1 when no mx.json, else reads the value', () => {
+    const root = tmp();
+    expect(readRuntimeVersion(root)).toBe(1); // legacy: no mx.json
+    writeRuntimeVersion(root, 5);
+    expect(readRuntimeVersion(root)).toBe(5);
+  });
+
+  it('initRuntime stamps mx.json with version = RUNTIME_VERSION on a fresh runtime', () => {
+    const root = path.join(tmp(), 'rt');
+    const res = initRuntime(root, TEMPLATES_DIR);
+    expect(readRuntimeVersion(root)).toBe(RUNTIME_VERSION);
+    expect(res.created).toContain(path.join(root, 'mx.json'));
+  });
+
+  it('writeRuntimeVersion preserves other mx.json keys', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const cfg = JSON.parse(fs.readFileSync(path.join(root, 'mx.json'), 'utf8'));
+    cfg.custom = 'keep-me';
+    fs.writeFileSync(path.join(root, 'mx.json'), JSON.stringify(cfg));
+    writeRuntimeVersion(root, 7);
+    const after = JSON.parse(fs.readFileSync(path.join(root, 'mx.json'), 'utf8'));
+    expect(after.version).toBe(7);
+    expect(after.custom).toBe('keep-me');
+  });
+
+  it('initRuntime refuses to adopt an existing runtime of a different version', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    writeRuntimeVersion(root, 1); // simulate a legacy runtime
+    expect(() => initRuntime(root, TEMPLATES_DIR)).toThrow(/mx migrate/);
+  });
+
+  it('requireRuntime gates on version mismatch, unless allowVersionMismatch', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    expect(requireRuntime({ runtime: root })).toBe(root); // matches RUNTIME_VERSION
+
+    writeRuntimeVersion(root, RUNTIME_VERSION - 1);
+    expect(() => requireRuntime({ runtime: root })).toThrow(/mx migrate/);
+    // migrate's bypass:
+    expect(requireRuntime({ runtime: root, allowVersionMismatch: true })).toBe(root);
+  });
+
+  it('migrateRuntime upgrades a v1 runtime to the container layout and bumps VERSION', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    // Build a legacy v1 state: flat clone + worktree, VERSION=1.
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'x');
+    runGit(src, ['add', '-A']);
+    runGit(src, ['commit', '-qm', 'init']);
+    const flat = path.join(root, 'repos', 'app');
+    execFileSync('git', ['clone', '-q', src, flat], { stdio: 'ignore' });
+    seedWork(root, {
+      name: 'feat',
+      description: '',
+      worktrees: [{ repo: 'app', branch: 'feat', ports: {} }],
+    });
+    const flatWt = path.join(root, 'works', 'feat', 'app');
+    runGit(flat, ['worktree', 'add', '-q', '-b', 'feat', flatWt]);
+    writeRuntimeVersion(root, 1);
+
+    const res = migrateRuntime(root);
+    expect(res.from).toBe(1);
+    expect(res.to).toBe(RUNTIME_VERSION);
+    expect(res.applied).toEqual([{ from: 1, to: 2 }]);
+    expect(readRuntimeVersion(root)).toBe(2);
+    expect(fs.existsSync(path.join(root, 'repos', 'app', 'git', '.git'))).toBe(true);
+    // The worktree moved into wt/ and relinked; the flat path is gone.
+    const movedWt = path.join(root, 'works', 'feat', 'wt', 'app');
+    expect(fs.existsSync(flatWt)).toBe(false);
+    expect(fs.existsSync(movedWt)).toBe(true);
+    const branch = execFileSync('git', ['-C', movedWt, 'rev-parse', '--abbrev-ref', 'HEAD'], {
+      encoding: 'utf8',
+    }).trim();
+    expect(branch).toBe('feat');
+
+    // Idempotent: already current → no-op.
+    expect(migrateRuntime(root).applied).toEqual([]);
+  });
+
+  it('migrateRuntime rejects a runtime newer than the CLI supports', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    writeRuntimeVersion(root, RUNTIME_VERSION + 1);
+    expect(() => migrateRuntime(root)).toThrow(/Upgrade your mx CLI/);
+  });
+});
+
+describe('repo container layout + migration', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+  const runGit = (cwd: string, args: string[]) =>
+    execFileSync('git', args, { cwd, stdio: 'ignore' });
+
+  function srcRepo(): string {
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'x');
+    runGit(src, ['add', '-A']);
+    runGit(src, ['commit', '-qm', 'init']);
+    return src;
+  }
+
+  it('repoAdd clones into repos/<name>/git; repoInfo.path is the container', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, srcRepo(), 'app');
+    expect(fs.existsSync(path.join(repoGitDir(root, 'app'), '.git'))).toBe(true);
+    expect(repoInfo(root, 'app').path).toBe(path.join(root, 'repos', 'app'));
+    expect(repoInfo(root, 'app').branch).toBe('main');
+  });
+
+  it('migrateRepoLayout moves a legacy flat clone into git/ and relinks worktrees', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    // Simulate the OLD layout: clone directly into repos/app (flat) + a worktree.
+    const flat = path.join(root, 'repos', 'app');
+    execFileSync('git', ['clone', '-q', srcRepo(), flat], { stdio: 'ignore' });
+    const wt = path.join(root, 'works', 'feat', 'app');
+    fs.mkdirSync(path.join(root, 'works', 'feat'), { recursive: true });
+    runGit(flat, ['worktree', 'add', '-q', '-b', 'feat', wt]);
+    expect(fs.existsSync(path.join(flat, '.git'))).toBe(true);
+
+    const migrated = migrateRepoLayout(root);
+    expect(migrated).toEqual([path.join(root, 'repos', 'app')]);
+
+    // Clone now lives under git/; the container no longer holds .git directly.
+    expect(fs.existsSync(path.join(root, 'repos', 'app', 'git', '.git'))).toBe(true);
+    expect(fs.existsSync(path.join(flat, '.git'))).toBe(false);
+
+    // The pre-existing worktree relinked and still resolves to its branch.
+    const branch = execFileSync('git', ['-C', wt, 'rev-parse', '--abbrev-ref', 'HEAD'], {
+      encoding: 'utf8',
+    }).trim();
+    expect(branch).toBe('feat');
+
+    // Idempotent: a second run migrates nothing.
+    expect(migrateRepoLayout(root)).toEqual([]);
+  });
+});
+
+describe('repoFetch', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+  const runGit = (cwd: string, args: string[]) =>
+    execFileSync('git', args, { cwd, stdio: 'ignore' });
+  const sha = (cwd: string, ref: string) =>
+    execFileSync('git', ['-C', cwd, 'rev-parse', ref], { encoding: 'utf8' }).trim();
+
+  /** Source repo on `main` with one commit; pristine clone added to a runtime. */
+  function fixture(): { root: string; src: string; clone: string; name: string } {
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'x');
+    runGit(src, ['add', '-A']);
+    runGit(src, ['commit', '-qm', 'init']);
+
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, src, 'app');
+    return { root, src, clone: path.join(root, 'repos', 'app', 'git'), name: 'app' };
+  }
+
+  // Advance origin/main by one commit on the source repo.
+  function advanceSrc(src: string): void {
+    fs.writeFileSync(path.join(src, 'g.txt'), 'y');
+    runGit(src, ['add', '-A']);
+    runGit(src, ['commit', '-qm', 'second']);
+  }
+
+  it('fast-forwards the currently checked-out branch to origin', () => {
+    const { root, src, clone, name } = fixture();
+    advanceSrc(src);
+    repoFetch(root, name);
+    // Pristine is on main (its current branch), so main matches origin/main.
+    expect(sha(clone, 'main')).toBe(sha(clone, 'refs/remotes/origin/main'));
+    expect(sha(clone, 'main')).toBe(sha(src, 'main'));
+  });
+
+  it('does not fast-forward a non-current branch — only the checked-out one', () => {
+    const { root, src, clone, name } = fixture();
+    const mainBefore = sha(clone, 'main');
+    // Move the pristine clone off main onto a branch with no upstream.
+    runGit(clone, ['checkout', '-q', '-b', 'wip']);
+    advanceSrc(src); // origin/main advances
+
+    repoFetch(root, name);
+
+    // The fetch updates origin/main, but local main (not checked out) is left
+    // exactly where it was — only the current branch is fast-forwarded.
+    expect(sha(clone, 'main')).toBe(mainBefore);
+    expect(sha(clone, 'main')).not.toBe(sha(clone, 'refs/remotes/origin/main'));
+  });
+});
+
 describe('repoHealth / listRepoHealth', () => {
   const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
   const runGit = (cwd: string, args: string[]) =>
@@ -527,7 +839,7 @@ describe('repoHealth / listRepoHealth', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
     repoAdd(root, src, 'app');
-    return { root, src, clone: path.join(root, 'repos', 'app'), name: 'app' };
+    return { root, src, clone: path.join(root, 'repos', 'app', 'git'), name: 'app' };
   }
 
   it('a freshly cloned pristine repo is healthy', () => {

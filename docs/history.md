@@ -2,6 +2,23 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 2.0.0 — 2026-06-27
+
+**Runtime versioning + container repo layout — the first major.** Several intertwined changes that together cross to runtime **v2**:
+
+- **Runtime versioning.** A new `<runtime>/mx.json` file holds the layout version (`2`; absent = legacy v1). The CLI supports exactly one runtime version, mapped **CLI major ⇄ runtime version**. A **version gate** now precedes every runtime-touching command: on a mismatch it refuses with `RUNTIME_VERSION_MISMATCH` and points at `mx migrate`. The only commands allowed on a mismatched runtime are `mx migrate`, `mx update`, `mx help`, `mx version`. `mx init` stamps `mx.json` on a fresh runtime and refuses to adopt one whose version differs.
+- **Container repo layout.** Pristine clones moved from a flat `repos/<repo>/` to `repos/<repo>/git/`, with the container also holding per-repo scripts. `mx repo ls`/`info`/`health` report the container path.
+- **Work-folder restructure.** A work's worktrees moved from flat (`works/<work>/<repo>`) into `works/<work>/wt/<repo>`, and the work folder gained a stamped-once-then-user-owned `CLAUDE.md` (loads alongside the runtime `CLAUDE.md` for work-specific rules) plus three scratch dirs: `scripts/` (ad-hoc scripts), `files/` (keepable artifacts), `tmp/` (throwaway, deletable any time). The work-folder root is now reserved for mx-native files — sessions/users put non-mx files in `files/`/`tmp/`/`scripts/`, never the root. `.code-workspace` folder entries now point at `wt/<repo>` (name stays the repo name); `inferContext` reads the repo from the `wt/<repo>` segment.
+- **`mx update` → `mx sync` (rename).** The old re-stamp command is now `mx sync` (header "Synced runtime at …"); same behavior plus it backfills per-repo `hydrate.sh`/`health.sh`, the per-work scaffolding (`wt/`/`scripts/`/`files/`/`tmp/`/`sessions/`), the per-work `CLAUDE.md`, and per-work `.claude/settings.json` (all stamp-if-missing). **`mx update` is now a new command** that self-updates the CLI within its major (`npm i -g @roulabs/mx@^<major>`), detects a newer major and suggests the deliberate upgrade, and is *not* version-gated.
+- **`mx migrate` (new).** Upgrades an older runtime up to the supported version; validates the whole chain before mutating (`NO_MIGRATION` on a gap, `CLI_TOO_OLD` if the runtime is newer). The v1 → v2 step upgrades **both** layouts: it moves clones into `git/` (`git worktree repair`) **and** restructures every work — moving flat worktrees into `wt/` (`git worktree move`), creating the new scratch dirs, stamping the work `CLAUDE.md`, and rewriting the `.code-workspace` folder paths to `wt/<repo>`.
+- **Per-repo scripts (new).** `repos/<repo>/hydrate.sh` runs automatically after `worktree add` (cwd = new worktree; positional `$1`/`$2` + `MX_*` env; non-zero = warning); `--no-hydrate` skips it and `mx work … worktree hydrate <repo>` re-runs it (`HYDRATE_FAILED` on non-zero). `repos/<repo>/health.sh` augments `mx repo health` via a captured `extra` field, never affecting `healthy`/`issues`.
+- **Per-work context-index hook (new).** `mx work new` / `mx sync` generate `works/<feature>/.claude/settings.json`, a Claude Code `SessionStart` hook that loads `context/INDEX.json` into every session launched in the work folder.
+- **`mx work new -o` / `--open` (macOS).** Opens a fullscreen Terminal in the work folder plus a fullscreen editor (Cursor → VS Code) on the workspace; non-macOS downgrades to a warning (`UNSUPPORTED`).
+- **Listing paths.** `mx work ls` and `mx repo ls` show the folder path (human collapses `$HOME` to `~`; porcelain adds an absolute `path` field).
+- **New error codes:** `RUNTIME_VERSION_MISMATCH`, `CLI_TOO_OLD`, `NO_MIGRATION`, `BAD_VERSION`, `HYDRATE_FAILED`, `UNSUPPORTED`.
+
+**Breaking:** the on-disk runtime layout changed (clones moved to `git/`; each work's worktrees moved to `wt/<repo>`) — existing runtimes must run `mx migrate` after upgrading the CLI, which restructures both repos and works in one step; `mx update` no longer means "re-stamp" (that's `mx sync` now).
+
 ## 1.11.0 — 2026-06-12
 
 **Documented the self-hosting pattern in both CLAUDE.md files.** Source CLAUDE.md gained a "## Self-hosting" section covering the dogfooding setup, the two-binary distinction (global `mx` for productive operations, `pnpm mx` for testing-only sandbox use), and direnv convention. Runtime CLAUDE.md template's "What this runtime is for" now lists two valid setups — mx-source elsewhere (default) or hosted as a work in this runtime — and names the rule that still applies under self-hosting: never run the worktree's locally-built CLI against this runtime, use a sandbox. Pure docs; no code. Minor bump because the runtime template change requires a `mx update` to propagate.
@@ -102,7 +119,8 @@ Checks: on-default-branch, uncommitted changes, untracked files, ahead/behind or
 
 ## Roadmap / not done yet
 
-- `mx open` (terminal + editor layout)
 - Per-runtime support for non-Claude agents (templates for `AGENTS.md` for Codex, `.cursorrules` for Cursor, etc.) — the storage layer is already agent-agnostic; the instruction-file layer is the per-agent adapter
 - Optional: isolated per-env state (separate DB schema / container) for safe parallel runs
 - Release script could refuse to release from a non-`main` branch (or push to main explicitly when on a feature branch) — see the [release](release.md) "gotcha 5"
+
+*(Done in 2.0.0: terminal + editor layout — shipped as `mx work new -o` / `--open` on macOS.)*
