@@ -15,7 +15,7 @@ export interface Flags {
   force: boolean;
   /** Skip interactive confirmation prompts (currently: `mx work archive --yes`). */
   yes: boolean;
-  /** Include archived items alongside active ones (currently: `mx status --all`, `mx work ls --all`). */
+  /** Include archived items alongside active ones (currently: `mx info --all`, `mx work ls --all`). */
   all: boolean;
   /** Restrict to archived items only (currently: `mx work ls --archived`). */
   archived: boolean;

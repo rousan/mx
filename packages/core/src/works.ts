@@ -106,7 +106,7 @@ export function workNew(root: string, name: string, description = ''): WorkNewRe
 
 /**
  * A work as surfaced by listings: the full manifest plus a count of session
- * summaries on disk. Same shape used by `mx status`'s works section
+ * summaries on disk. Same shape used by `mx info`'s works section
  * (re-exported there as `StatusWork`).
  *
  * Note (1.6.0+): `worktrees` is now the full array of `Worktree` records

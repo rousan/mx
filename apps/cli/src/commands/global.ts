@@ -141,7 +141,7 @@ function renderSelfUpdate(info: SelfUpdateInfo): void {
 }
 
 /**
- * Render `mx status` in a calm, monochrome, sectioned layout.
+ * Render `mx info` in a calm, monochrome, sectioned layout.
  *
  * Three sections — context, repos, works — each with computed column widths
  * so names line up vertically. Only typography weight (bold + dim) carries

@@ -18,7 +18,7 @@ export interface StatusContext {
 }
 
 /**
- * A work as surfaced by `mx status` — alias of `WorkSummary` (the full
+ * A work as surfaced by `mx info` — alias of `WorkSummary` (the full
  * manifest plus session count). Kept as a separate export name so callers
  * that imported `StatusWork` historically still resolve.
  */
