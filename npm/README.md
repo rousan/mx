@@ -52,7 +52,7 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 | `mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]` | add a worktree (runs the repo's `hydrate.sh` unless `--no-hydrate`) |
 | `mx work -n <name> worktree ls\|rm\|hydrate <repo>` | list / remove / re-run hydrate for a worktree |
 | `mx work -n <name> port set\|unset\|ls <repo> <service> [<port>]` | allocate/release ports |
-| `mx work -n <name> archive [--yes]` / `unarchive` | soft-delete / restore a work (keeps branches) |
+| `mx work -n <name> archive [--yes]` / `unarchive` | soft-delete / restore a work (keeps branches); runs the work's `hooks/{pre,post}-{archive,unarchive}.sh` (a `pre-*` non-zero exit aborts) |
 | `mx work -n <name> destroy --force` | permanently remove the work folder (keeps branches) |
 
 ## License

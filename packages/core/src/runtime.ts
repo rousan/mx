@@ -138,6 +138,47 @@ export const worktreePath = (root: string, name: string, repo: string): string =
   path.join(worktreesDir(root, name), repo);
 
 /**
+ * The work-lifecycle events that fire a per-work hook. Each maps to a
+ * `<work>/hooks/<event>.sh` script: a `pre-*` hook runs before the operation
+ * mutates anything (and can abort it by exiting non-zero), a `post-*` hook runs
+ * after it succeeds. The set is intentionally small for now (archive /
+ * unarchive) but the machinery is generic, so new events slot in here.
+ */
+export const WORK_HOOK_EVENTS = [
+  'pre-archive',
+  'post-archive',
+  'pre-unarchive',
+  'post-unarchive',
+] as const;
+
+/**
+ * A single work-lifecycle hook event name.
+ */
+export type WorkHookEvent = (typeof WORK_HOOK_EVENTS)[number];
+
+/**
+ * Path to a work's `hooks/` directory, holding its lifecycle hook scripts.
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ * @returns Absolute path to `works/<name>/hooks`.
+ */
+export const workHooksDir = (root: string, name: string): string =>
+  path.join(workDir(root, name), 'hooks');
+
+/**
+ * Path to a single work lifecycle hook script
+ * (`works/<name>/hooks/<event>.sh`).
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ * @param event - Lifecycle event the script handles.
+ * @returns Absolute path to the hook script.
+ */
+export const workHookScript = (root: string, name: string, event: WorkHookEvent): string =>
+  path.join(workHooksDir(root, name), `${event}.sh`);
+
+/**
  * The runtime layout version this build of mx supports. A runtime's `VERSION`
  * file must match this for commands to run; `mx migrate` upgrades older
  * runtimes up to it. Tracks the CLI major version (CLI 2.x ⇄ runtime v2).
@@ -549,7 +590,8 @@ export function ensureWorkScaffolding(root: string, workName: string): string[] 
   //   files/   — artifacts to keep
   //   tmp/     — throwaway scratch (may be deleted anytime)
   //   sessions/— session summaries
-  for (const d of ['wt', 'scripts', 'files', 'tmp', 'sessions']) {
+  //   hooks/   — per-work lifecycle hook scripts (archive/unarchive)
+  for (const d of ['wt', 'scripts', 'files', 'tmp', 'sessions', 'hooks']) {
     const p = path.join(wd, d);
     if (!exists(p)) {
       fs.mkdirSync(p, { recursive: true });
@@ -573,6 +615,17 @@ export function ensureWorkScaffolding(root: string, workName: string): string[] 
     fs.mkdirSync(path.dirname(settings), { recursive: true });
     fs.writeFileSync(settings, workClaudeSettings(root));
     created.push(settings);
+  }
+  // Per-work lifecycle hook scripts (stamp-if-missing; user-editable, executable).
+  // Each is a documented no-op that exits 0 so an un-customized hook never blocks
+  // the operation it wraps. The hooks/ directory is created in the loop above.
+  for (const event of WORK_HOOK_EVENTS) {
+    const hook = workHookScript(root, workName, event);
+    if (!exists(hook)) {
+      fs.writeFileSync(hook, workHookScriptBody(event));
+      fs.chmodSync(hook, 0o755);
+      created.push(hook);
+    }
   }
   return created;
 }
@@ -623,6 +676,55 @@ function workClaudeSettings(root: string): string {
     },
   };
   return JSON.stringify(settings, null, 2) + '\n';
+}
+
+/**
+ * Default contents for a per-work lifecycle hook script — a documented no-op
+ * that exits 0, so an un-customized hook never blocks the operation it wraps.
+ * Stamped once per event into `<work>/hooks/`; the user fills in the body. The
+ * comment header is tailored to the event (which operation, pre vs post, what's
+ * on disk at that moment, and what a non-zero exit does).
+ *
+ * @param event - The lifecycle event this script handles.
+ * @returns The default hook script text.
+ */
+function workHookScriptBody(event: WorkHookEvent): string {
+  const isPre = event.startsWith('pre-');
+  const op = event.replace(/^(pre|post)-/, ''); // "archive" | "unarchive"
+  const failNote = isPre
+    ? `# A NON-ZERO EXIT ABORTS the ${op}: nothing is mutated and mx errors with\n# HOOK_FAILED. Use this to veto (e.g. block on unpushed commits).`
+    : `# Runs only after the ${op} succeeds. A non-zero exit is reported as a\n# warning; it cannot undo the ${op}.`;
+  let stateNote: string;
+  if (op === 'archive') {
+    stateNote = isPre
+      ? '# State when this runs: worktrees still present under wt/.'
+      : '# State when this runs: worktrees removed, branches kept, work flagged archived.';
+  } else {
+    stateNote = isPre
+      ? '# State when this runs: work is archived, no worktrees on disk yet.'
+      : '# State when this runs: worktrees re-created under wt/, archive flag cleared.';
+  }
+  return `#!/usr/bin/env bash
+#
+# mx ${event} hook for this work.
+#
+# Runs around \`mx work -n <work> ${op}\`.
+${failNote}
+${stateNote}
+#
+# mx runs this with the work folder as the working directory and passes context
+# both as positional args and environment variables:
+#
+#   $1 / $MX_EVENT       the lifecycle event ("${event}")
+#   $2 / $MX_WORK_PATH   absolute path to the work folder
+#   $MX_WORK             work name
+#   $MX_RUNTIME          runtime root
+#
+set -euo pipefail
+
+# No-op by default. Add your ${event} logic below.
+exit 0
+`;
 }
 
 /**

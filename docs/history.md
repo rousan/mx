@@ -2,6 +2,15 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 2.2.0 — 2026-06-28
+
+**Per-work lifecycle hooks for archive/unarchive.** Each work now has a `hooks/` folder with four mx-stamped, executable **no-op** scripts: `pre-archive.sh`, `post-archive.sh`, `pre-unarchive.sh`, `post-unarchive.sh`. mx runs them around `mx work archive` / `mx work unarchive`:
+
+- A **`pre-*`** hook runs before anything is mutated (worktrees still on disk for archive; none yet for unarchive). A non-zero exit **aborts** the operation with the new error code `HOOK_FAILED` — a veto point (e.g. block archive when a branch has unpushed commits).
+- A **`post-*`** hook runs after the operation succeeds; a non-zero exit is a warning only.
+
+Each runs with the work folder as cwd and gets context via positional args (`$1` event, `$2` work path) and env vars (`MX_EVENT`, `MX_WORK`, `MX_WORK_PATH`, `MX_RUNTIME`). The scripts are mx-owned but user-editable; `mx work new` stamps them, and `mx sync` backfills `hooks/` (stamp-if-missing) on any existing v2 runtime — **no migration or version bump needed**, so this ships as a minor. New: `WORK_HOOK_EVENTS` / `workHooksDir` / `workHookScript` in `@mx/core`, the CLI runner `apps/cli/src/workhooks.ts`, and the `HOOK_FAILED` error code.
+
 ## 2.1.1 — 2026-06-28
 
 Docs/comment cleanup only — no behavior change. Fixed lingering `mx status` references (renamed to `mx info` in 2.1.0) in code comments and the CLAUDE.md command list, and corrected `docs/architecture.md`'s stale "no release workflow" claim (the CI release workflow has existed since 2.0.0).
