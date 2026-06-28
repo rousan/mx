@@ -44,7 +44,9 @@ function need(v: string | undefined | null, msg: string): string {
  * @param flags - Parsed flags.
  */
 export function dispatchWork(positionals: string[], flags: Flags): void {
-  const action = positionals[1];
+  // `mx work -n <name> -o` (no explicit action) is shorthand for `… open`.
+  let action = positionals[1];
+  if (!action && flags.open) action = 'open';
 
   if (action === 'new') {
     const root = requireRuntime({ runtime: flags.runtime });
@@ -162,6 +164,23 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       // Raw path — meant for shell substitution, no styling.
       const res = workPath(root, name);
       emit(() => console.log(res.path), res);
+      return;
+    }
+    case 'open': {
+      // Open an existing work's dev layout (same as `mx work new -o`): a
+      // fullscreen Terminal in the work folder + the editor on the workspace.
+      const res = workPath(root, name); // throws NO_WORK if it doesn't exist
+      try {
+        openWorkLayout(res.path, workspaceFile(root, name));
+      } catch (e) {
+        const msg = e instanceof MxError ? e.message : String(e);
+        process.stderr.write(`${warn()} ${dim(`could not open layout: ${msg}`)}\n`);
+        return;
+      }
+      emit(
+        () => console.log(`${check()} opened ${bold(name)} ${dim('(Terminal + editor)')}`),
+        { work: name, opened: true },
+      );
       return;
     }
     case 'describe': {

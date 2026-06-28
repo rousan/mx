@@ -266,6 +266,10 @@ cd "$(mx work -n feat path)"
 
 Plain output, no decoration.
 
+### `mx work -n <name> open` (or `mx work -n <name> -o`)
+
+Open an **existing** work's dev layout — the same thing `mx work new -o` does at creation: a fullscreen Terminal `cd`'d into the work folder plus a fullscreen editor (Cursor, falling back to VS Code) on the work's `.code-workspace`. macOS only; on other platforms (or a window-management failure) it warns and is a no-op. `mx work -n <name> -o` is shorthand for `… open`.
+
 ### `mx work -n <name> describe <text>`
 
 Update the work's description.
