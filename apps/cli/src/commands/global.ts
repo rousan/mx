@@ -188,11 +188,7 @@ function renderStatus(data: StatusResult): void {
   const visibleArchived = data.works.filter((w) => w.isArchived === true);
   const visibleActive = data.works.filter((w) => w.isArchived !== true);
   const hiddenArchived = data.archivedWorksCount - visibleArchived.length;
-  const worksCount =
-    data.archivedWorksCount > 0
-      ? dim(`(${visibleActive.length} active, ${data.archivedWorksCount} archived${hiddenArchived > 0 ? ` — pass --all to show` : ''})`)
-      : dim(`(${data.works.length})`);
-  console.log(`  ${bold('works')}  ${worksCount}`);
+  console.log(`  ${bold('works')}`);
 
   if (data.works.length === 0) {
     const empty =

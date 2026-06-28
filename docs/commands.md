@@ -21,7 +21,7 @@ Prints a contextual hint about `$MX_RUNTIME`:
 
 Show the runtime overview: path + version, context entry count, repos, works. The header shows the runtime layout version (`mx vN`); repos and works each show their folder path (home-collapsed to `~`). Porcelain output includes a top-level `version` field.
 
-By default shows **active works only**; pass `--all` to include archived. The works section header still says `(N active, M archived)` even when archived are hidden so you know they exist.
+By default shows **active works only**; pass `--all` to include archived.
 
 Layout:
 
@@ -39,7 +39,7 @@ Layout:
         ~/mx/repos/app
         main  git@github.com:acme/app.git
 
-  works  (4 active, 2 archived — pass --all to show)
+  works
     • auth-rotation
         ~/mx/works/auth-rotation
         (no worktrees)
