@@ -196,16 +196,7 @@ Purely-local health check. **No network, no fetch.** Surfaces drift from the exp
 
 These structured checks are mx's built-in **typed source of truth** for repo health. In addition, `mx repo health` runs the central `repo-health` hook (`<runtime>/hooks/repo-health`) with `MX_REPO` set and captures its stdout into a separate `extra` field — see [Hooks](#hooks). A missing, empty, or failing hook yields `extra: null` and never affects `healthy` / `issues`.
 
-**List mode** (no `-n`): one line per repo with ✓/⚠ at the start, issues summarized inline:
-
-```
-⚠ analytics      2 untracked files
-✓ app          
-⚠ web-marketing  1 commit behind origin/main
-✓ worker       
-```
-
-**Detail mode** (`-n <name>`): structured per-metric block with ✓/⚠ markers aligned in a column:
+Both forms render the **same per-repo detail block** — a structured per-metric block with ✓/⚠ markers aligned in a column. `-n <name>` shows one repo; without `-n`, every repo's block is printed in turn (alphabetical), separated by a blank line — so you see identical info either way.
 
 ```
 worker
@@ -216,7 +207,7 @@ worker
   ahead of origin     0 commits     ✓
   behind of origin    1 commit      ⚠  run `mx repo -n worker fetch`
   last fetched        2 hours ago    
-  worktrees in works  1                used by: checkout-revamp
+  worktrees in works  1
 
   repo-health
     <captured stdout of the repo-health hook, if it produced any>

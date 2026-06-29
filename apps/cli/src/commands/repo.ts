@@ -233,14 +233,24 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
       return;
     }
     case 'health': {
-      // No -n → list mode (all repos, ✓/⚠ prefix). With -n (or cwd) → detail mode.
+      // With -n (or cwd) → one repo's detail block. Without → the same detail
+      // block for every repo, one after another (so both views match).
       const name = flags.name || ctxRepo;
       if (name) {
         const h = repoHealth(root, name);
         emit(() => renderHealthDetail(h), h);
       } else {
         const list = listRepoHealth(root);
-        emit(() => renderHealthList(list), list);
+        emit(() => {
+          if (list.length === 0) {
+            console.log(dim('no repos yet — `mx repo add <git-url>`'));
+            return;
+          }
+          list.forEach((h, i) => {
+            if (i > 0) console.log();
+            renderHealthDetail(h);
+          });
+        }, list);
       }
       return;
     }
@@ -272,26 +282,6 @@ function relativeTime(iso: string | null): string {
   if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
   const years = Math.floor(months / 12);
   return `${years} year${years === 1 ? '' : 's'} ago`;
-}
-
-/**
- * Render the list-mode `mx repo health` output: one line per repo,
- * prefixed with ✓ for healthy and ⚠ for any issues.
- *
- * @param list - One health snapshot per repo.
- */
-function renderHealthList(list: RepoHealth[]): void {
-  if (list.length === 0) {
-    console.log(dim('no repos yet — `mx repo add <git-url>`'));
-    return;
-  }
-  const nameW = Math.max(...list.map((h) => h.name.length));
-  for (const h of list) {
-    const marker = h.healthy ? check() : warn();
-    const name = h.name.padEnd(nameW);
-    const detail = h.healthy ? '' : `  ${dim(h.issues.join('; '))}`;
-    console.log(`${marker} ${name}${detail}`);
-  }
 }
 
 /**
@@ -350,11 +340,9 @@ function renderHealthDetail(h: RepoHealth): void {
     (h.behindOfOrigin ?? 0) > 0 ? `run \`mx repo -n ${h.name} fetch\`` : undefined,
   );
   addRow('last fetched', relativeTime(h.lastFetchedAt));
-  const usedByCount = h.worktreesInWorks.length;
   rows.push({
     label: 'worktrees in works',
-    value: String(usedByCount),
-    hint: usedByCount ? `used by: ${h.worktreesInWorks.join(', ')}` : undefined,
+    value: String(h.worktreesInWorks.length),
   });
 
   // Align the marker column by padding values to the widest plain length.

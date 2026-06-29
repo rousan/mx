@@ -47,7 +47,7 @@ Key files in `apps/cli/src/`:
 - `open.ts` — the macOS `mx work new -o` / `mx work open` helper (fullscreen Terminal in the work folder)
 - `help.ts` — `mx help` text
 - `commands/global.ts` — `init`, `status`, `sync`, `update` (self-update, then `autoSyncAfterUpdate` shells the freshly-installed global `mx sync`), `migrate`, plus `renderStatus()`
-- `commands/repo.ts` — `add`, `new` (local repo; `--quick` chains a `dev-<name>` work + `develop` worktree + optional `-o` open), `ls`, `fetch` (wrapped in `pre/post-repo-fetch` hooks), `info`, `health`, `rm`, plus `renderHealthList` / `renderHealthDetail` (detail renders the captured `repo-health` hook output)
+- `commands/repo.ts` — `add`, `new` (local repo; `--quick` chains a `dev-<name>` work + `develop` worktree + optional `-o` open), `ls`, `fetch` (wrapped in `pre/post-repo-fetch` hooks), `info`, `health` (renders `renderHealthDetail` per repo — one repo with `-n`, all repos otherwise), `rm` (`renderHealthDetail` renders the captured `repo-health` hook output)
 - `commands/work.ts` — `new` (incl. `-o`), `ls`, `info`, `path`, `describe`, `worktree {add [<name>],ls,rm}` (fires the worktree-create/remove hooks; no `hydrate` subcommand), `port {set,unset,ls}` (by worktree name), `archive`, `unarchive` (fire the work-archive/unarchive hooks), `destroy`
 - `commands/bin.ts` — `mx bin` / `mx bins`: `ls` (tags shipped vs user bins by checking the bundled `templates/bin/`, flags non-executable ones, reports PATH membership) and `path`; dispatched from `main.ts`
 - `tsup.config.ts` — bundles `src/bin/mx.ts` → `../../npm/bin/mx.js`; on success, copies templates/ and LICENSE into `npm/`
