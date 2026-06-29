@@ -6,7 +6,6 @@ import {
   workInfo,
   workDescribe,
   workPath,
-  workspaceFile,
   worktreeAdd,
   worktreeList,
   worktreeRemove,
@@ -61,7 +60,7 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       // Best-effort: the work is already created, so a window-management
       // failure (or a non-macOS host) is a warning, never a hard error.
       try {
-        openWorkLayout(res.path, workspaceFile(root, res.name));
+        openWorkLayout(res.path);
       } catch (e) {
         const msg = e instanceof MxError ? e.message : String(e);
         process.stderr.write(`${warn()} ${dim(`could not open layout: ${msg}`)}\n`);
@@ -172,14 +171,14 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       // fullscreen Terminal in the work folder + the editor on the workspace.
       const res = workPath(root, name); // throws NO_WORK if it doesn't exist
       try {
-        openWorkLayout(res.path, workspaceFile(root, name));
+        openWorkLayout(res.path);
       } catch (e) {
         const msg = e instanceof MxError ? e.message : String(e);
         process.stderr.write(`${warn()} ${dim(`could not open layout: ${msg}`)}\n`);
         return;
       }
       emit(
-        () => console.log(`${check()} opened ${bold(name)} ${dim('(Terminal + editor)')}`),
+        () => console.log(`${check()} opened ${bold(name)} ${dim('(Terminal)')}`),
         { work: name, opened: true },
       );
       return;

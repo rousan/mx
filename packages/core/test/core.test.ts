@@ -19,6 +19,8 @@ import {
   writeRuntimeVersion,
   RUNTIME_VERSION,
   repoGitDir,
+  runtimeBinDir,
+  listRuntimeBins,
   workHookScript,
   WORK_HOOK_EVENTS,
   readWork,
@@ -38,6 +40,7 @@ import {
   listRepoHealth,
   statusRuntime,
 } from '../src/index';
+import { compareVersions, maxVersion } from '../src/semver';
 import { resolveBase } from '../src/git';
 import type { Work } from '../src/types';
 
@@ -68,6 +71,31 @@ const originalCwd = process.cwd();
 
 afterEach(() => {
   process.chdir(originalCwd);
+});
+
+describe('compareVersions / maxVersion', () => {
+  it('orders by major, then minor, then patch', () => {
+    expect(compareVersions('2.5.0', '2.3.0')).toBe(1);
+    expect(compareVersions('2.3.0', '2.5.0')).toBe(-1);
+    expect(compareVersions('2.5.0', '2.5.0')).toBe(0);
+    expect(compareVersions('3.0.0', '2.9.9')).toBe(1);
+    expect(compareVersions('2.10.0', '2.9.0')).toBe(1); // numeric, not lexical
+    expect(compareVersions('2.1.1', '2.1.0')).toBe(1);
+  });
+
+  it('treats missing components as 0 and ignores pre-release/build suffixes', () => {
+    expect(compareVersions('2', '2.0.0')).toBe(0);
+    expect(compareVersions('2.0', '2.0.0')).toBe(0);
+    expect(compareVersions('2.5.0-beta.1', '2.5.0')).toBe(0); // core triple only
+  });
+
+  it('maxVersion picks the highest regardless of input order, null when empty', () => {
+    // The bug this guards: npm view output is not assumed ascending.
+    expect(maxVersion(['2.0.0', '2.5.0', '2.1.1', '2.3.0', '2.4.0'])).toBe('2.5.0');
+    expect(maxVersion(['2.5.0', '2.3.0'])).toBe('2.5.0');
+    expect(maxVersion(['2.3.0'])).toBe('2.3.0');
+    expect(maxVersion([])).toBeNull();
+  });
 });
 
 describe('repoNameFromUrl', () => {
@@ -556,6 +584,59 @@ describe('per-work context-index hook', () => {
   });
 });
 
+describe('runtime bin directory', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+
+  it('initRuntime stamps bin/ with the shipped utility bins, executable', () => {
+    const root = path.join(tmp(), 'rt');
+    const res = initRuntime(root, TEMPLATES_DIR);
+    const binDir = runtimeBinDir(root);
+    expect(res.created).toContain(binDir);
+    const bins = listRuntimeBins(root);
+    const names = bins.map((b) => b.name);
+    // Whatever ships in templates/bin should land here (currently dcs + lcs).
+    expect(names).toContain('dcs');
+    expect(names).toContain('lcs');
+    expect(names).toEqual([...names].sort()); // sorted
+    expect(bins.every((b) => b.executable)).toBe(true);
+  });
+
+  it('listRuntimeBins is empty when there is no bin/ directory', () => {
+    const root = tmp(); // bare dir, never inited
+    expect(listRuntimeBins(root)).toEqual([]);
+  });
+
+  it('syncRuntime backfills bin/ when missing', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const binDir = runtimeBinDir(root);
+    // Simulate a pre-bin runtime: remove bin/ entirely.
+    fs.rmSync(binDir, { recursive: true, force: true });
+    expect(fs.existsSync(binDir)).toBe(false);
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    expect(res.updated).toContain(path.join(binDir, 'dcs'));
+    expect(fs.existsSync(path.join(binDir, 'dcs'))).toBe(true);
+  });
+
+  it('syncRuntime re-stamps shipped bins (overwrites) but leaves user bins alone', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const binDir = runtimeBinDir(root);
+    const tmplDcs = fs.readFileSync(path.join(TEMPLATES_DIR, 'bin', 'dcs'), 'utf8');
+    // Edit a shipped bin (dcs) and add a user-owned bin (mytool).
+    fs.writeFileSync(path.join(binDir, 'dcs'), 'edited\n');
+    fs.writeFileSync(path.join(binDir, 'mytool'), 'user-content\n');
+
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    // Shipped bin is mx-owned: always re-stamped back to the template content.
+    expect(res.updated).toContain(path.join(binDir, 'dcs'));
+    expect(fs.readFileSync(path.join(binDir, 'dcs'), 'utf8')).toBe(tmplDcs);
+    // User bin is never touched.
+    expect(res.updated).not.toContain(path.join(binDir, 'mytool'));
+    expect(fs.readFileSync(path.join(binDir, 'mytool'), 'utf8')).toBe('user-content\n');
+  });
+});
+
 describe('repoNew (local repo)', () => {
   const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
 
@@ -613,35 +694,15 @@ describe('repoNew (local repo)', () => {
   });
 });
 
-describe('per-work bin directory', () => {
+describe('work scaffolding has no per-work bin/', () => {
   const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
 
-  it('workNew creates an empty bin/ directory', () => {
+  it('workNew does not create a per-work bin/ (use scripts/ instead)', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
     const res = workNew(root, 'feat');
-    const bin = path.join(res.path, 'bin');
-    expect(fs.statSync(bin).isDirectory()).toBe(true);
-    expect(fs.readdirSync(bin)).toEqual([]); // starts empty
-  });
-
-  it('syncRuntime backfills bin/ for an existing work, preserving its contents', () => {
-    const root = path.join(tmp(), 'rt');
-    initRuntime(root, TEMPLATES_DIR);
-    workNew(root, 'feat');
-    const bin = path.join(root, 'works', 'feat', 'bin');
-    // Simulate a pre-bin work: remove bin/, then verify sync recreates it.
-    fs.rmSync(bin, { recursive: true, force: true });
-    expect(fs.existsSync(bin)).toBe(false);
-    const res = syncRuntime(root, TEMPLATES_DIR);
-    expect(res.updated).toContain(bin);
-    expect(fs.existsSync(bin)).toBe(true);
-
-    // Non-destructive: a binary already in bin/ survives a second sync.
-    fs.writeFileSync(path.join(bin, 'tool'), 'x');
-    const res2 = syncRuntime(root, TEMPLATES_DIR);
-    expect(res2.updated).not.toContain(bin);
-    expect(fs.existsSync(path.join(bin, 'tool'))).toBe(true);
+    expect(fs.existsSync(path.join(res.path, 'bin'))).toBe(false);
+    expect(fs.existsSync(path.join(res.path, 'scripts'))).toBe(true);
   });
 });
 

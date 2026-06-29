@@ -2,6 +2,20 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 2.7.0 — 2026-06-29
+
+Four changes in one release: a runtime-wide `bin/`, `mx update` auto-syncing, removal of the redundant per-work `bin/`, and `-o` opening only the Terminal.
+
+**Runtime-wide `bin/` for utility executables.** New **`<runtime>/bin/`** — a single directory of utility executables shared across every work, meant to be on your `PATH`. mx ships `dcs` (delete a Claude Code session by `/rename` name or id) and `lcs` (list all Claude Code sessions) from the CLI's bundled `templates/bin/`. Shipped bins are **mx-owned: re-stamped (overwritten) on every `mx init`/`mx sync`**, like the runtime `CLAUDE.md`, so improvements ship to you automatically; **your own bins are never touched** (to customize a shipped one, copy it to a new name). New **`mx bin`** (alias `mx bins`): `mx bin ls` lists every bin tagged `built-in` vs `user`, flags non-executable ones, and reports whether `bin/` is on `PATH`; `mx bin path` prints the directory for `export PATH="$(mx bin path):$PATH"`. New `runtimeBinDir` / `listRuntimeBins` and `stampRuntimeBins` in `@mx/core`, `commands/bin.ts` in the CLI.
+
+**`mx update` now auto-runs `mx sync`.** After a successful in-major self-update, `mx update` shells out to the freshly-installed global `mx` to run `mx sync`, so the runtime immediately picks up the new version's templates and scaffolding (runtime `CLAUDE.md`, shipped `bin/`, etc.). Best-effort — a sync failure prints a hint rather than failing the update; in `--porcelain` mode the sync runs silently. Nothing happens when you're already on the latest in-major version.
+
+**Removed the per-work `bin/`** added in 2.3.0 — it was redundant with each work's `scripts/`. New works no longer get a `bin/`; `ensureWorkScaffolding` dropped it. Existing per-work `bin/` directories are left exactly as they are — `mx sync` neither creates, touches, nor deletes them.
+
+**`-o`/`--open` now opens only the Terminal.** Previously `mx work new -o`, `mx work open`, and `mx repo new --quick -o` launched a fullscreen Terminal **and** a fullscreen editor (Cursor → VS Code) on the work's `.code-workspace`. The editor launch is dropped — `-o` just opens a fullscreen Terminal `cd`'d into the work folder; open your editor yourself. The `.code-workspace` file is still generated, so you can open it whenever you like. `openWorkLayout` lost its `workspace` parameter.
+
+Minor — no runtime-layout change.
+
 ## 2.5.0 — 2026-06-28
 
 **`mx repo new` — create a local repo, no remote.** The counterpart to `mx repo add` for quick experiments and throwaway apps you don't want to push anywhere: `mx repo new <name>` runs `git init` on `main`, writes a starter `README.md`, makes an initial commit (so `main` exists and worktrees can fork from it), and stamps the per-repo `hydrate.sh`/`health.sh` — removing the manual `mkdir` + `git init` + commit dance. The commit uses your git identity, falling back to a neutral `mx <mx@localhost>` only when none is configured.
@@ -14,7 +28,7 @@ What each release brought. Reverse-chronological. Dates reflect when the corresp
 
 ## 2.3.0 — 2026-06-28
 
-**Per-work `bin/` directory.** Every work now gets a `bin/` folder alongside `scripts/`, `files/`, `tmp/`, and `hooks/` — a place for executables and binaries a session builds or downloads (compiled tools, fetched CLIs, helper binaries). It starts empty and is owned by the user/agent; mx just creates the directory. `mx work new` creates it and `mx sync` backfills it (stamp-if-missing) on existing v2 runtimes — no migration or version bump needed, so it ships as a minor. Added by listing `bin` in `ensureWorkScaffolding`; `inferContext` treats it like the other non-`wt/` work subdirs (implies the work, no repo).
+**Per-work `bin/` directory.** _(Reverted in 2.7.0 — redundant with `scripts/`.)_ Every work now gets a `bin/` folder alongside `scripts/`, `files/`, `tmp/`, and `hooks/` — a place for executables and binaries a session builds or downloads (compiled tools, fetched CLIs, helper binaries). It starts empty and is owned by the user/agent; mx just creates the directory. `mx work new` creates it and `mx sync` backfills it (stamp-if-missing) on existing v2 runtimes — no migration or version bump needed, so it ships as a minor. Added by listing `bin` in `ensureWorkScaffolding`; `inferContext` treats it like the other non-`wt/` work subdirs (implies the work, no repo).
 
 ## 2.2.0 — 2026-06-28
 

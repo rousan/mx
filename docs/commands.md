@@ -60,7 +60,7 @@ Re-sync the runtime with the current mx version (this is the command formerly ca
 
 - re-stamps `<runtime>/CLAUDE.md` from `templates/CLAUDE.md` (always rewritten, mx-owned)
 - stamps `<runtime>/context/INDEX.json` **only if missing** (existing index content is preserved)
-- backfills mx-owned structural directories across every work — `<work>/wt/`, `scripts/`, `bin/`, `files/`, `tmp/`, `hooks/`, and `sessions/` for any work that pre-dates that scaffolding (plus the per-repo `hydrate.sh`/`health.sh`, the work `CLAUDE.md`, `.claude/settings.json`, and the lifecycle hook scripts — all stamp-if-missing)
+- backfills the runtime `bin/` and its shipped utility bins, and mx-owned structural directories across every work — `<work>/wt/`, `scripts/`, `files/`, `tmp/`, `hooks/`, and `sessions/` for any work that pre-dates that scaffolding (plus the per-repo `hydrate.sh`/`health.sh`, the work `CLAUDE.md`, `.claude/settings.json`, and the lifecycle hook scripts — all stamp-if-missing)
 - stamps the per-work `CLAUDE.md`, **stamp-if-missing** (stamped once, then user-owned — see [The work folder](runtime-model.md#the-work-folder))
 - backfills per-repo `hydrate.sh` / `health.sh` in each repo container, **stamp-if-missing** and executable (see [Per-repo scripts](#per-repo-scripts))
 - generates each work's `.claude/settings.json` context-index hook, **stamp-if-missing** (see [Per-work context-index hook](#per-work-context-index-hook))
@@ -89,6 +89,8 @@ A newer major is available: @roulabs/mx@3.
 ```
 
 Crossing a major is always a deliberate user action — `mx update` never does it automatically (a new major implies a runtime migration). `mx update` is **not** subject to the version gate: you may need it precisely because your runtime is a newer major than the CLI on `$PATH`. If `npm` is missing or the install fails, it prints the manual command for you to run instead.
+
+**Auto-sync after update.** When an in-major update actually installs a newer version, `mx update` then runs **`mx sync`** automatically so the runtime picks up the new version's templates and scaffolding (the runtime `CLAUDE.md`, shipped `bin/` utilities, per-work/per-repo files). It does this by shelling out to the freshly-installed global `mx` — the running process is still the pre-update code, so an in-process sync would stamp the *old* templates. Since the update stays in-major, the runtime version still matches and sync isn't gated. It's best-effort: if the sync can't run (e.g. no runtime at the resolved path) `mx update` prints a hint rather than failing. In `--porcelain` mode the sync runs silently so the update's JSON stays the only object on stdout. (Nothing happens when you're already on the latest in-major version.)
 
 ### `mx migrate [--dry-run]`
 
@@ -139,7 +141,7 @@ Also stamps the per-repo scripts `hydrate.sh` and `health.sh` into the container
 
 Create a brand-new **local** repo (no remote) at `<runtime>/repos/<name>/git/`: `git init` on `main`, a starter `README.md`, and an initial commit (so `main` exists and worktrees can fork from it). Stamps `hydrate.sh`/`health.sh` like `add`. This is the counterpart to `add` for quick experiments and throwaway apps you don't want to push to a remote yet — no more manual `mkdir` + `git init` + commit dance. The initial commit uses your git identity, falling back to a neutral `mx <mx@localhost>` only if none is configured. Errors `EXISTS` if the repo already exists, `BAD_ARGS` on an invalid name (must be a single path segment).
 
-`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and runs the repo's `hydrate.sh` (skip with `--no-hydrate`). Pair with `-o`/`--open` to open the work's Terminal + editor layout (macOS), and `--description <t>` to set the work description. So a fresh experiment is one line:
+`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and runs the repo's `hydrate.sh` (skip with `--no-hydrate`). Pair with `-o`/`--open` to open the work in a fullscreen Terminal (macOS), and `--description <t>` to set the work description. So a fresh experiment is one line:
 
 ```
 mx repo new exp --quick -o     # repo "exp", work "dev-exp", worktree on "develop", opened
@@ -245,11 +247,11 @@ Default is a documented no-op (no output). When present and producing output, it
 
 ### `mx work new <name> [--description <text>] [--open|-o]`
 
-Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `bin/`, `files/`, `tmp/`, `hooks/`, and `sessions/`, the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)), `.claude/settings.json` (the per-work context-index hook — see [Per-work context-index hook](#per-work-context-index-hook)), and the lifecycle hook scripts in `hooks/` (see [Work lifecycle hooks](#work-lifecycle-hooks)). Prints the absolute path. All of these are **stamp-if-missing**.
+Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `files/`, `tmp/`, `hooks/`, and `sessions/`, the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)), `.claude/settings.json` (the per-work context-index hook — see [Per-work context-index hook](#per-work-context-index-hook)), and the lifecycle hook scripts in `hooks/` (see [Work lifecycle hooks](#work-lifecycle-hooks)). Prints the absolute path. All of these are **stamp-if-missing**.
 
 The name is immutable.
 
-**`--open` / `-o` (macOS only)**: after creating the work, opens a fullscreen Terminal `cd`'d into the work folder plus a fullscreen editor (Cursor, falling back to VS Code) on the work's `.code-workspace`. You merge the two windows into Split View by hand. On non-macOS platforms this is downgraded to a warning (internally `UNSUPPORTED`) — the work is still created.
+**`--open` / `-o` (macOS only)**: after creating the work, opens a fullscreen Terminal `cd`'d into the work folder. (Open your editor yourself — it no longer launches one.) On non-macOS platforms this is downgraded to a warning (internally `UNSUPPORTED`) — the work is still created.
 
 ### `mx work ls [--all|--archived] [--porcelain]`
 
@@ -286,7 +288,7 @@ Plain output, no decoration.
 
 ### `mx work -n <name> open` (or `mx work -n <name> -o`)
 
-Open an **existing** work's dev layout — the same thing `mx work new -o` does at creation: a fullscreen Terminal `cd`'d into the work folder plus a fullscreen editor (Cursor, falling back to VS Code) on the work's `.code-workspace`. macOS only; on other platforms (or a window-management failure) it warns and is a no-op. `mx work -n <name> -o` is shorthand for `… open`.
+Open an **existing** work's dev layout — the same thing `mx work new -o` does at creation: a fullscreen Terminal `cd`'d into the work folder. macOS only; on other platforms (or a window-management failure) it warns and is a no-op. `mx work -n <name> -o` is shorthand for `… open`.
 
 ### `mx work -n <name> describe <text>`
 
@@ -381,6 +383,19 @@ mx: refusing to destroy "feat" — destroy is permanent and removes the work fol
 ```
 
 With `--force`, prints a loud irreversibility warning to stderr before executing.
+
+### `mx bin ls` · `mx bin path` (alias `mx bins`)
+
+Manage the runtime-wide `bin/` directory — utility executables shared across every work, meant to be on your `PATH`. mx ships some (currently `dcs` and `lcs` — delete / list Claude Code sessions by name) and you can drop your own in; any executable file is picked up.
+
+- **`mx bin ls`** (or bare `mx bin`) — list the bins, each tagged `mx` (shipped) or `user` (yours), with a warning on any that aren't executable, plus a note on whether `bin/` is currently on your `PATH`. Porcelain returns `{ "dir", "onPath", "bins": [{ "name", "path", "executable", "shipped" }] }`.
+- **`mx bin path`** — print the absolute `bin/` directory, for wiring it onto `PATH`:
+
+  ```
+  export PATH="$(mx bin path):$PATH"
+  ```
+
+The directory is created by `mx init` and refreshed by `mx sync`. mx-shipped bins are **mx-owned: re-stamped (overwritten) on every sync**, like the runtime `CLAUDE.md`, so improvements land automatically; **your own bins are never touched**. To customize a shipped bin without losing it on the next sync, copy it to a new name. This is distinct from a work's `scripts/` folder (scoped to one work) — `bin/` is runtime-wide.
 
 ## Per-work context-index hook
 

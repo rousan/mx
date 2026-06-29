@@ -1,0 +1,178 @@
+#!/usr/bin/env node
+"use strict";
+
+/**
+ * List all Claude Code sessions across every project in a readable table.
+ *
+ * Sessions live at ~/.claude/projects/<project>/<id>.jsonl. The name shown is
+ * the latest /rename custom title, falling back to the auto-generated ai-title,
+ * then "(unnamed)". Output is sorted newest-first by file modified time.
+ *
+ * Usage: lcs [name-substring]
+ *   With an argument, only sessions whose name contains it (case-insensitive)
+ *   are shown.
+ */
+
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+/**
+ * Format a byte count as a short human-readable string (e.g. "402.2 KB").
+ */
+function humanSize(bytes) {
+  const units = ["B", "KB", "MB", "GB"];
+  let n = bytes;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${i === 0 ? n : n.toFixed(1)} ${units[i]}`;
+}
+
+/**
+ * Read the latest custom-title and ai-title from a transcript file.
+ */
+function readTitles(file) {
+  let custom = null;
+  let ai = null;
+  let data;
+  try {
+    data = fs.readFileSync(file, "utf8");
+  } catch {
+    return { custom, ai };
+  }
+  for (const line of data.split("\n")) {
+    if (line.includes('"custom-title"')) {
+      try {
+        const o = JSON.parse(line);
+        if (o && o.type === "custom-title") custom = o.customTitle;
+      } catch {
+        /* skip */
+      }
+    } else if (line.includes('"ai-title"')) {
+      try {
+        const o = JSON.parse(line);
+        if (o && o.type === "ai-title") ai = o.aiTitle;
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  return { custom, ai };
+}
+
+/**
+ * Truncate a string to width, adding an ellipsis when it overflows.
+ */
+function clip(s, width) {
+  s = String(s);
+  if (s.length <= width) return s;
+  return s.slice(0, width - 1) + "…";
+}
+
+/**
+ * Strip the common ~/.claude project prefix ("-Users-<user>-") for a shorter,
+ * still-recognizable project label.
+ */
+function shortProject(proj) {
+  const home = os.homedir().replace(/\//g, "-"); // e.g. "-Users-rousan"
+  return proj.startsWith(home + "-") ? proj.slice(home.length + 1) : proj.replace(/^-/, "");
+}
+
+function main() {
+  const filter = (process.argv[2] || "").toLowerCase();
+  const root = path.join(os.homedir(), ".claude", "projects");
+
+  let projects = [];
+  try {
+    projects = fs.readdirSync(root);
+  } catch {
+    console.error(`No Claude projects directory at ${root}`);
+    return 1;
+  }
+
+  const rows = [];
+  for (const proj of projects) {
+    const dir = path.join(root, proj);
+    let files = [];
+    try {
+      files = fs.readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const f of files) {
+      if (!f.endsWith(".jsonl")) continue;
+      const file = path.join(dir, f);
+      let st;
+      try {
+        st = fs.statSync(file);
+      } catch {
+        continue;
+      }
+      const { custom, ai } = readTitles(file);
+      const name = custom || ai || "(unnamed)";
+      if (filter && !name.toLowerCase().includes(filter)) continue;
+      rows.push({
+        sid: f.slice(0, -".jsonl".length),
+        name,
+        named: Boolean(custom),
+        mtime: st.mtime,
+        size: st.size,
+        project: shortProject(proj),
+      });
+    }
+  }
+
+  if (rows.length === 0) {
+    console.log(filter ? `No sessions match ${JSON.stringify(filter)}.` : "No sessions found.");
+    return 0;
+  }
+
+  // Sort alphabetically by name (case-insensitive), then by recency.
+  rows.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || b.mtime - a.mtime);
+
+  // Column widths (name and project are capped, then sized to actual data).
+  const NAME_CAP = 34;
+  const PROJ_CAP = 32;
+  const fmtTime = (d) => d.toISOString().slice(0, 16).replace("T", " ");
+  const idW = Math.max(2, ...rows.map((r) => r.sid.length));
+  const nameW = Math.min(NAME_CAP, Math.max(4, ...rows.map((r) => r.name.length)));
+  const projW = Math.min(PROJ_CAP, Math.max(7, ...rows.map((r) => r.project.length)));
+  const sizeW = Math.max(4, ...rows.map((r) => humanSize(r.size).length));
+
+  // Column order: ID, NAME, SIZE, PROJECT, MODIFIED.
+  const header =
+    "ID".padEnd(idW) +
+    "  " +
+    "NAME".padEnd(nameW) +
+    "  " +
+    "SIZE".padStart(sizeW) +
+    "  " +
+    "PROJECT".padEnd(projW) +
+    "  " +
+    "MODIFIED".padEnd(16); // date values are 16 chars ("YYYY-MM-DD HH:MM")
+  console.log(header);
+  console.log("-".repeat(header.length));
+
+  for (const r of rows) {
+    console.log(
+      r.sid.padEnd(idW) +
+        "  " +
+        clip(r.name, nameW).padEnd(nameW) +
+        "  " +
+        humanSize(r.size).padStart(sizeW) +
+        "  " +
+        clip(r.project, projW).padEnd(projW) +
+        "  " +
+        fmtTime(r.mtime)
+    );
+  }
+
+  console.log("-".repeat(header.length));
+  console.log(`${rows.length} session${rows.length === 1 ? "" : "s"}`);
+  return 0;
+}
+
+process.exit(main());

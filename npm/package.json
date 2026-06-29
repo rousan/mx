@@ -1,6 +1,6 @@
 {
   "name": "@roulabs/mx",
-  "version": "2.5.0",
+  "version": "2.7.0",
   "description": "mx — run several features in parallel across shared repos using git worktrees",
   "type": "module",
   "bin": {
