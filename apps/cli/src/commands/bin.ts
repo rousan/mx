@@ -2,7 +2,7 @@ import { readdirSync, statSync } from 'node:fs';
 import * as path from 'node:path';
 import { delimiter } from 'node:path';
 import { requireRuntime, runtimeBinDir, listRuntimeBins, MxError } from '@mx/core';
-import { emit, dim, bold, warn, tildify } from '../output';
+import { emit, dim, bold, check, warn, tildify } from '../output';
 import { templatesDir } from '../paths';
 import type { Flags } from '../args';
 
@@ -61,12 +61,17 @@ export function dispatchBin(positionals: string[], flags: Flags): void {
               console.log(`  ${bold(b.name.padEnd(nameW))}  ${origin}${flag}`);
             }
           }
-          // Nudge the user to wire bin/ onto PATH if it isn't already.
+          // Always close with PATH guidance — confirm when it's wired up, or
+          // spell out exactly how to wire it (mx can't edit your shell config).
           console.log();
           if (onPath(dir)) {
-            console.log(`  ${dim(`${tildify(dir)} is on your PATH`)}`);
+            console.log(`  ${check()} ${dim(`${tildify(dir)} is on your PATH — these run as commands anywhere`)}`);
           } else {
-            console.log(`  ${dim(`not on PATH — add: export PATH="$(mx bin path):$PATH"`)}`);
+            console.log(`  ${warn()} ${dim(`${tildify(dir)} is not on your PATH yet.`)}`);
+            console.log(`  ${dim('To run these as commands, add this line to your shell startup file')}`);
+            console.log(`  ${dim('(~/.zshrc, ~/.bashrc, …) and restart your shell:')}`);
+            console.log();
+            console.log(`      ${bold('export PATH="$(mx bin path):$PATH"')}`);
           }
         },
         // Porcelain: the raw list plus the dir and whether it's on PATH.
