@@ -8,9 +8,9 @@ Every command supported by `mx`, with flags, semantics, and examples.
 
 Scaffold or adopt a runtime. Target resolution: positional `path` arg → `$MX_RUNTIME` → `~/mx`.
 
-Creates: `repos/`, `works/`, `.mx-root`, `mx.json` (stamped with the runtime version this CLI supports), `CLAUDE.md` (stamped), `context/INDEX.json` (only if missing). Idempotent.
+Creates: `repos/`, `works/`, `.mx-root`, `mx.json` (stamped with the runtime version this CLI supports), `CLAUDE.md` (stamped), the central `hooks/` hub (one stamped no-op per event), the runtime `bin/` (+ shipped utilities), `context/INDEX.json` (only if missing). Idempotent.
 
-On a fresh runtime, `mx init` stamps `mx.json` with the runtime version this CLI supports (currently `2`). When adopting an existing runtime, it refuses if that runtime's `mx.json` differs from what this CLI supports — pointing you at `mx migrate` (if the runtime is older) or at upgrading the CLI (if the runtime is newer). See [Runtime versioning](#runtime-versioning).
+On a fresh runtime, `mx init` stamps `mx.json` with the runtime version this CLI supports (currently `3`). When adopting an existing runtime, it refuses if that runtime's `mx.json` differs from what this CLI supports — pointing you at `mx migrate` (if the runtime is older) or at upgrading the CLI (if the runtime is newer). See [Runtime versioning](#runtime-versioning).
 
 Prints a contextual hint about `$MX_RUNTIME`:
 - If `$MX_RUNTIME` already points at this runtime: confirms you're set.
@@ -124,9 +124,9 @@ Print help text or version (read from `<pkg>/package.json` at startup). Allowed 
 
 ## Runtime versioning
 
-A runtime carries its layout version in `<runtime>/mx.json` — an integer (currently `2`). An **absent** `mx.json` file means a legacy **v1** runtime.
+A runtime carries its layout version in `<runtime>/mx.json` — an integer (currently `3`). An **absent** `mx.json` file means a legacy **v1** runtime.
 
-This CLI supports a single runtime version (`RUNTIME_VERSION = 2`), and the mapping is fixed: **CLI major version ⇄ runtime version** (CLI 2.x supports runtime v2, CLI 3.x will support v3, …).
+This CLI supports a single runtime version (`RUNTIME_VERSION = 3`), and the mapping is fixed: **CLI major version ⇄ runtime version** (CLI 3.x supports runtime v3, CLI 2.x supported v2, …).
 
 **The version gate.** Before any runtime-touching command runs, mx compares the runtime's `mx.json` to the version it supports. On a mismatch it **refuses** the command with error code `RUNTIME_VERSION_MISMATCH` and points you at `mx migrate`. The only commands allowed on a mismatched runtime are:
 
@@ -341,7 +341,7 @@ Only `y` / `yes` (case-insensitive) proceeds; anything else aborts with `Aborted
 
 **Lifecycle hooks:** after confirmation, mx fires the central `pre-work-archive` hook (worktrees still on disk). A non-zero exit **aborts** the archive with `HOOK_FAILED` — nothing is mutated. After a successful archive it fires `post-work-archive`; a non-zero exit there is a warning only. See [Hooks](#hooks).
 
-### `mx work -n <name> unarchive [<repo>=<branch>...]`
+### `mx work -n <name> unarchive [<worktree>=<branch>...]`
 
 Restore an archived work. Re-creates worktrees from the branches recorded in `work.json`. Refuses with `NOT_ARCHIVED` if the work isn't archived. Each restored worktree is treated as freshly created — mx fires **`post-worktree-create` per worktree** (the "hydrate" step), so the hook re-installs deps and **re-allocates ports** just like a first-time `worktree add` (ports were freed on archive).
 

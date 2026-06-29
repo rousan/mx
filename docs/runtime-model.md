@@ -99,7 +99,7 @@ The work-folder **root** is reserved for mx-native files (`work.json`, the `.cod
 
 ### `inferContext` and the `wt/` segment
 
-Because worktrees now live under `wt/`, a repo is inferred from the **third** path segment of a work path: `works/<work>/wt/<repo>/…` implies both the work and the repo. Other work subdirs (`scripts/`, `files/`, `tmp/`, `sessions/`) imply the work but **no** repo.
+Because worktrees live under `wt/`, the **third** path segment of a work path is the worktree **name**: `works/<work>/wt/<name>/…` implies the work, and the repo is resolved from that worktree's `work.json` entry (the name defaults to the repo, so it's usually `wt/<repo>`). Other work subdirs (`scripts/`, `files/`, `tmp/`, `sessions/`) imply the work but **no** repo.
 
 ## `work.json` schema
 
@@ -212,6 +212,6 @@ No pointer file is written anywhere in the source tree — runtimes are entirely
 
 ## `inferContext` — cwd → work / repo
 
-When you're inside `<runtime>/works/<work>/...`, `mx work info` (etc.) infer the work from the cwd. A repo is inferred only from a worktree path `<runtime>/works/<work>/wt/<repo>/...` (the segment after `wt/`); the other work subdirs (`scripts/`, `files/`, `tmp/`, `sessions/`) imply the work but no repo. Same for `<runtime>/repos/<repo>/...` inferring the repo. So you can drop `-n <name>` in most contexts.
+When you're inside `<runtime>/works/<work>/...`, `mx work info` (etc.) infer the work from the cwd. A repo is inferred from a worktree path `<runtime>/works/<work>/wt/<name>/...` — the segment after `wt/` is the worktree name, resolved to its repo via `work.json`; the other work subdirs (`scripts/`, `files/`, `tmp/`, `sessions/`) imply the work but no repo. Same for `<runtime>/repos/<repo>/...` inferring the repo. So you can drop `-n <name>` in most contexts.
 
 Implementation: `inferContext(root)` in `runtime.ts` does a `realpath` comparison so symlinked runtime roots (e.g. macOS `/tmp` → `/private/tmp`) still match.
