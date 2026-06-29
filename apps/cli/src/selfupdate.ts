@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { compareVersions, maxVersion } from '@mx/core';
 import { cliVersion } from './paths';
 
 /** The published package name self-update targets. */
@@ -49,8 +50,9 @@ function npmViewJson(spec: string, field: string): unknown {
 }
 
 /**
- * Highest published version matching a range (npm lists matches ascending, so
- * the last entry is the newest).
+ * Highest published version matching a range. `npm view <pkg>@<range> version`
+ * returns a single string when one version matches, or an array when several do
+ * — and we don't trust the array's order, so we take the semver-max explicitly.
  *
  * @param range - A semver range (e.g. `^2`).
  * @returns The newest matching version, or null.
@@ -58,7 +60,7 @@ function npmViewJson(spec: string, field: string): unknown {
 function latestForRange(range: string): string | null {
   const v = npmViewJson(`${PKG}@${range}`, 'version');
   if (typeof v === 'string') return v;
-  if (Array.isArray(v) && v.length) return String(v[v.length - 1]);
+  if (Array.isArray(v) && v.length) return maxVersion(v.map(String));
   return null;
 }
 
@@ -120,8 +122,11 @@ export function selfUpdate(porcelain: boolean): SelfUpdateInfo {
   const overall = latestOverall();
   if (overall && major(overall) > curMajor) info.newMajor = major(overall);
 
-  // Only install when a newer in-major version actually exists.
-  if (info.latestInMajor && info.latestInMajor !== current) {
+  // Only install when a STRICTLY NEWER in-major version exists. Comparing with
+  // `!==` (instead of a semver `>`) would treat a lower "latest" — e.g. from a
+  // stale registry view — as an update and trigger a pointless reinstall that
+  // reports a confusing downgrade ("Updated to v2.3.0 (was v2.5.0)").
+  if (info.latestInMajor && compareVersions(info.latestInMajor, current) > 0) {
     const r = spawnSync('npm', ['i', '-g', `${PKG}@^${curMajor}`], {
       stdio: porcelain ? ['ignore', 'pipe', 'pipe'] : 'inherit',
     });

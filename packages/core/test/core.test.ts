@@ -40,6 +40,7 @@ import {
   listRepoHealth,
   statusRuntime,
 } from '../src/index';
+import { compareVersions, maxVersion } from '../src/semver';
 import { resolveBase } from '../src/git';
 import type { Work } from '../src/types';
 
@@ -70,6 +71,31 @@ const originalCwd = process.cwd();
 
 afterEach(() => {
   process.chdir(originalCwd);
+});
+
+describe('compareVersions / maxVersion', () => {
+  it('orders by major, then minor, then patch', () => {
+    expect(compareVersions('2.5.0', '2.3.0')).toBe(1);
+    expect(compareVersions('2.3.0', '2.5.0')).toBe(-1);
+    expect(compareVersions('2.5.0', '2.5.0')).toBe(0);
+    expect(compareVersions('3.0.0', '2.9.9')).toBe(1);
+    expect(compareVersions('2.10.0', '2.9.0')).toBe(1); // numeric, not lexical
+    expect(compareVersions('2.1.1', '2.1.0')).toBe(1);
+  });
+
+  it('treats missing components as 0 and ignores pre-release/build suffixes', () => {
+    expect(compareVersions('2', '2.0.0')).toBe(0);
+    expect(compareVersions('2.0', '2.0.0')).toBe(0);
+    expect(compareVersions('2.5.0-beta.1', '2.5.0')).toBe(0); // core triple only
+  });
+
+  it('maxVersion picks the highest regardless of input order, null when empty', () => {
+    // The bug this guards: npm view output is not assumed ascending.
+    expect(maxVersion(['2.0.0', '2.5.0', '2.1.1', '2.3.0', '2.4.0'])).toBe('2.5.0');
+    expect(maxVersion(['2.5.0', '2.3.0'])).toBe('2.5.0');
+    expect(maxVersion(['2.3.0'])).toBe('2.3.0');
+    expect(maxVersion([])).toBeNull();
+  });
 });
 
 describe('repoNameFromUrl', () => {

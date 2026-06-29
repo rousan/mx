@@ -47,6 +47,8 @@ export {
 } from './runtime';
 export type { InitResult, SyncResult, MxConfig, WorkHookEvent, RuntimeBin } from './runtime';
 
+export { compareVersions, maxVersion } from './semver';
+
 export { migrateRuntime } from './migrations';
 export type { MigrateResult, AppliedMigration } from './migrations';
 
