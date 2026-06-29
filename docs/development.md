@@ -42,7 +42,7 @@ Run `pnpm typecheck && pnpm lint && pnpm test` before committing. CI (`.github/w
 - **Domain logic** → `packages/core/src/`. Add a Vitest test in `packages/core/test/`. Functions return data, throw `MxError` — no `console.log`, no `process.exit`, no on-disk-layout assumptions (paths are parameters).
 - **CLI behaviour** → `apps/cli/src/commands/`. Use `emit(human, data)` from `output.ts` to handle the human / porcelain split. Use `dim`/`bold`/`check()`/`warn()` for output style. Errors in core flow up through `fail()` automatically.
 - **Args parsing** → `apps/cli/src/args.ts`. Add booleans to `Flags`, default in the parser, recognize the token. Value flags use the `VALUE_FLAGS` map for both `--flag value` and `--flag=value` forms.
-- **Templates** (`CLAUDE.md`, `work.json`, `.code-workspace`, `context/INDEX.json`, `repo/hydrate.sh`, `repo/health.sh`) → `/templates/`. tsup copies them into `npm/templates/` on every build. Runtimes pick up changes only after `mx sync`.
+- **Templates** (`CLAUDE.md`, `work.json`, `.code-workspace`, `context/INDEX.json`, `hooks/<event>` scripts, `bin/<tool>`) → `/templates/`. tsup copies them into `npm/templates/` on every build. Runtimes pick up changes only after `mx sync`.
 
 ## Testing patterns
 

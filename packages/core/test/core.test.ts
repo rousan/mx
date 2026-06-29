@@ -21,8 +21,10 @@ import {
   repoGitDir,
   runtimeBinDir,
   listRuntimeBins,
-  workHookScript,
-  WORK_HOOK_EVENTS,
+  hookScript,
+  HOOK_EVENTS,
+  readRepoConfig,
+  repoConfigFile,
   readWork,
   writeWork,
   workNew,
@@ -36,7 +38,6 @@ import {
   repoFetch,
   repoInfo,
   repoHealth,
-  stampRepoScripts,
   listRepoHealth,
   statusRuntime,
 } from '../src/index';
@@ -706,62 +707,48 @@ describe('work scaffolding has no per-work bin/', () => {
   });
 });
 
-describe('per-work lifecycle hooks', () => {
+describe('central hooks hub', () => {
   const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
 
-  it('workNew stamps the four archive/unarchive hook scripts, executable no-ops', () => {
+  it('initRuntime stamps hooks/ with every shipped event, executable', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    expect(fs.existsSync(path.join(root, 'hooks'))).toBe(true);
+    for (const event of HOOK_EVENTS) {
+      const hook = hookScript(root, event);
+      expect(fs.existsSync(hook)).toBe(true);
+      expect((fs.statSync(hook).mode & 0o111) !== 0).toBe(true); // executable
+      expect(fs.readFileSync(hook, 'utf8')).toContain(`mx hook: ${event}`);
+    }
+    // Includes the renamed/centralized events.
+    expect(HOOK_EVENTS).toContain('post-worktree-create');
+    expect(HOOK_EVENTS).toContain('repo-health');
+  });
+
+  it('syncRuntime backfills hooks/ stamp-if-missing, never clobbering user logic', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const hook = hookScript(root, 'post-worktree-create');
+    fs.rmSync(hook);
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    expect(res.updated).toContain(hook);
+    expect(fs.existsSync(hook)).toBe(true);
+    // A user edit survives a second sync (hooks are never overwritten).
+    fs.writeFileSync(hook, '#!/usr/bin/env bash\nexit 1\n');
+    const res2 = syncRuntime(root, TEMPLATES_DIR);
+    expect(res2.updated).not.toContain(hook);
+    expect(fs.readFileSync(hook, 'utf8')).toBe('#!/usr/bin/env bash\nexit 1\n');
+  });
+
+  it('workNew no longer creates a per-work hooks/ directory', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
     const res = workNew(root, 'feat');
-    expect(fs.existsSync(path.join(res.path, 'hooks'))).toBe(true);
-    expect(WORK_HOOK_EVENTS).toEqual([
-      'pre-archive',
-      'post-archive',
-      'pre-unarchive',
-      'post-unarchive',
-    ]);
-    for (const event of WORK_HOOK_EVENTS) {
-      const hook = workHookScript(root, 'feat', event);
-      expect(fs.existsSync(hook)).toBe(true);
-      expect((fs.statSync(hook).mode & 0o111) !== 0).toBe(true); // has an exec bit
-      const body = fs.readFileSync(hook, 'utf8');
-      expect(body).toContain(`mx ${event} hook`);
-      expect(body.trimEnd().endsWith('exit 0')).toBe(true); // no-op by default
-    }
-  });
-
-  it('pre-hooks document the abort contract; post-hooks document warn-only', () => {
-    const root = path.join(tmp(), 'rt');
-    initRuntime(root, TEMPLATES_DIR);
-    workNew(root, 'feat');
-    const pre = fs.readFileSync(workHookScript(root, 'feat', 'pre-archive'), 'utf8');
-    const post = fs.readFileSync(workHookScript(root, 'feat', 'post-archive'), 'utf8');
-    expect(pre).toContain('ABORTS');
-    expect(pre).toContain('HOOK_FAILED');
-    expect(post).toContain('cannot undo');
-  });
-
-  it('syncRuntime backfills hooks/ for an existing work, without clobbering edits', () => {
-    const root = path.join(tmp(), 'rt');
-    initRuntime(root, TEMPLATES_DIR);
-    workNew(root, 'feat');
-    // Simulate a pre-hooks work: remove hooks/, then verify sync recreates it.
-    fs.rmSync(path.join(root, 'works', 'feat', 'hooks'), { recursive: true, force: true });
-    const preArchive = workHookScript(root, 'feat', 'pre-archive');
-    expect(fs.existsSync(preArchive)).toBe(false);
-    const res = syncRuntime(root, TEMPLATES_DIR);
-    expect(res.updated).toContain(preArchive);
-    expect(fs.existsSync(preArchive)).toBe(true);
-
-    // Non-clobbering: a user edit survives a second sync.
-    fs.writeFileSync(preArchive, '#!/usr/bin/env bash\nexit 1\n');
-    const res2 = syncRuntime(root, TEMPLATES_DIR);
-    expect(res2.updated).not.toContain(preArchive);
-    expect(fs.readFileSync(preArchive, 'utf8')).toBe('#!/usr/bin/env bash\nexit 1\n');
+    expect(fs.existsSync(path.join(res.path, 'hooks'))).toBe(false);
   });
 });
 
-describe('per-repo hydrate script', () => {
+describe('repo.json + central repo-health hook', () => {
   const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
   const runGit = (cwd: string, args: string[]) =>
     execFileSync('git', args, { cwd, stdio: 'ignore' });
@@ -776,39 +763,36 @@ describe('per-repo hydrate script', () => {
     return src;
   }
 
-  it('stampRepoScripts writes an executable hydrate.sh, idempotently', () => {
-    const dir = tmp();
-    const dest = path.join(dir, 'hydrate.sh');
-    const created = stampRepoScripts(dir, TEMPLATES_DIR);
-    expect(created).toContain(dest);
-    expect(fs.existsSync(dest)).toBe(true);
-    expect((fs.statSync(dest).mode & 0o111) !== 0).toBe(true); // has an exec bit
-    // Idempotent + non-clobbering: a second call stamps nothing.
-    expect(stampRepoScripts(dir, TEMPLATES_DIR)).toEqual([]);
-  });
-
-  it('syncRuntime backfills hydrate.sh + health.sh for existing repos', () => {
-    const root = path.join(tmp(), 'rt');
-    initRuntime(root, TEMPLATES_DIR);
-    repoAdd(root, srcRepo(), 'app'); // core repoAdd clones only — no scripts yet
-    const hydrate = path.join(root, 'repos', 'app', 'hydrate.sh');
-    const health = path.join(root, 'repos', 'app', 'health.sh');
-    expect(fs.existsSync(hydrate)).toBe(false);
-    const res = syncRuntime(root, TEMPLATES_DIR);
-    expect(res.updated).toContain(hydrate);
-    expect(res.updated).toContain(health);
-    expect(fs.existsSync(hydrate)).toBe(true);
-    expect(fs.existsSync(health)).toBe(true);
-  });
-
-  it('repoHealth.extra captures health.sh stdout (null when absent)', () => {
+  it('repoAdd writes repo.json and no per-repo scripts', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
     repoAdd(root, srcRepo(), 'app');
-    expect(repoHealth(root, 'app').extra).toBeNull(); // no health.sh yet
-    const hs = path.join(root, 'repos', 'app', 'health.sh');
-    fs.writeFileSync(hs, '#!/usr/bin/env bash\necho "node_modules: present"\n');
-    fs.chmodSync(hs, 0o755);
+    expect(fs.existsSync(repoConfigFile(root, 'app'))).toBe(true);
+    expect(readRepoConfig(root, 'app')?.name).toBe('app');
+    expect(fs.existsSync(path.join(root, 'repos', 'app', 'hydrate.sh'))).toBe(false);
+    expect(fs.existsSync(path.join(root, 'repos', 'app', 'health.sh'))).toBe(false);
+  });
+
+  it('syncRuntime backfills repo.json for a repo that lacks it', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, srcRepo(), 'app');
+    fs.rmSync(repoConfigFile(root, 'app'));
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    expect(res.updated).toContain(repoConfigFile(root, 'app'));
+    expect(readRepoConfig(root, 'app')?.name).toBe('app');
+  });
+
+  it('repoHealth.extra captures the central repo-health hook stdout', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, srcRepo(), 'app');
+    // The shipped repo-health hook is a no-op (no stdout) → null.
+    expect(repoHealth(root, 'app').extra).toBeNull();
+    // Replace it with one that prints; its output is captured.
+    const hook = hookScript(root, 'repo-health');
+    fs.writeFileSync(hook, '#!/usr/bin/env bash\necho "node_modules: present"\n');
+    fs.chmodSync(hook, 0o755);
     expect(repoHealth(root, 'app').extra).toBe('node_modules: present');
   });
 });
@@ -862,7 +846,7 @@ describe('runtime versioning + migrate', () => {
     expect(requireRuntime({ runtime: root, allowVersionMismatch: true })).toBe(root);
   });
 
-  it('migrateRuntime upgrades a v1 runtime to the container layout and bumps VERSION', () => {
+  it('migrateRuntime upgrades a v1 runtime through to the current version', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
     // Build a legacy v1 state: flat clone + worktree, VERSION=1.
@@ -885,13 +869,16 @@ describe('runtime versioning + migrate', () => {
     runGit(flat, ['worktree', 'add', '-q', '-b', 'feat', flatWt]);
     writeRuntimeVersion(root, 1);
 
-    const res = migrateRuntime(root);
+    const res = migrateRuntime(root, TEMPLATES_DIR);
     expect(res.from).toBe(1);
     expect(res.to).toBe(RUNTIME_VERSION);
-    expect(res.applied).toEqual([{ from: 1, to: 2 }]);
-    expect(readRuntimeVersion(root)).toBe(2);
+    expect(res.applied).toEqual([
+      { from: 1, to: 2 },
+      { from: 2, to: 3 },
+    ]);
+    expect(readRuntimeVersion(root)).toBe(RUNTIME_VERSION);
+    // v1→v2: container layout + worktree moved into wt/.
     expect(fs.existsSync(path.join(root, 'repos', 'app', 'git', '.git'))).toBe(true);
-    // The worktree moved into wt/ and relinked; the flat path is gone.
     const movedWt = path.join(root, 'works', 'feat', 'wt', 'app');
     expect(fs.existsSync(flatWt)).toBe(false);
     expect(fs.existsSync(movedWt)).toBe(true);
@@ -899,12 +886,43 @@ describe('runtime versioning + migrate', () => {
       encoding: 'utf8',
     }).trim();
     expect(branch).toBe('feat');
+    // v2→v3: central hooks stamped + repo.json created.
+    expect(fs.existsSync(hookScript(root, 'post-worktree-create'))).toBe(true);
+    expect(readRepoConfig(root, 'app')?.name).toBe('app');
 
     // Idempotent: already current → no-op.
-    expect(migrateRuntime(root).applied).toEqual([]);
+    expect(migrateRuntime(root, TEMPLATES_DIR).applied).toEqual([]);
   });
 
-  it('migrateRuntime --dry-run plans the same changes but mutates nothing', () => {
+  it('v2→v3 removes default per-repo scripts but keeps customized ones with a warning', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    runGit(src, ['commit', '-qm', 'init', '--allow-empty']);
+    execFileSync('git', ['clone', '-q', src, path.join(root, 'repos', 'app', 'git')], {
+      stdio: 'ignore',
+    });
+    // A default hydrate.sh (boilerplate only) and a customized health.sh.
+    const hydrate = path.join(root, 'repos', 'app', 'hydrate.sh');
+    const health = path.join(root, 'repos', 'app', 'health.sh');
+    fs.writeFileSync(hydrate, '#!/usr/bin/env bash\nset -euo pipefail\necho "Hydrate is done"\n');
+    fs.writeFileSync(health, '#!/usr/bin/env bash\nset -euo pipefail\necho "$(redis-cli ping)"\n');
+    writeRuntimeVersion(root, 2);
+
+    const res = migrateRuntime(root, TEMPLATES_DIR);
+    expect(res.to).toBe(3);
+    // Default removed; customized kept + warned.
+    expect(fs.existsSync(hydrate)).toBe(false);
+    expect(fs.existsSync(health)).toBe(true);
+    expect(res.warnings.some((w) => w.includes('health.sh'))).toBe(true);
+    expect(readRepoConfig(root, 'app')?.name).toBe('app');
+  });
+
+  it('migrateRuntime --dry-run plans the changes but mutates nothing', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
     const src = path.join(tmp(), 'src');
@@ -925,32 +943,39 @@ describe('runtime versioning + migrate', () => {
     const flatWt = path.join(root, 'works', 'feat', 'app');
     runGit(flat, ['worktree', 'add', '-q', '-b', 'feat', flatWt]);
     writeRuntimeVersion(root, 1);
+    // initRuntime already stamped a v3 hooks/ — remove it to simulate a true v1
+    // runtime so the v2→v3 hook-stamp shows up in the plan.
+    fs.rmSync(path.join(root, 'hooks'), { recursive: true, force: true });
 
-    const plan = migrateRuntime(root, { dryRun: true });
+    const plan = migrateRuntime(root, TEMPLATES_DIR, { dryRun: true });
     expect(plan.dryRun).toBe(true);
     expect(plan.from).toBe(1);
-    expect(plan.applied).toEqual([{ from: 1, to: 2 }]);
-    // The plan names the real targets...
-    expect(plan.changed).toContain(path.join(root, 'repos', 'app'));
+    expect(plan.applied).toEqual([
+      { from: 1, to: 2 },
+      { from: 2, to: 3 },
+    ]);
+    // The plan names real targets across both steps (the v2→v3 repo.json step
+    // can't be previewed here — in a chained v1→v3 dry run the repos aren't
+    // moved to git/ yet, so listRepoNames sees none; that's fine for v2→v3).
     expect(plan.changed).toContain(path.join(root, 'works', 'feat', 'wt', 'app'));
+    expect(plan.changed).toContain(hookScript(root, 'post-worktree-create'));
     // ...but NOTHING was actually moved or stamped, and VERSION is untouched.
     expect(readRuntimeVersion(root)).toBe(1);
     expect(fs.existsSync(path.join(root, 'repos', 'app', 'git'))).toBe(false);
     expect(fs.existsSync(flatWt)).toBe(true);
-    expect(fs.existsSync(path.join(root, 'works', 'feat', 'wt', 'app'))).toBe(false);
-    expect(fs.existsSync(path.join(root, 'works', 'feat', 'hooks'))).toBe(false);
+    expect(fs.existsSync(hookScript(root, 'post-worktree-create'))).toBe(false);
 
     // A real run afterwards still works (dry run left nothing half-done).
-    const real = migrateRuntime(root);
+    const real = migrateRuntime(root, TEMPLATES_DIR);
     expect(real.dryRun).toBe(false);
-    expect(readRuntimeVersion(root)).toBe(2);
+    expect(readRuntimeVersion(root)).toBe(RUNTIME_VERSION);
     expect(fs.existsSync(path.join(root, 'works', 'feat', 'wt', 'app'))).toBe(true);
   });
 
   it('migrateRuntime --dry-run on an already-current runtime is a clean no-op', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
-    const plan = migrateRuntime(root, { dryRun: true });
+    const plan = migrateRuntime(root, TEMPLATES_DIR, { dryRun: true });
     expect(plan.applied).toEqual([]);
     expect(plan.changed).toEqual([]);
     expect(plan.dryRun).toBe(true);
@@ -960,7 +985,7 @@ describe('runtime versioning + migrate', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
     writeRuntimeVersion(root, RUNTIME_VERSION + 1);
-    expect(() => migrateRuntime(root)).toThrow(/Upgrade your mx CLI/);
+    expect(() => migrateRuntime(root, TEMPLATES_DIR)).toThrow(/Upgrade your mx CLI/);
   });
 });
 

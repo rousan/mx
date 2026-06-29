@@ -88,19 +88,19 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 |---|---|
 | `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `mx.json`, `CLAUDE.md`, `context/INDEX.json`) |
 | `mx info [--all] [--porcelain]` | list repos, works, worktrees, and ports (active works only by default; `--all` includes archived) |
-| `mx sync` | re-sync runtime with current mx version: re-stamp `CLAUDE.md`, backfill `context/INDEX.json`, the runtime `bin/` + shipped utility bins, per-work dirs (`wt/`/`scripts/`/`files/`/`tmp/`/`hooks/`/`sessions/`) + work `CLAUDE.md` + `.claude/settings.json` + lifecycle hooks (`hooks/{pre,post}-{archive,unarchive}.sh`), per-repo `hydrate.sh`/`health.sh` if missing. Same-major, non-destructive. |
+| `mx sync` | re-sync runtime with current mx version: re-stamp `CLAUDE.md`, backfill `context/INDEX.json`, the central `hooks/` hub + runtime `bin/`, each repo's `repo.json`, per-work dirs (`wt/`/`scripts/`/`files/`/`tmp/`/`sessions/`) + work `CLAUDE.md` + `.claude/settings.json`. Same-major, non-destructive. |
 | `mx update` | self-update the CLI within its major (`npm i -g`), then auto-run `mx sync` to refresh the runtime; reports a newer major if available. Not runtime-gated. |
 | `mx migrate [--dry-run]` | upgrade an older-version runtime to the version this CLI supports (only command allowed on a version mismatch); `--dry-run` previews the plan without changing anything |
-| `mx repo add <git-url> [--name <n>]` | clone a pristine repo into `repos/<repo>/git` (stamps its `hydrate.sh`/`health.sh`) |
+| `mx repo add <git-url> [--name <n>]` | clone a pristine repo into `repos/<repo>/git` (writes its `repo.json`) |
 | `mx repo new <name> [--quick] [-o]` | create a fresh **local** repo (no remote): `git init` on main + README + initial commit. `--quick` also makes a `dev-<name>` work + a `develop` worktree (a one-shot for quick experiments) |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
-| `mx repo health` / `mx repo -n <name> health` | local-only health check (on default branch? clean? in sync?), augmented by the repo's `health.sh` |
+| `mx repo health` / `mx repo -n <name> health` | local-only health check (on default branch? clean? in sync?), augmented by the central `repo-health` hook |
 | `mx work new <name> [--description <t>] [-o]` | create a work (prints its path); `-o` opens a fullscreen Terminal in the work folder (macOS) |
 | `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works (ls shows active only by default; `--all` includes archived; `--archived` shows archived only) |
-| `mx work -n <name> worktree add\|ls\|rm\|hydrate <repo> [--no-hydrate]` | manage worktrees; `add` runs the repo's `hydrate.sh` (skip with `--no-hydrate`), `hydrate` re-runs it |
+| `mx work -n <name> worktree add\|ls\|rm\|hydrate <repo> [--no-hydrate]` | manage worktrees; `add` fires `pre/post-worktree-create` (`post` = hydrate; skip with `--no-hydrate`), `rm` fires `pre/post-worktree-remove`, `hydrate` re-runs `post-worktree-create` |
 | `mx work -n <name> port set\|unset\|ls <repo> <service> [<port>]` | allocate/release ports |
-| `mx work -n <name> archive [--yes\|-y]` | remove worktrees; keep folder + work.json + sessions/ + branches (recoverable). Prompts for confirmation; `--yes` skips the prompt (required for `--porcelain` and non-TTY callers). Runs the work's `hooks/pre-archive.sh` (non-zero aborts: `HOOK_FAILED`) and `hooks/post-archive.sh` (non-zero warns) |
-| `mx work -n <name> unarchive [<repo>=<branch>...]` | re-create worktrees; positional overrides if recorded branches are missing. Runs `hooks/pre-unarchive.sh` (non-zero aborts) and `hooks/post-unarchive.sh` (non-zero warns) |
+| `mx work -n <name> archive [--yes\|-y]` | remove worktrees; keep folder + work.json + sessions/ + branches (recoverable). Prompts for confirmation; `--yes` skips the prompt (required for `--porcelain` and non-TTY callers). Fires `pre-work-archive` (non-zero aborts: `HOOK_FAILED`) and `post-work-archive` (non-zero warns) |
+| `mx work -n <name> unarchive [<repo>=<branch>...]` | re-create worktrees; positional overrides if recorded branches are missing. Fires `pre-work-unarchive` (non-zero aborts) and `post-work-unarchive` (non-zero warns) |
 | `mx work -n <name> destroy --force` | **permanent**: delete the work folder (incl. sessions); branches kept. Prefer archive. |
 | `mx bin ls` / `mx bin path` (alias `mx bins`) | list the runtime's `bin/` utility executables (mx-shipped + your own); `path` prints the dir for `export PATH="$(mx bin path):$PATH"` |
 
@@ -115,8 +115,8 @@ See **[docs/release.md](docs/release.md)** for the full runbook, the `NPM_TOKEN`
 ## Roadmap
 
 - [x] `mx` CLI — `init`, `status`, `sync`, `update`, `migrate`, `repo`, `work` (worktree + port + path)
-- [x] Runtime versioning (`mx.json` + version gate) and `mx migrate`; container repo layout (`repos/<repo>/git`)
-- [x] Per-repo `hydrate.sh` (after `worktree add`) and `health.sh` (augments `mx repo health`)
+- [x] Runtime versioning (`mx.json` + version gate) and `mx migrate`; container repo layout (`repos/<repo>/git` + `repo.json`)
+- [x] Central hook hub (`<runtime>/hooks/`): worktree create/remove, work archive/unarchive, repo fetch, repo-health — any language, branch on `MX_*`
 - [x] Per-work `SessionStart` hook loading the context-registry index
 - [x] `mx work new -o` — fullscreen Terminal in the work folder (macOS)
 - [x] Env-based runtime discovery (`--runtime` / `$MX_RUNTIME` / default `~/mx`)

@@ -21,7 +21,7 @@ export interface Flags {
   archived: boolean;
   /** Open the work's dev layout after creating it (currently: `mx work new -o`, macOS). */
   open: boolean;
-  /** Skip running a repo's `hydrate.sh` after `worktree add`. */
+  /** Skip the `post-worktree-create` hook after `worktree add`. */
   noHydrate: boolean;
   /** Plan only, mutate nothing (currently: `mx migrate --dry-run`). */
   dryRun: boolean;

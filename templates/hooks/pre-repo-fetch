@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+#
+# mx hook: pre-repo-fetch
+#
+# Runs BEFORE `mx repo fetch` fetches a repo.
+# A non-zero exit ABORTS the fetch for that repo (HOOK_FAILED).
+#
+# This is a shared, runtime-wide hook — it fires for EVERY repo/work, so branch
+# on the context below. Write it in any language: just set the shebang and keep
+# the file executable (e.g. #!/usr/bin/env node or #!/usr/bin/env python3).
+#
+# Working directory: the pristine clone.
+# Context (environment variables):
+#     $MX_REPO — repo name
+#     $MX_REPO_PATH — repo container
+#     $MX_GIT_DIR — the pristine clone
+#     $MX_EVENT (this event name), $MX_RUNTIME (runtime root)
+#
+# No-op by default — delete this file to disable the hook entirely.
+set -euo pipefail
+
+# Branch on the context to do per-repo / per-work / per-branch logic, e.g.:
+#   case "${MX_REPO:-}" in
+#     web)  npm --prefix "$MX_WORKTREE_PATH" install ;;
+#     api)  cp "$MX_RUNTIME/secrets/api.env" "$MX_WORKTREE_PATH/.env" ;;
+#   esac
+
+exit 0

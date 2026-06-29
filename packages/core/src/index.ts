@@ -13,18 +13,19 @@ export {
   worksDir,
   runtimeBinDir,
   listRuntimeBins,
+  runtimeHooksDir,
+  hookScript,
+  HOOK_EVENTS,
   repoPath,
   repoGitDir,
-  repoHydrateScript,
-  repoHealthScript,
+  repoConfigFile,
+  readRepoConfig,
+  writeRepoConfig,
   workDir,
   workManifest,
   workspaceFile,
   worktreesDir,
   worktreePath,
-  workHooksDir,
-  workHookScript,
-  WORK_HOOK_EVENTS,
   defaultRuntime,
   discoverRuntime,
   requireRuntime,
@@ -45,14 +46,14 @@ export {
   readRuntimeVersion,
   writeRuntimeVersion,
 } from './runtime';
-export type { InitResult, SyncResult, MxConfig, WorkHookEvent, RuntimeBin } from './runtime';
+export type { InitResult, SyncResult, MxConfig, HookEvent, RuntimeBin, RepoConfig } from './runtime';
 
 export { compareVersions, maxVersion } from './semver';
 
 export { migrateRuntime } from './migrations';
 export type { MigrateResult, AppliedMigration } from './migrations';
 
-export { stampClaudeMd, removeStaleRuntimeReadme, stampRepoScripts, stampRuntimeBins } from './templates';
+export { stampClaudeMd, removeStaleRuntimeReadme, stampRuntimeHooks, stampRuntimeBins } from './templates';
 
 export {
   repoNameFromUrl,

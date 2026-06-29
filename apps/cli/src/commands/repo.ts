@@ -3,8 +3,7 @@ import {
   inferContext,
   repoAdd,
   repoNew,
-  repoPath,
-  stampRepoScripts,
+  repoGitDir,
   listReposInfo,
   repoFetch,
   repoInfo,
@@ -18,9 +17,26 @@ import {
 import type { RepoHealth } from '@mx/core';
 import { emit, dim, bold, check, warn, tildify } from '../output';
 import { openWorkLayout } from '../open';
-import { runWorktreeHydrate } from '../hydrate';
-import { templatesDir } from '../paths';
+import { runPreHook, runPostHook } from '../hooks';
 import type { Flags } from '../args';
+
+/**
+ * Run a repo fetch wrapped in its pre/post hooks. The pre-hook can veto the
+ * fetch (throws `HOOK_FAILED`); the post-hook is best-effort.
+ *
+ * @param root - Runtime root.
+ * @param name - Repo name.
+ * @param porcelain - Quiet hook stdio when true.
+ * @returns The fetch result.
+ */
+function fetchWithHooks(root: string, name: string, porcelain: boolean): ReturnType<typeof repoFetch> {
+  const gitDir = repoGitDir(root, name);
+  const env = { MX_REPO: name, MX_REPO_PATH: repoInfo(root, name).path, MX_GIT_DIR: gitDir };
+  runPreHook(root, 'pre-repo-fetch', { cwd: gitDir, env }, porcelain);
+  const res = repoFetch(root, name);
+  runPostHook(root, 'post-repo-fetch', { cwd: gitDir, env }, porcelain);
+  return res;
+}
 
 /**
  * Require a non-empty string argument, throwing a usage `MxError` otherwise.
@@ -50,9 +66,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
   switch (action) {
     case 'add': {
       const url = need(positionals[2], 'usage: mx repo add <git-url> [--name <n>]');
-      const res = repoAdd(root, url, flags.name);
-      // Stamp the repo's mx-owned scripts (hydrate.sh, health.sh) into its container.
-      stampRepoScripts(repoPath(root, res.name), templatesDir());
+      const res = repoAdd(root, url, flags.name); // also writes repo.json
       emit(() => console.log(`${check()} cloned ${bold(res.name)} ${dim(`→ ${res.path}`)}`), res);
       return;
     }
@@ -65,8 +79,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
         positionals[2],
         'usage: mx repo new <name> [--quick] [-o] [--description <t>]',
       );
-      const res = repoNew(root, name);
-      stampRepoScripts(repoPath(root, res.name), templatesDir());
+      const res = repoNew(root, name); // also writes repo.json
 
       if (!flags.quick) {
         emit(() => {
@@ -84,15 +97,23 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
       const workRes = workNew(root, workName, flags.description ?? '');
       const wtRes = worktreeAdd(root, workName, name, { branch: 'develop' });
       if (!flags.noHydrate) {
-        const outcome = runWorktreeHydrate(
-          { root, work: workName, repo: name, worktreePath: wtRes.path, branch: wtRes.branch },
+        runPostHook(
+          root,
+          'post-worktree-create',
+          {
+            cwd: wtRes.path,
+            env: {
+              MX_WORK: workName,
+              MX_REPO: name,
+              MX_BRANCH: wtRes.branch,
+              MX_BASE: '',
+              MX_WORKTREE_PATH: wtRes.path,
+              MX_WORK_PATH: workRes.path,
+              MX_GIT_DIR: repoGitDir(root, name),
+            },
+          },
           flags.porcelain,
         );
-        if (outcome.ran && !outcome.ok && !flags.porcelain) {
-          process.stderr.write(
-            `${warn()} ${dim(`hydrate.sh exited non-zero — worktree kept. Re-run: mx work -n ${workName} worktree hydrate ${name}`)}\n`,
-          );
-        }
       }
       let opened = false;
       if (flags.open) {
@@ -157,7 +178,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
         const lines: string[] = [];
         for (const n of names) {
           try {
-            const r = repoFetch(root, n);
+            const r = fetchWithHooks(root, n, flags.porcelain);
             out.push(r);
             lines.push(
               `${check()} ${bold(r.name)} ${dim(`— ${r.remoteBranches.length} branch(es) on origin, now on ${r.branch}`)}`,
@@ -175,7 +196,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
         flags.name || ctxRepo,
         'which repo? pass -n <name>, run inside a repo, or use --all (mx repo -n <name> fetch)',
       );
-      const res = repoFetch(root, name);
+      const res = fetchWithHooks(root, name, flags.porcelain);
       emit(
         () =>
           console.log(
@@ -350,10 +371,10 @@ function renderHealthDetail(h: RepoHealth): void {
     console.log(`  ${label}  ${value}${marker}${hint}`);
   }
 
-  // Repo-specific augmentation from the repo's health.sh, if any.
+  // Repo-specific augmentation from the central repo-health hook, if any.
   if (h.extra) {
     console.log();
-    console.log(`  ${dim('health.sh')}`);
+    console.log(`  ${dim('repo-health')}`);
     for (const line of h.extra.split('\n')) console.log(`    ${dim(line)}`);
   }
 }

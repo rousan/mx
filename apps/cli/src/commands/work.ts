@@ -9,6 +9,8 @@ import {
   worktreeAdd,
   worktreeList,
   worktreeRemove,
+  worktreePath,
+  repoGitDir,
   workDestroy,
   archiveWork,
   unarchiveWork,
@@ -17,12 +19,43 @@ import {
   portList,
   MxError,
 } from '@mx/core';
-import * as path from 'node:path';
+import { existsSync } from 'node:fs';
 import { emit, dim, bold, check, warn, confirmYesNo, tildify } from '../output';
 import { openWorkLayout } from '../open';
-import { runWorktreeHydrate } from '../hydrate';
-import { runWorkHook } from '../workhooks';
+import { runHook, runPreHook, runPostHook } from '../hooks';
 import type { Flags } from '../args';
+
+/**
+ * Build the `MX_*` env for a worktree-related hook from the work/repo/branch.
+ *
+ * @param name - Work name.
+ * @param repo - Repo name.
+ * @param branch - Worktree branch.
+ * @param worktreePathAbs - Absolute worktree path.
+ * @param workFolder - Absolute work folder path.
+ * @param gitDir - Repo pristine clone path.
+ * @param base - Base ref, if any.
+ * @returns The `MX_*` env map.
+ */
+function worktreeHookEnv(
+  name: string,
+  repo: string,
+  branch: string,
+  worktreePathAbs: string,
+  workFolder: string,
+  gitDir: string,
+  base = '',
+): Record<string, string> {
+  return {
+    MX_WORK: name,
+    MX_REPO: repo,
+    MX_BRANCH: branch,
+    MX_BASE: base,
+    MX_WORKTREE_PATH: worktreePathAbs,
+    MX_WORK_PATH: workFolder,
+    MX_GIT_DIR: gitDir,
+  };
+}
 
 /**
  * Require a non-empty string argument, throwing a usage `MxError` otherwise.
@@ -232,28 +265,15 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
           return;
         }
       }
-      // pre-archive hook runs while worktrees are still intact; a non-zero exit
-      // vetoes the archive before anything is removed. Skip it when the work is
-      // already archived so a side-effecting hook never fires on a no-op — core
-      // will throw the canonical ALREADY_ARCHIVED below.
+      // pre-work-archive hook runs while worktrees are still intact; a non-zero
+      // exit vetoes the archive. Skip it when the work is already archived so a
+      // side-effecting hook never fires on a no-op — core throws ALREADY_ARCHIVED.
+      const archiveHookEnv = { MX_WORK: name, MX_WORK_PATH: workPath(root, name).path };
       if (workInfo(root, name).isArchived !== true) {
-        const preArchive = runWorkHook(root, name, 'pre-archive', flags.porcelain);
-        if (preArchive.ran && !preArchive.ok) {
-          throw new MxError(
-            `pre-archive hook for "${name}" exited non-zero — archive aborted`,
-            'HOOK_FAILED',
-          );
-        }
+        runPreHook(root, 'pre-work-archive', { cwd: archiveHookEnv.MX_WORK_PATH, env: archiveHookEnv }, flags.porcelain);
       }
       const res = archiveWork(root, name);
-      // post-archive hook is best-effort: the archive already happened, so a
-      // non-zero exit only warns.
-      const postArchive = runWorkHook(root, name, 'post-archive', flags.porcelain);
-      if (postArchive.ran && !postArchive.ok && !flags.porcelain) {
-        process.stderr.write(
-          `${warn()} ${dim(`post-archive hook for ${name} exited non-zero (archive already applied)`)}\n`,
-        );
-      }
+      runPostHook(root, 'post-work-archive', { cwd: archiveHookEnv.MX_WORK_PATH, env: archiveHookEnv }, flags.porcelain);
       emit(() => {
         const removed = res.removedWorktrees.join(', ') || 'none';
         console.log(`${check()} archived work ${bold(name)}`);
@@ -277,27 +297,15 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         }
         overrides[tok.slice(0, eq)] = tok.slice(eq + 1);
       }
-      // pre-unarchive hook runs before any worktree is re-created; a non-zero
-      // exit vetoes the unarchive. Skip it when the work isn't archived so a
-      // side-effecting hook never fires on a no-op — core will throw the
-      // canonical NOT_ARCHIVED below.
+      // pre-work-unarchive hook runs before any worktree is re-created; a
+      // non-zero exit vetoes it. Skip when the work isn't archived so a
+      // side-effecting hook never fires on a no-op — core throws NOT_ARCHIVED.
+      const unarchiveHookEnv = { MX_WORK: name, MX_WORK_PATH: workPath(root, name).path };
       if (workInfo(root, name).isArchived === true) {
-        const preUnarchive = runWorkHook(root, name, 'pre-unarchive', flags.porcelain);
-        if (preUnarchive.ran && !preUnarchive.ok) {
-          throw new MxError(
-            `pre-unarchive hook for "${name}" exited non-zero — unarchive aborted`,
-            'HOOK_FAILED',
-          );
-        }
+        runPreHook(root, 'pre-work-unarchive', { cwd: unarchiveHookEnv.MX_WORK_PATH, env: unarchiveHookEnv }, flags.porcelain);
       }
       const res = unarchiveWork(root, name, overrides);
-      // post-unarchive hook is best-effort: the worktrees are already back.
-      const postUnarchive = runWorkHook(root, name, 'post-unarchive', flags.porcelain);
-      if (postUnarchive.ran && !postUnarchive.ok && !flags.porcelain) {
-        process.stderr.write(
-          `${warn()} ${dim(`post-unarchive hook for ${name} exited non-zero (unarchive already applied)`)}\n`,
-        );
-      }
+      runPostHook(root, 'post-work-unarchive', { cwd: unarchiveHookEnv.MX_WORK_PATH, env: unarchiveHookEnv }, flags.porcelain);
       emit(() => {
         console.log(`${check()} unarchived work ${bold(name)}`);
         for (const r of res.restored) {
@@ -327,6 +335,17 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
         positionals[3],
         'usage: mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]',
       );
+      const workFolder = workPath(root, name).path;
+      const dest = worktreePath(root, name, repo);
+      const branch = flags.branch || name; // mirrors worktreeAdd's default
+      const gitDir = repoGitDir(root, repo);
+      // pre-worktree-create: a non-zero exit vetoes creation (nothing made yet).
+      runPreHook(
+        root,
+        'pre-worktree-create',
+        { cwd: workFolder, env: worktreeHookEnv(name, repo, branch, dest, workFolder, gitDir, flags.base) },
+        flags.porcelain,
+      );
       const res = worktreeAdd(root, name, repo, { branch: flags.branch, base: flags.base });
       emit(
         () =>
@@ -335,18 +354,15 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
           ),
         res,
       );
-      // Run the repo's hydrate hook for the new worktree (unless opted out). The
-      // worktree already exists, so a failure is a warning, not a hard error.
+      // post-worktree-create (the old "hydrate"): runs in the new worktree;
+      // non-zero is a warning, worktree kept. Skip with --no-hydrate.
       if (!flags.noHydrate) {
-        const outcome = runWorktreeHydrate(
-          { root, work: name, repo: res.repo, worktreePath: res.path, branch: res.branch, base: flags.base },
+        runPostHook(
+          root,
+          'post-worktree-create',
+          { cwd: res.path, env: worktreeHookEnv(name, repo, res.branch, res.path, workFolder, gitDir, flags.base) },
           flags.porcelain,
         );
-        if (outcome.ran && !outcome.ok && !flags.porcelain) {
-          process.stderr.write(
-            `${warn()} ${dim(`hydrate.sh for ${res.repo} exited non-zero — worktree kept. Re-run: mx work -n ${name} worktree hydrate ${res.repo}`)}\n`,
-          );
-        }
       }
       return;
     }
@@ -372,6 +388,18 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
     }
     case 'rm': {
       const repo = need(positionals[3], 'usage: mx work -n <name> worktree rm <repo>');
+      const wt = worktreeList(root, name).find((w) => w.repo === repo);
+      const workFolder = workPath(root, name).path;
+      const dest = worktreePath(root, name, repo);
+      const gitDir = repoGitDir(root, repo);
+      const branch = wt?.branch ?? '';
+      // pre-worktree-remove: worktree still on disk; non-zero vetoes removal.
+      runPreHook(
+        root,
+        'pre-worktree-remove',
+        { cwd: existsSync(dest) ? dest : workFolder, env: worktreeHookEnv(name, repo, branch, dest, workFolder, gitDir) },
+        flags.porcelain,
+      );
       const res = worktreeRemove(root, name, repo);
       emit(
         () =>
@@ -380,26 +408,36 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
           ),
         res,
       );
+      runPostHook(
+        root,
+        'post-worktree-remove',
+        { cwd: workFolder, env: worktreeHookEnv(name, repo, res.branch, dest, workFolder, gitDir) },
+        flags.porcelain,
+      );
       return;
     }
     case 'hydrate': {
-      // Re-run a repo's hydrate.sh against its existing worktree on demand.
+      // Re-run the post-worktree-create hook against an existing worktree.
       const repo = need(positionals[3], 'usage: mx work -n <name> worktree hydrate <repo>');
       const wt = worktreeList(root, name).find((w) => w.repo === repo);
       if (!wt) throw new MxError(`work "${name}" has no worktree for ${repo}`, 'NO_WORKTREE');
-      const worktreePath = path.join(workPath(root, name).path, 'wt', repo);
-      const outcome = runWorktreeHydrate(
-        { root, work: name, repo, worktreePath, branch: wt.branch },
+      const workFolder = workPath(root, name).path;
+      const wtPath = worktreePath(root, name, repo);
+      const outcome = runHook(
+        root,
+        'post-worktree-create',
+        { cwd: wtPath, env: worktreeHookEnv(name, repo, wt.branch, wtPath, workFolder, repoGitDir(root, repo)) },
         flags.porcelain,
       );
       if (outcome.missing) {
         emit(
-          () => console.log(dim(`no hydrate.sh for ${repo} — nothing to run`)),
+          () => console.log(dim(`no post-worktree-create hook — nothing to run`)),
           { work: name, repo, ran: false },
         );
         return;
       }
-      if (!outcome.ok) throw new MxError(`hydrate.sh for ${repo} exited non-zero`, 'HYDRATE_FAILED');
+      // Explicit re-run: a non-zero exit is a hard error (unlike the auto-run).
+      if (!outcome.ok) throw new MxError(`post-worktree-create hook for ${repo} exited non-zero`, 'HOOK_FAILED');
       emit(() => console.log(`${check()} hydrated ${bold(repo)}`), {
         work: name,
         repo,

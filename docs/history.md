@@ -2,6 +2,18 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 3.0.0 — 2026-06-29
+
+**Hooks are centralized into one runtime-wide hub — a breaking layout change (runtime v3).** The per-repo `hydrate.sh`/`health.sh` and per-work `hooks/` are gone; all lifecycle hooks now live in **`<runtime>/hooks/`**, one executable per event, and you branch on `MX_*` context inside.
+
+- **Events:** `pre/post-worktree-create` (post = the old "hydrate"), `pre/post-worktree-remove`, `pre/post-work-archive`, `pre/post-work-unarchive`, `pre/post-repo-fetch`, and `repo-health`. `pre-*` non-zero exit aborts the operation (`HOOK_FAILED`); `post-*` warns; `repo-health` stdout feeds `mx repo health`.
+- **Any language.** A hook is just an executable — bash, Node, Python — keyed off its shebang. mx stamps a documented no-op per event (stamp-if-missing, so your logic is never clobbered); delete a file to disable that event.
+- **Repos** now carry a `repo.json` (`{ "name": … }`, extensible) and **no scripts**. `mx repo add`/`new` write it; the CLI fires hooks around `worktree add`/`rm`, `archive`/`unarchive`, and `repo fetch`.
+- **Migration v2 → v3** (`mx migrate`): stamps the `hooks/` hub, writes each `repo.json`, and **retires the old scripts — deleting defaults, but keeping anything you customized with a warning** so you can fold the logic into the central hooks. `--dry-run` previews the plan + warnings.
+- **CLI:** new `apps/cli/src/hooks.ts` runner (replaces `hydrate.ts` + `workhooks.ts`); `HYDRATE_FAILED` folded into `HOOK_FAILED`. **Core:** `HOOK_EVENTS` / `hookScript` / `runtimeHooksDir`, `repoConfigFile` / `readRepoConfig` / `writeRepoConfig`, `stampRuntimeHooks` in `@mx/core`; `RUNTIME_VERSION = 3`.
+
+After upgrading the CLI (`npm i -g @roulabs/mx@latest`), run **`mx migrate`** once per runtime.
+
 ## 2.8.0 — 2026-06-29
 
 **`mx bin ls` spells out the PATH setup.** When `<runtime>/bin/` isn't on your `PATH`, the listing now ends with a clear, multi-line instruction — add `export PATH="$(mx bin path):$PATH"` to your shell startup file (`~/.zshrc`, `~/.bashrc`, …) and restart — instead of a terse one-liner. When it is on `PATH`, it confirms with a ✓. CLI-only cosmetic change.

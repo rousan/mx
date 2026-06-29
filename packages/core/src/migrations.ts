@@ -11,16 +11,61 @@
  * runtime that can't be fully upgraded is rejected up front rather than left
  * half-migrated.
  */
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { MxError } from './errors';
+import { exists } from './fsutil';
+import { stampRuntimeHooks } from './templates';
 import {
   RUNTIME_VERSION,
+  HOOK_EVENTS,
   readRuntimeVersion,
   writeRuntimeVersion,
   migrateRepoLayout,
   migrateWorkLayout,
   ensureWorkScaffolding,
   listWorkNames,
+  listRepoNames,
+  repoPath,
+  repoConfigFile,
+  writeRepoConfig,
+  runtimeHooksDir,
+  workDir,
 } from './runtime';
+
+/**
+ * Whether a shell script is just the mx-shipped boilerplate (no user logic) and
+ * therefore safe to remove during a migration. Strips the shebang, comments,
+ * and blank lines, then checks that every remaining line is known boilerplate
+ * (the `set -euo pipefail` guard, a bare `exit 0`, or the old default echo). An
+ * empty/whitespace file counts as default too.
+ *
+ * @param content - The script's full text.
+ * @returns True when nothing but boilerplate remains (safe to delete).
+ */
+function isDefaultScript(content: string): boolean {
+  const ALLOW = new Set([
+    'set -euo pipefail',
+    'exit 0',
+    'echo "Hydrate is done"',
+    'echo "Setup is done"',
+  ]);
+  const lines = content
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith('#'));
+  return lines.every((l) => ALLOW.has(l));
+}
+
+/**
+ * The outcome of one migration step: paths it changed (or would change in a dry
+ * run) and any non-fatal warnings the user should see (e.g. a customized script
+ * preserved rather than removed).
+ */
+interface MigrationStepResult {
+  changed: string[];
+  warnings: string[];
+}
 
 /**
  * One version-to-version migration step.
@@ -33,24 +78,28 @@ interface MigrationStep {
   /**
    * Apply the step. Must be deterministic and idempotent-safe, and is
    * responsible for writing the new `VERSION` on success. When `dryRun` is set
-   * it must mutate nothing (not even `VERSION`) and only return the paths it
-   * would change.
+   * it must mutate nothing (not even `VERSION`) and only return what it would
+   * change. `templatesDir` is the CLI's bundled templates directory (needed to
+   * stamp new files; unused by steps that only move/generate).
    *
    * @param root - Runtime root.
-   * @param opts - Step options.
-   * @param opts.dryRun - When set, plan only — no mutations.
-   * @returns Paths changed (or that would change) by the step.
+   * @param opts - Step options (`dryRun`, `templatesDir`).
+   * @returns The paths changed (or that would change) and any warnings.
    */
-  run: (root: string, opts: { dryRun: boolean }) => string[];
+  run: (root: string, opts: { dryRun: boolean; templatesDir: string }) => MigrationStepResult;
 }
 
 /**
  * Migration registry, keyed by *from* version.
  *
- * v1 → v2: two layout changes. (a) Pristine repos move from flat `repos/<name>`
- * to the container `repos/<name>/git`. (b) Each work's worktrees move from flat
- * `works/<work>/<repo>` into `works/<work>/wt/<repo>`, and the new per-work
- * scaffolding (`scripts/`, `files/`, `tmp/`, `CLAUDE.md`, `.claude/`) is created.
+ * - **v1 → v2**: pristine repos move from flat `repos/<name>` to `repos/<name>/git`;
+ *   each work's worktrees move from `works/<work>/<repo>` to `works/<work>/wt/<repo>`,
+ *   and the new per-work scaffolding is created.
+ * - **v2 → v3**: hooks are centralized. The per-repo `hydrate.sh`/`health.sh` and
+ *   per-work `hooks/` are replaced by a single `<runtime>/hooks/` hub; each repo
+ *   gains a `repo.json`. Old scripts are removed when they're unchanged from the
+ *   mx default, and **preserved with a warning** when customized (so the user can
+ *   fold the logic into the central hooks).
  */
 const STEPS: Record<number, MigrationStep> = {
   1: {
@@ -64,7 +113,73 @@ const STEPS: Record<number, MigrationStep> = {
         changed.push(...ensureWorkScaffolding(root, work, { dryRun }));
       }
       if (!dryRun) writeRuntimeVersion(root, 2);
-      return changed;
+      return { changed, warnings: [] };
+    },
+  },
+  2: {
+    from: 2,
+    to: 3,
+    run: (root, { dryRun, templatesDir }) => {
+      const changed: string[] = [];
+      const warnings: string[] = [];
+
+      // 1. Central hooks/ + the shipped hook templates (stamp-if-missing).
+      if (dryRun) {
+        const hd = runtimeHooksDir(root);
+        if (!exists(hd)) changed.push(hd);
+        for (const ev of HOOK_EVENTS) {
+          const p = path.join(hd, ev);
+          if (!exists(p)) changed.push(p);
+        }
+      } else {
+        changed.push(...stampRuntimeHooks(root, templatesDir));
+      }
+
+      // 2. Per repo: add repo.json, and retire the old per-repo scripts —
+      //    delete the defaults, keep (and warn about) anything customized.
+      for (const repo of listRepoNames(root)) {
+        const cfg = repoConfigFile(root, repo);
+        if (!exists(cfg)) {
+          if (!dryRun) writeRepoConfig(root, repo);
+          changed.push(cfg);
+        }
+        for (const script of ['hydrate.sh', 'health.sh']) {
+          const p = path.join(repoPath(root, repo), script);
+          if (!exists(p)) continue;
+          if (isDefaultScript(fs.readFileSync(p, 'utf8'))) {
+            if (!dryRun) fs.rmSync(p);
+            changed.push(p);
+          } else {
+            warnings.push(
+              `kept customized ${p} — mx no longer runs it; fold its logic into <runtime>/hooks/post-worktree-create or repo-health`,
+            );
+          }
+        }
+      }
+
+      // 3. Per work: drop the per-work hooks/ dir when all of its scripts are
+      //    defaults; keep + warn when any were customized.
+      for (const work of listWorkNames(root)) {
+        const hd = path.join(workDir(root, work), 'hooks');
+        if (!exists(hd)) continue;
+        const files = fs
+          .readdirSync(hd)
+          .filter((f) => fs.statSync(path.join(hd, f)).isFile());
+        const allDefault = files.every((f) =>
+          isDefaultScript(fs.readFileSync(path.join(hd, f), 'utf8')),
+        );
+        if (allDefault) {
+          if (!dryRun) fs.rmSync(hd, { recursive: true, force: true });
+          changed.push(hd);
+        } else {
+          warnings.push(
+            `kept customized ${hd} — per-work hooks are gone in v3; fold its logic into <runtime>/hooks/ (pre/post-work-archive, pre/post-work-unarchive)`,
+          );
+        }
+      }
+
+      if (!dryRun) writeRuntimeVersion(root, 3);
+      return { changed, warnings };
     },
   },
 };
@@ -91,6 +206,8 @@ export interface MigrateResult {
   applied: AppliedMigration[];
   /** Paths changed across all applied steps (or that *would* change in a dry run). */
   changed: string[];
+  /** Non-fatal warnings (e.g. customized scripts preserved for you to migrate). */
+  warnings: string[];
   /** True when this was a dry run — nothing was actually mutated. */
   dryRun: boolean;
 }
@@ -110,15 +227,20 @@ export interface MigrateResult {
  * touches an old runtime.
  *
  * @param root - Runtime root.
+ * @param templatesDir - The CLI's bundled templates directory (for stamping new files).
  * @param opts - Migration options.
  * @param opts.dryRun - When set, plan only — validate and report, no mutations.
- * @returns The from/to versions, the steps applied, the paths changed, and `dryRun`.
+ * @returns The from/to versions, steps applied, paths changed, warnings, and `dryRun`.
  */
-export function migrateRuntime(root: string, opts: { dryRun?: boolean } = {}): MigrateResult {
+export function migrateRuntime(
+  root: string,
+  templatesDir: string,
+  opts: { dryRun?: boolean } = {},
+): MigrateResult {
   const dryRun = opts.dryRun === true;
   const from = readRuntimeVersion(root);
   if (from === RUNTIME_VERSION) {
-    return { from, to: RUNTIME_VERSION, applied: [], changed: [], dryRun };
+    return { from, to: RUNTIME_VERSION, applied: [], changed: [], warnings: [], dryRun };
   }
   if (from > RUNTIME_VERSION) {
     throw new MxError(
@@ -139,10 +261,13 @@ export function migrateRuntime(root: string, opts: { dryRun?: boolean } = {}): M
   }
   const applied: AppliedMigration[] = [];
   const changed: string[] = [];
+  const warnings: string[] = [];
   for (let v = from; v < RUNTIME_VERSION; v++) {
     const step = STEPS[v];
-    changed.push(...step.run(root, { dryRun }));
+    const res = step.run(root, { dryRun, templatesDir });
+    changed.push(...res.changed);
+    warnings.push(...res.warnings);
     applied.push({ from: step.from, to: step.to });
   }
-  return { from, to: RUNTIME_VERSION, applied, changed, dryRun };
+  return { from, to: RUNTIME_VERSION, applied, changed, warnings, dryRun };
 }

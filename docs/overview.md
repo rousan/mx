@@ -17,15 +17,16 @@ mx manages a **runtime**: a single folder somewhere on disk (default `~/mx`, ove
 ```
 <runtime>/
 ├── .mx-root                     # marker
-├── mx.json                      # runtime config: { "version": 2 }
+├── mx.json                      # runtime config: { "version": 3 }
 ├── CLAUDE.md                    # feature-session rules (stamped from templates/)
+├── hooks/                       # central hook hub: one executable per lifecycle event
+├── bin/                         # runtime-wide utility executables (for PATH)
 ├── context/                     # shared memory across features
 │   ├── INDEX.json               # single source of truth for entry metadata
 │   └── <path>.md                # body-only entries (nested folders allowed)
 ├── repos/<repo>/                # per-repo container
 │   ├── git/                     # the pristine clone, kept on default branch; READ-ONLY base
-│   ├── hydrate.sh                 # runs after worktree add (customizable)
-│   └── health.sh                # augments `mx repo health` (customizable)
+│   └── repo.json                # repo metadata { "name": … }
 └── works/<feature>/             # one folder per parallel feature
     ├── work.json                # manifest (owned by mx)
     ├── <feature>.code-workspace # VS Code workspace (owned by mx; folder paths → wt/<repo>)
@@ -40,7 +41,7 @@ mx manages a **runtime**: a single folder somewhere on disk (default `~/mx`, ove
 
 Two things to internalize:
 
-1. **`repos/<repo>/git/` is read-only reference.** You never edit, commit, or run dev servers inside the clone. Worktrees fork from it and share its `.git` object store. The container around it (`repos/<repo>/`) also holds mx-owned per-repo scripts (`hydrate.sh`, `health.sh`).
+1. **`repos/<repo>/git/` is read-only reference.** You never edit, commit, or run dev servers inside the clone. Worktrees fork from it and share its `.git` object store. The container around it (`repos/<repo>/`) also holds `repo.json` metadata. Lifecycle hooks (hydrate, health, etc.) are **central**, in `<runtime>/hooks/`.
 2. **`mx` owns its state.** `work.json` and `.code-workspace` are written only through `mx` commands. Feature sessions never hand-edit them.
 
 The runtime is **versioned**: `mx.json` records the on-disk layout version (CLI major ⇄ runtime version). mx refuses to operate on a runtime whose version it doesn't support and points you at `mx migrate` (upgrade the runtime) or `mx update` (upgrade the CLI). See [runtime-model](runtime-model.md#runtime-versioning).

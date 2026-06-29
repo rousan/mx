@@ -60,9 +60,9 @@ Re-sync the runtime with the current mx version (this is the command formerly ca
 
 - re-stamps `<runtime>/CLAUDE.md` from `templates/CLAUDE.md` (always rewritten, mx-owned)
 - stamps `<runtime>/context/INDEX.json` **only if missing** (existing index content is preserved)
-- backfills the runtime `bin/` and its shipped utility bins, and mx-owned structural directories across every work — `<work>/wt/`, `scripts/`, `files/`, `tmp/`, `hooks/`, and `sessions/` for any work that pre-dates that scaffolding (plus the per-repo `hydrate.sh`/`health.sh`, the work `CLAUDE.md`, `.claude/settings.json`, and the lifecycle hook scripts — all stamp-if-missing)
+- backfills the central `hooks/` hub (stamp-if-missing per event), the runtime `bin/` and its shipped utility bins, and mx-owned structural directories across every work — `<work>/wt/`, `scripts/`, `files/`, `tmp/`, and `sessions/` for any work that pre-dates that scaffolding
+- writes each repo's `repo.json`, **only if missing**
 - stamps the per-work `CLAUDE.md`, **stamp-if-missing** (stamped once, then user-owned — see [The work folder](runtime-model.md#the-work-folder))
-- backfills per-repo `hydrate.sh` / `health.sh` in each repo container, **stamp-if-missing** and executable (see [Per-repo scripts](#per-repo-scripts))
 - generates each work's `.claude/settings.json` context-index hook, **stamp-if-missing** (see [Per-work context-index hook](#per-work-context-index-hook))
 - removes a stale `<runtime>/README.md` if one lingers (legacy cleanup)
 
@@ -71,7 +71,8 @@ Output enumerates every path actually written:
 ```
 ✓ Synced runtime at /Users/rousan/mx
   + /Users/rousan/mx/CLAUDE.md
-  + /Users/rousan/mx/repos/app/hydrate.sh
+  + /Users/rousan/mx/hooks/post-worktree-create
+  + /Users/rousan/mx/repos/app/repo.json
   + /Users/rousan/mx/works/old-feat/sessions
   + /Users/rousan/mx/works/old-feat/.claude/settings.json
 ```
@@ -102,10 +103,18 @@ It validates the **full migration chain** (`v_current → … → supported`) *b
 - errors `CLI_TOO_OLD` if the runtime is **newer** than this CLI supports (upgrade the CLI with `mx update` instead)
 - a friendly no-op if the runtime is already at the supported version
 
-The registered **v1 → v2** step upgrades **both** the repo and work layouts in one pass:
+The registered steps:
+
+**v1 → v2** upgrades the repo and work layouts in one pass:
 
 - moves each pristine clone from `repos/<repo>/` into `repos/<repo>/git/` and runs `git worktree repair` so existing worktrees relink to the moved clone;
 - restructures every work — moves its flat worktrees from `works/<work>/<repo>` into `works/<work>/wt/<repo>` (via `git worktree move`), creates the new `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/` folders, stamps the work `CLAUDE.md`, and rewrites the `.code-workspace` folder paths to `wt/<repo>`.
+
+**v2 → v3** centralizes hooks:
+
+- stamps the central `<runtime>/hooks/` hub (one executable per event);
+- writes each repo's `repo.json`;
+- **retires the old per-repo `hydrate.sh`/`health.sh` and per-work `hooks/`** — removes them when they're unchanged from the mx default, but **keeps them with a warning** (surfaced in the output and in `warnings`/porcelain) when you customized them, so you can fold the logic into the central hooks.
 
 **`--dry-run`** previews the migration without touching anything: it runs the same up-front validation (so an impossible migration still errors `NO_MIGRATION` / `CLI_TOO_OLD`), then prints every path it *would* move, stamp, or create and ends with "No changes were made." Nothing is moved and the runtime's `mx.json` version is left untouched, so you can review the plan before letting migrate run against an old runtime. In `--porcelain` mode the result object carries `"dryRun": true` and the planned paths in `changed`. Run it again without the flag to apply.
 
@@ -129,19 +138,19 @@ A malformed `mx.json` file errors with `BAD_VERSION`.
 
 ## Repos (pristine clones)
 
-Each repo lives in a **container** at `<runtime>/repos/<repo>/`, holding the pristine clone at `git/` plus mx-owned per-repo scripts (`hydrate.sh`, `health.sh`). The commands below report the repo `path` as the container (`repos/<repo>`), not the inner git dir.
+Each repo lives in a **container** at `<runtime>/repos/<repo>/`, holding the pristine clone at `git/` plus a `repo.json` metadata file (`{ "name": … }`, extensible). The commands below report the repo `path` as the container (`repos/<repo>`), not the inner git dir. (Lifecycle hooks are central — `<runtime>/hooks/` — not per-repo.)
 
 ### `mx repo add <git-url> [--name <n>]`
 
 Clone a repo into its container at `<runtime>/repos/<repo>/git/`. The only command that clones. Name is derived from the URL (last segment minus `.git`) unless `--name` overrides.
 
-Also stamps the per-repo scripts `hydrate.sh` and `health.sh` into the container (see [Per-repo scripts](#per-repo-scripts)).
+Also writes `repo.json` (`{ "name": … }`) into the container.
 
 ### `mx repo new <name> [--quick] [-o] [--description <t>]`
 
-Create a brand-new **local** repo (no remote) at `<runtime>/repos/<name>/git/`: `git init` on `main`, a starter `README.md`, and an initial commit (so `main` exists and worktrees can fork from it). Stamps `hydrate.sh`/`health.sh` like `add`. This is the counterpart to `add` for quick experiments and throwaway apps you don't want to push to a remote yet — no more manual `mkdir` + `git init` + commit dance. The initial commit uses your git identity, falling back to a neutral `mx <mx@localhost>` only if none is configured. Errors `EXISTS` if the repo already exists, `BAD_ARGS` on an invalid name (must be a single path segment).
+Create a brand-new **local** repo (no remote) at `<runtime>/repos/<name>/git/`: `git init` on `main`, a starter `README.md`, and an initial commit (so `main` exists and worktrees can fork from it). Writes `repo.json` like `add`. This is the counterpart to `add` for quick experiments and throwaway apps you don't want to push to a remote yet — no more manual `mkdir` + `git init` + commit dance. The initial commit uses your git identity, falling back to a neutral `mx <mx@localhost>` only if none is configured. Errors `EXISTS` if the repo already exists, `BAD_ARGS` on an invalid name (must be a single path segment).
 
-`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and runs the repo's `hydrate.sh` (skip with `--no-hydrate`). Pair with `-o`/`--open` to open the work in a fullscreen Terminal (macOS), and `--description <t>` to set the work description. So a fresh experiment is one line:
+`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and fires the `post-worktree-create` hook (skip with `--no-hydrate`). Pair with `-o`/`--open` to open the work in a fullscreen Terminal (macOS), and `--description <t>` to set the work description. So a fresh experiment is one line:
 
 ```
 mx repo new exp --quick -o     # repo "exp", work "dev-exp", worktree on "develop", opened
@@ -185,7 +194,7 @@ Purely-local health check. **No network, no fetch.** Surfaces drift from the exp
 
 **Checks**: default branch (from `origin/HEAD` symbolic ref, set at clone time), current branch, uncommitted changes, untracked files, ahead/behind origin/<branch> (compared against last fetch), last-fetched timestamp (`.git/FETCH_HEAD` mtime), worktrees-in-works.
 
-These structured checks are mx's built-in **typed source of truth** for repo health. In addition, `mx repo health` now also runs the repo's `health.sh` hook (if any) and captures its stdout into a separate `extra` field — see [Per-repo scripts](#per-repo-scripts). A missing, empty, or failing hook yields `extra: null` and never affects `healthy` / `issues`.
+These structured checks are mx's built-in **typed source of truth** for repo health. In addition, `mx repo health` runs the central `repo-health` hook (`<runtime>/hooks/repo-health`) with `MX_REPO` set and captures its stdout into a separate `extra` field — see [Hooks](#hooks). A missing, empty, or failing hook yields `extra: null` and never affects `healthy` / `issues`.
 
 **List mode** (no `-n`): one line per repo with ✓/⚠ at the start, issues summarized inline:
 
@@ -209,45 +218,23 @@ worker
   last fetched        2 hours ago    
   worktrees in works  1                used by: checkout-revamp
 
-  health.sh
-    <captured stdout of the repo's health.sh, if it produced any>
+  repo-health
+    <captured stdout of the repo-health hook, if it produced any>
 ```
 
-The `health.sh` section appears only when the hook produced output. In porcelain, the captured output is the string field `extra` (or `null`).
+The `repo-health` section appears only when the hook produced output. In porcelain, the captured output is the string field `extra` (or `null`).
 
 **Exit code is 0** even when issues are found (read-only convention). To refresh the "behind" numbers against actual origin, run `mx repo -n <name> fetch` first.
 
 ### `mx repo -n <name> rm`
 
-Remove the repo container (clone + scripts). Refuses with `IN_USE` if any work still has a worktree of it.
-
-## Per-repo scripts
-
-Each repo container holds two mx-owned-but-user-customizable hooks: `repos/<repo>/hydrate.sh` and `repos/<repo>/health.sh`. Both are stamped on `mx repo add` and backfilled by `mx sync` — always **stamp-if-missing** and executable, so your edits are preserved.
-
-### `hydrate.sh` — runs after `worktree add`
-
-Default body just `echo "Setup is done"`. It runs **automatically after** `mx work … worktree add <repo>`, with the **new worktree as the working directory**. Context is passed both ways:
-
-- **positional args**: `$1` = worktree path, `$2` = branch
-- **env vars**: `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_RUNTIME`
-
-A non-zero exit during automatic post-`worktree add` execution is a **warning** — the worktree is kept.
-
-Typical uses: copy a `.env`, allocate a port with `mx work … port set` and wire it into config, install dependencies.
-
-- Pass `--no-hydrate` to `worktree add` to skip running it.
-- Re-run it on demand with `mx work -n <name> worktree hydrate <repo>` (see below) — in that explicit mode, a non-zero exit errors with `HYDRATE_FAILED`.
-
-### `health.sh` — augments `mx repo health`
-
-Default is a documented no-op (no output). When present and producing output, its stdout is captured into the `extra` field of `mx repo health` (shown as a `health.sh` section in detail view). It runs with the **git clone** as cwd; env: `MX_REPO`, `MX_REPO_PATH`, `MX_GIT_DIR`, `MX_RUNTIME`. A missing / empty / failing hook yields `extra: null` and never affects `healthy` / `issues`.
+Remove the repo container (clone + `repo.json`). Refuses with `IN_USE` if any work still has a worktree of it.
 
 ## Works (features)
 
 ### `mx work new <name> [--description <text>] [--open|-o]`
 
-Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `files/`, `tmp/`, `hooks/`, and `sessions/`, the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)), `.claude/settings.json` (the per-work context-index hook — see [Per-work context-index hook](#per-work-context-index-hook)), and the lifecycle hook scripts in `hooks/` (see [Work lifecycle hooks](#work-lifecycle-hooks)). Prints the absolute path. All of these are **stamp-if-missing**.
+Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `files/`, `tmp/`, and `sessions/`, the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)), and `.claude/settings.json` (the per-work context-index hook — see [Per-work context-index hook](#per-work-context-index-hook)). Prints the absolute path. All of these are **stamp-if-missing**. (Lifecycle hooks are central, not per-work — see [Hooks](#hooks).)
 
 The name is immutable.
 
@@ -302,11 +289,11 @@ Create a git worktree of `<repo>` inside the work at `works/<name>/wt/<repo>`, o
 
 Run `mx repo -n <repo> fetch` first if you want the base at its latest upstream commit.
 
-**After** the worktree is created, the repo's `hydrate.sh` runs automatically with the new worktree as cwd (see [Per-repo scripts](#per-repo-scripts)). A non-zero exit here is a warning — the worktree is kept. Pass `--no-hydrate` to skip running it.
+**Before** creation mx fires the `pre-worktree-create` hook (a non-zero exit aborts with `HOOK_FAILED`); **after** creation it fires `post-worktree-create` — the "hydrate" step — with the new worktree as cwd (see [Hooks](#hooks)). A non-zero exit there is a warning — the worktree is kept. Pass `--no-hydrate` to skip the post hook.
 
 ### `mx work -n <name> worktree hydrate <repo>`
 
-Re-run the repo's `hydrate.sh` against an existing worktree on demand (same env + positional args as the automatic run). In this explicit mode a non-zero exit errors with `HYDRATE_FAILED`.
+Re-run the `post-worktree-create` hook against an existing worktree on demand (same env as the automatic run). In this explicit mode a non-zero exit errors with `HOOK_FAILED`.
 
 ### `mx work -n <name> worktree ls [--porcelain]`
 
@@ -356,7 +343,7 @@ Only `y` / `yes` (case-insensitive) proceeds; anything else aborts with `Aborted
 
 `--yes` / `-y` skips the prompt. **Required** when stdin isn't a TTY (piped, scripted) or with `--porcelain` — otherwise mx errors with code `NEED_CONFIRMATION`.
 
-**Lifecycle hooks:** after confirmation, mx runs `works/<name>/hooks/pre-archive.sh` (worktrees still on disk). A non-zero exit **aborts** the archive with `HOOK_FAILED` — nothing is mutated. After a successful archive it runs `hooks/post-archive.sh`; a non-zero exit there is a warning only (the archive already happened). See [Work lifecycle hooks](#work-lifecycle-hooks).
+**Lifecycle hooks:** after confirmation, mx fires the central `pre-work-archive` hook (worktrees still on disk). A non-zero exit **aborts** the archive with `HOOK_FAILED` — nothing is mutated. After a successful archive it fires `post-work-archive`; a non-zero exit there is a warning only. See [Hooks](#hooks).
 
 ### `mx work -n <name> unarchive [<repo>=<branch>...]`
 
@@ -370,7 +357,7 @@ mx: cannot unarchive "feat" — branch(es) not found: app=feature-x. Re-run with
 
 To override per-repo: pass `<repo>=<branch>` positional args. Overrides update `work.json`'s recorded branches to the actually-used ones.
 
-**Lifecycle hooks:** mx runs `hooks/pre-unarchive.sh` before re-creating any worktree (a non-zero exit aborts with `HOOK_FAILED`) and `hooks/post-unarchive.sh` after restoration (non-zero warns only). See [Work lifecycle hooks](#work-lifecycle-hooks).
+**Lifecycle hooks:** mx fires the central `pre-work-unarchive` hook before re-creating any worktree (a non-zero exit aborts with `HOOK_FAILED`) and `post-work-unarchive` after restoration (non-zero warns only). See [Hooks](#hooks).
 
 ### `mx work -n <name> destroy --force`
 
@@ -403,27 +390,21 @@ The directory is created by `mx init` and refreshed by `mx sync`. mx-shipped bin
 
 The hook is **per-work** (not at the runtime root) because Claude Code reads `.claude/settings.json` only from the session's launch directory, and mx sessions launch in the work folder. It is **stamp-if-missing** — user edits are preserved.
 
-## Work lifecycle hooks
+## Hooks
 
-`mx work new` and `mx sync` stamp four documented, executable **no-op** scripts into `works/<feature>/hooks/`, run around archive/unarchive:
+All lifecycle hooks live in **one place** — `<runtime>/hooks/` — with **one executable per event**, named exactly for the event (no extension). `mx init` stamps a documented no-op for each; `mx sync` backfills any that are missing but **never overwrites** your edits. Because the hooks are runtime-wide (shared by every repo and work), you branch on the context **inside** the script. Write them in **any language** — bash, Node, Python — just set the shebang and keep the file executable. Delete a hook file to disable that event.
 
-| hook | runs | non-zero exit |
+| event | fires | non-zero exit |
 |---|---|---|
-| `pre-archive.sh` | before `archive` removes worktrees (worktrees on disk) | **aborts** the archive (`HOOK_FAILED`); nothing mutated |
-| `post-archive.sh` | after a successful archive (worktrees gone) | warning only |
-| `pre-unarchive.sh` | before `unarchive` re-creates worktrees (none on disk) | **aborts** the unarchive (`HOOK_FAILED`) |
-| `post-unarchive.sh` | after worktrees are restored | warning only |
+| `pre-worktree-create` | before `worktree add` creates a worktree | **aborts** (`HOOK_FAILED`) |
+| `post-worktree-create` | after a worktree is created — the "hydrate" step (cwd = the new worktree) | warning (worktree kept) |
+| `pre-worktree-remove` / `post-worktree-remove` | around `worktree rm` | pre **aborts**; post warns |
+| `pre-work-archive` / `post-work-archive` | around `mx work archive` | pre **aborts**; post warns |
+| `pre-work-unarchive` / `post-work-unarchive` | around `mx work unarchive` | pre **aborts**; post warns |
+| `pre-repo-fetch` / `post-repo-fetch` | around `mx repo fetch` | pre **aborts**; post warns |
+| `repo-health` | during `mx repo health` | stdout captured into the report |
 
-Each runs with the **work folder** as the working directory. Context is passed as positional args and environment variables:
-
-```
-$1 / $MX_EVENT       the event name (e.g. "pre-archive")
-$2 / $MX_WORK_PATH   absolute path to the work folder
-$MX_WORK             work name
-$MX_RUNTIME          runtime root
-```
-
-A `pre-*` hook is a veto point (block archive on unpushed commits, snapshot state, etc.); a `post-*` hook is for after-the-fact cleanup or notification. The default scripts just `exit 0`, so an un-customized hook is inert. They are mx-owned but **user-editable** — `mx sync` re-stamps a script only if it's missing (never clobbering edits) and backfills `hooks/` for works created before this feature. In `--porcelain` mode hook stdio is suppressed to keep output clean, but a `pre-*` veto still aborts with a JSON `HOOK_FAILED` error.
+Context arrives as `MX_*` environment variables — always `MX_EVENT` and `MX_RUNTIME`, plus event-specific ones: `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_GIT_DIR`, `MX_REPO_PATH`. Each shipped hook's header documents its own set and working directory. A `pre-*` non-zero exit **aborts** the operation (`HOOK_FAILED`, nothing mutated) — even in `--porcelain` mode (where hook stdio is suppressed, the abort still surfaces as a JSON `HOOK_FAILED` error); a `post-*` non-zero exit is only a warning.
 
 ## Output conventions
 
@@ -461,7 +442,6 @@ A `pre-*` hook is a veto point (block archive on unpushed commits, snapshot stat
 | `CLI_TOO_OLD` | runtime is newer than the CLI supports — upgrade the CLI |
 | `NO_MIGRATION` | no registered migration step for a version gap in the chain |
 | `BAD_VERSION` | malformed `<runtime>/mx.json` file |
-| `HYDRATE_FAILED` | explicit `worktree hydrate` hook exited non-zero |
-| `HOOK_FAILED` | a `pre-archive`/`pre-unarchive` work lifecycle hook exited non-zero — the operation was aborted |
+| `HOOK_FAILED` | a hook exited non-zero — a `pre-*` hook aborted the operation, or an explicit `worktree hydrate` failed |
 | `UNSUPPORTED` | platform-unsupported action (e.g. `mx work new -o` on non-macOS; downgraded to a warning) |
 | `INTERNAL` | non-`MxError` thrown — bug |

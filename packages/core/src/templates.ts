@@ -62,11 +62,38 @@ export function stampContextIndex(targetDir: string, templatesDir: string): stri
 }
 
 /**
- * mx-owned per-repo script files, copied into a repo's container
- * (`repos/<name>/`) from `<templatesDir>/repo/<file>`. User-customizable once
- * stamped, so each is written only when missing.
+ * Stamp the central lifecycle-hook templates from `<templatesDir>/hooks/` into
+ * the runtime's `<targetDir>/hooks/`, **only those not already present** — these
+ * carry the user's own branching logic, so they're never overwritten once they
+ * exist (unlike `bin/`, which is mx-owned). Each newly-stamped hook is made
+ * executable. Always ensures the `hooks/` directory exists even when there are
+ * no templates, so the user has somewhere to add hooks.
+ *
+ * @param targetDir - The runtime root to write `hooks/` into.
+ * @param templatesDir - Directory containing the `hooks/<event>` templates.
+ * @returns Absolute paths created this call (the dir if newly made, plus each
+ *   newly-stamped hook).
  */
-const REPO_SCRIPTS = ['hydrate.sh', 'health.sh'] as const;
+export function stampRuntimeHooks(targetDir: string, templatesDir: string): string[] {
+  const created: string[] = [];
+  const destDir = path.join(targetDir, 'hooks');
+  if (!exists(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+    created.push(destDir);
+  }
+  const srcDir = path.join(templatesDir, 'hooks');
+  if (!exists(srcDir)) return created;
+  for (const name of fs.readdirSync(srcDir).sort()) {
+    const src = path.join(srcDir, name);
+    if (!fs.statSync(src).isFile()) continue;
+    const dest = path.join(destDir, name);
+    if (exists(dest)) continue; // never clobber user hook logic
+    fs.copyFileSync(src, dest);
+    fs.chmodSync(dest, 0o755);
+    created.push(dest);
+  }
+  return created;
+}
 
 /**
  * Stamp mx-shipped runtime utility bins from `<templatesDir>/bin/` into the
@@ -106,25 +133,3 @@ export function stampRuntimeBins(targetDir: string, templatesDir: string): strin
   return written;
 }
 
-/**
- * Stamp mx-owned per-repo scripts (e.g. `hydrate.sh`) into a repo container,
- * **only those not already present** (they're user-editable after creation).
- * Each newly-stamped script is made executable.
- *
- * @param containerDir - The repo's container directory (`repos/<name>`).
- * @param templatesDir - Directory containing the `repo/<script>` templates.
- * @returns Absolute paths of scripts newly stamped this call.
- */
-export function stampRepoScripts(containerDir: string, templatesDir: string): string[] {
-  const created: string[] = [];
-  for (const name of REPO_SCRIPTS) {
-    const dest = path.join(containerDir, name);
-    if (exists(dest)) continue;
-    const src = path.join(templatesDir, 'repo', name);
-    if (!exists(src)) throw new MxError(`missing template: ${src}`, 'NO_TEMPLATE');
-    fs.copyFileSync(src, dest);
-    fs.chmodSync(dest, 0o755);
-    created.push(dest);
-  }
-  return created;
-}
