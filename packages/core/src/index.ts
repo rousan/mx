@@ -34,6 +34,8 @@ export {
   readWork,
   writeWork,
   findWorktree,
+  findWorktreeByName,
+  worktreeName,
   inferContext,
   initRuntime,
   syncRuntime,

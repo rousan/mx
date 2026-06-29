@@ -97,10 +97,10 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 | `mx repo health` / `mx repo -n <name> health` | local-only health check (on default branch? clean? in sync?), augmented by the central `repo-health` hook |
 | `mx work new <name> [--description <t>] [-o]` | create a work (prints its path); `-o` opens a fullscreen Terminal in the work folder (macOS) |
 | `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works (ls shows active only by default; `--all` includes archived; `--archived` shows archived only) |
-| `mx work -n <name> worktree add\|ls\|rm\|hydrate <repo> [--no-hydrate]` | manage worktrees; `add` fires `pre/post-worktree-create` (`post` = hydrate; skip with `--no-hydrate`), `rm` fires `pre/post-worktree-remove`, `hydrate` re-runs `post-worktree-create` |
-| `mx work -n <name> port set\|unset\|ls <repo> <service> [<port>]` | allocate/release ports |
+| `mx work -n <name> worktree add <repo> [<wt-name>]` / `ls` / `rm <wt-name>` | manage worktrees; `add` fires `pre/post-worktree-create`, `rm` fires `pre/post-worktree-remove`. `<wt-name>` defaults to the repo — pass a distinct one for **multiple worktrees of the same repo** |
+| `mx work -n <name> port set\|unset\|ls <wt-name> <service> [<port>]` | allocate/release ports per worktree (omit `<port>` to auto-pick a free one) |
 | `mx work -n <name> archive [--yes\|-y]` | remove worktrees; keep folder + work.json + sessions/ + branches (recoverable). Prompts for confirmation; `--yes` skips the prompt (required for `--porcelain` and non-TTY callers). Fires `pre-work-archive` (non-zero aborts: `HOOK_FAILED`) and `post-work-archive` (non-zero warns) |
-| `mx work -n <name> unarchive [<repo>=<branch>...]` | re-create worktrees; positional overrides if recorded branches are missing. Fires `pre-work-unarchive` (non-zero aborts) and `post-work-unarchive` (non-zero warns) |
+| `mx work -n <name> unarchive [<wt-name>=<branch>...]` | re-create worktrees; positional overrides if recorded branches are missing. Fires `pre-work-unarchive` (non-zero aborts) and `post-work-unarchive` (non-zero warns) |
 | `mx work -n <name> destroy --force` | **permanent**: delete the work folder (incl. sessions); branches kept. Prefer archive. |
 | `mx bin ls` / `mx bin path` (alias `mx bins`) | list the runtime's `bin/` utility executables (mx-shipped + your own); `path` prints the dir for `export PATH="$(mx bin path):$PATH"` |
 
@@ -117,6 +117,7 @@ See **[docs/release.md](docs/release.md)** for the full runbook, the `NPM_TOKEN`
 - [x] `mx` CLI — `init`, `status`, `sync`, `update`, `migrate`, `repo`, `work` (worktree + port + path)
 - [x] Runtime versioning (`mx.json` + version gate) and `mx migrate`; container repo layout (`repos/<repo>/git` + `repo.json`)
 - [x] Central hook hub (`<runtime>/hooks/`): worktree create/remove, work archive/unarchive, repo fetch, repo-health — any language, branch on `MX_*`
+- [x] Multiple worktrees of one repo per work (named worktrees; `wt/<name>`)
 - [x] Per-work `SessionStart` hook loading the context-registry index
 - [x] `mx work new -o` — fullscreen Terminal in the work folder (macOS)
 - [x] Env-based runtime discovery (`--runtime` / `$MX_RUNTIME` / default `~/mx`)

@@ -96,25 +96,24 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
       const workName = `dev-${name}`;
       const workRes = workNew(root, workName, flags.description ?? '');
       const wtRes = worktreeAdd(root, workName, name, { branch: 'develop' });
-      if (!flags.noHydrate) {
-        runPostHook(
-          root,
-          'post-worktree-create',
-          {
-            cwd: wtRes.path,
-            env: {
-              MX_WORK: workName,
-              MX_REPO: name,
-              MX_BRANCH: wtRes.branch,
-              MX_BASE: '',
-              MX_WORKTREE_PATH: wtRes.path,
-              MX_WORK_PATH: workRes.path,
-              MX_GIT_DIR: repoGitDir(root, name),
-            },
+      runPostHook(
+        root,
+        'post-worktree-create',
+        {
+          cwd: wtRes.path,
+          env: {
+            MX_WORK: workName,
+            MX_REPO: name,
+            MX_WORKTREE_NAME: wtRes.name,
+            MX_BRANCH: wtRes.branch,
+            MX_BASE: '',
+            MX_WORKTREE_PATH: wtRes.path,
+            MX_WORK_PATH: workRes.path,
+            MX_GIT_DIR: repoGitDir(root, name),
           },
-          flags.porcelain,
-        );
-      }
+        },
+        flags.porcelain,
+      );
       let opened = false;
       if (flags.open) {
         try {

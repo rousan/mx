@@ -12,6 +12,10 @@ What each release brought. Reverse-chronological. Dates reflect when the corresp
 - **Migration v2 → v3** (`mx migrate`): stamps the `hooks/` hub, writes each `repo.json`, and **retires the old scripts — deleting defaults, but keeping anything you customized with a warning** so you can fold the logic into the central hooks. `--dry-run` previews the plan + warnings.
 - **CLI:** new `apps/cli/src/hooks.ts` runner (replaces `hydrate.ts` + `workhooks.ts`); `HYDRATE_FAILED` folded into `HOOK_FAILED`. **Core:** `HOOK_EVENTS` / `hookScript` / `runtimeHooksDir`, `repoConfigFile` / `readRepoConfig` / `writeRepoConfig`, `stampRuntimeHooks` in `@mx/core`; `RUNTIME_VERSION = 3`.
 
+**Multiple worktrees of one repo per work.** Each worktree now has a **`name`** (its `wt/<name>` directory and the `rm`/`port`/unarchive selector), defaulting to the repo name. Pass a distinct name to add several worktrees of the same repo to one work: `mx work -n feat worktree add app app-pr2 --branch fix`. Selectors (`worktree rm`, `port set`, `unarchive <name>=<branch>`) are by worktree name; ports are independent per worktree. `work.json` now always records `name` (uniform shape — `mx migrate` backfills it into existing manifests, `= repo`). Back-compatible: a name-less entry defaults to `repo`, and v2 couldn't hold two worktrees of one repo, so nothing needs moving. New `worktreeName` / `findWorktreeByName` in `@mx/core`; hooks gain `$MX_WORKTREE_NAME`.
+
+**Dropped `mx work worktree hydrate` and `--no-hydrate`.** With hooks as the source of truth, the dedicated subcommand and flag are redundant: `post-worktree-create` always fires on `worktree add` (make it a no-op to skip), and you re-run it by re-invoking the hook yourself.
+
 After upgrading the CLI (`npm i -g @roulabs/mx@latest`), run **`mx migrate`** once per runtime.
 
 ## 2.8.0 — 2026-06-29

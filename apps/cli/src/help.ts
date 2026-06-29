@@ -30,15 +30,14 @@ Works (features):
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
   mx work -n <name> open  (or -o)                       open the work in a fullscreen Terminal (macOS)
   mx work -n <name> describe <text>
-  mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]   fires pre/post-worktree-create hooks (post hydrates unless --no-hydrate)
+  mx work -n <name> worktree add <repo> [<name>] [--branch <b>] [--base <ref>]   fires pre/post-worktree-create hooks; <name> (default repo) lets one work hold multiple worktrees of a repo
   mx work -n <name> worktree ls [--porcelain]
-  mx work -n <name> worktree rm <repo>                  refuses on uncommitted changes; keeps branch
-  mx work -n <name> worktree hydrate <repo>             re-run the post-worktree-create hook against its worktree
-  mx work -n <name> port set <repo> <service> [<port>]  auto-picks a free port if omitted
-  mx work -n <name> port unset <repo> <service>
+  mx work -n <name> worktree rm <worktree>              refuses on uncommitted changes; keeps branch
+  mx work -n <name> port set <worktree> <service> [<port>]  auto-picks a free port if omitted
+  mx work -n <name> port unset <worktree> <service>
   mx work -n <name> port ls [--porcelain]
   mx work -n <name> archive [--yes|-y]                  removes worktrees; keeps folder + work.json + sessions; prompts for confirmation (use --yes to skip)
-  mx work -n <name> unarchive [<repo>=<branch>...]      re-creates worktrees from work.json; override per-repo branch if recorded one is missing
+  mx work -n <name> unarchive [<worktree>=<branch>...]  re-creates worktrees from work.json; override per-worktree branch if recorded one is missing
   mx work -n <name> destroy --force                     PERMANENT: deletes the work folder including session summaries (branches kept). Prefer archive.
 
 Bin (runtime-wide utility executables in <runtime>/bin, meant for PATH):

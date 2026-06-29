@@ -66,7 +66,7 @@ All lifecycle hooks live in **one** runtime-wide directory — `<runtime>/hooks/
 | `pre-repo-fetch` / `post-repo-fetch` | around `mx repo fetch` (cwd = git clone) | pre **aborts**; post warns |
 | `repo-health` | during `mx repo health` (cwd = git clone) | stdout captured into `extra`; failure → `extra: null` |
 
-Context arrives via `MX_*` env vars — always `MX_EVENT` + `MX_RUNTIME`, plus event-specific ones like `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_GIT_DIR`, `MX_REPO_PATH`. Each shipped template documents its own set. `worktree add --no-hydrate` skips the post-create hook; `mx work … worktree hydrate <repo>` re-runs it (non-zero → `HOOK_FAILED`).
+Context arrives via `MX_*` env vars — always `MX_EVENT` + `MX_RUNTIME`, plus event-specific ones like `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_GIT_DIR`, `MX_REPO_PATH`. Each shipped template documents its own set (worktree events also get `MX_WORKTREE_NAME`). To skip hydration, make `post-worktree-create` a no-op — there is no `--no-hydrate` flag or `worktree hydrate` subcommand.
 
 ## Runtime bin (`<runtime>/bin/`)
 
@@ -86,7 +86,7 @@ This is distinct from a work's `scripts/` (scoped to one work). See [`mx bin`](c
 
 A work folder (`works/<feature>/`) is more than a flat bag of worktrees. Its shape:
 
-- **`wt/`** — **all** worktrees live here, one per repo at `wt/<repo>` (each on the feature branch). This is the only place worktrees go; `mx work … worktree add` creates them here, and the `.code-workspace` folder entries point at `wt/<repo>` (the entry `name` stays the bare repo name).
+- **`wt/`** — **all** worktrees live here, at `wt/<worktree-name>` (each on its branch). The worktree name defaults to the repo, so it's usually `wt/<repo>`; a work can hold several worktrees of one repo by naming the extras. `mx work … worktree add` creates them here, and the `.code-workspace` folder entries point at `wt/<name>`.
 - **`CLAUDE.md`** — work-specific Claude rules. mx stamps it once (an explanatory comment, otherwise empty) and **never overwrites it** afterward. It loads **alongside** the runtime's `CLAUDE.md` for any session started in the work folder, because Claude Code walks up from the session's cwd collecting `CLAUDE.md` files. Put rules specific to this one work here.
 - **`scripts/`** — ad-hoc scripts for this work (also where any per-work helper binary goes; there is no per-work `bin/` — runtime-wide tools live in the runtime's [`bin/`](#runtime-bin)).
 - **`files/`** — artifacts worth keeping: notes, exports, scratch docs, downloads meant to survive.
@@ -108,8 +108,9 @@ Because worktrees now live under `wt/`, a repo is inferred from the **third** pa
   "name": "feature-a",
   "description": "Add a chatbox to the answer panel",
   "worktrees": [
-    { "repo": "repo-a", "branch": "feature-a", "ports": { "web": 3000, "api": 3001 } },
-    { "repo": "repo-b", "branch": "feature-a", "ports": { "worker": 3002 } }
+    { "repo": "repo-a", "name": "repo-a", "branch": "feature-a", "ports": { "web": 3000, "api": 3001 } },
+    { "repo": "repo-a", "name": "repo-a-pr2", "branch": "fix", "ports": { "web": 3002 } },
+    { "repo": "repo-b", "name": "repo-b", "branch": "feature-a", "ports": { "worker": 3003 } }
   ],
   "isArchived": false,
   "archived_at": null
@@ -120,11 +121,11 @@ Fields:
 
 - `name` — immutable; matches the work folder name.
 - `description` — free-text; set on `mx work new --description "…"` or `mx work -n <n> describe "…"`.
-- `worktrees[]` — one per repo. `branch` is the worktree's branch. `ports` is a `service → port` map local to that worktree.
+- `worktrees[]` — one entry per worktree. `repo` is the pristine repo; `name` is the worktree's identifier (its `wt/<name>` directory and the `rm`/`port` selector), defaulting to the repo name. A work may hold **several worktrees of the same repo** by giving the extras distinct names (above, `repo-a` and `repo-a-pr2`). `branch` is the worktree's branch; `ports` is a `service → port` map local to that worktree. (Older `work.json` may omit `name`; it then defaults to `repo`, and `mx migrate` backfills it.)
 - `isArchived` — true after `mx work archive`; cleared by `mx work unarchive`.
 - `archived_at` — ISO-8601 timestamp set when `isArchived` flips to true; deleted on unarchive (absent in JSON, not `null`).
 
-There is **no port-block concept**. Each port is allocated individually and is **unique across all works** in the runtime — when you `mx work -n <n> port set <repo> <service>`, mx finds a free port across every work's port set.
+There is **no port-block concept**. Each port is allocated individually and is **unique across all works** in the runtime — when you `mx work -n <n> port set <worktree> <service>`, mx finds a free port across every work's port set.
 
 ## `context/INDEX.json` schema
 

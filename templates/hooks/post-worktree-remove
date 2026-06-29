@@ -13,6 +13,7 @@
 # Context (environment variables):
 #     $MX_WORK — work name
 #     $MX_REPO — repo name
+#     $MX_WORKTREE_NAME — worktree name (the wt/<name> selector; = repo unless renamed)
 #     $MX_BRANCH — branch that was kept
 #     $MX_WORK_PATH — absolute work folder
 #     $MX_GIT_DIR — the repo pristine clone

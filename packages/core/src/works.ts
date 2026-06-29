@@ -11,7 +11,8 @@ import {
   repoGitDir,
   readWork,
   writeWork,
-  findWorktree,
+  findWorktreeByName,
+  worktreeName,
   listWorkNames,
   ensureWorkScaffolding,
   countSessions,
@@ -29,33 +30,35 @@ interface CodeWorkspace {
 }
 
 /**
- * Add a repo folder to a work's `.code-workspace`, creating the file if needed.
+ * Add a worktree folder to a work's `.code-workspace`, creating the file if
+ * needed. Keyed by worktree name (the `wt/<name>` segment), so multiple
+ * worktrees of the same repo get distinct entries.
  *
  * @param root - Runtime root.
  * @param name - Work name.
- * @param repo - Repo (folder) to add.
+ * @param wtName - Worktree name (folder under `wt/`) to add.
  */
-function addFolderToWorkspace(root: string, name: string, repo: string): void {
+function addFolderToWorkspace(root: string, name: string, wtName: string): void {
   const file = workspaceFile(root, name);
   const ws: CodeWorkspace = exists(file) ? readJson(file) : { folders: [], settings: {} };
   ws.folders = ws.folders ?? [];
-  const rel = `wt/${repo}`; // worktrees live under the work's wt/ folder
-  if (!ws.folders.some((f) => f.path === rel)) ws.folders.push({ name: repo, path: rel });
+  const rel = `wt/${wtName}`; // worktrees live under the work's wt/ folder
+  if (!ws.folders.some((f) => f.path === rel)) ws.folders.push({ name: wtName, path: rel });
   writeJson(file, ws);
 }
 
 /**
- * Remove a repo folder from a work's `.code-workspace` if present.
+ * Remove a worktree folder from a work's `.code-workspace` if present.
  *
  * @param root - Runtime root.
  * @param name - Work name.
- * @param repo - Repo (folder) to remove.
+ * @param wtName - Worktree name (folder under `wt/`) to remove.
  */
-function removeFolderFromWorkspace(root: string, name: string, repo: string): void {
+function removeFolderFromWorkspace(root: string, name: string, wtName: string): void {
   const file = workspaceFile(root, name);
   if (!exists(file)) return;
   const ws: CodeWorkspace = readJson(file);
-  ws.folders = (ws.folders ?? []).filter((f) => f.path !== `wt/${repo}`);
+  ws.folders = (ws.folders ?? []).filter((f) => f.path !== `wt/${wtName}`);
   writeJson(file, ws);
 }
 
@@ -208,6 +211,12 @@ export function workPath(root: string, name: string): WorkPathResult {
  * Options for creating a worktree.
  */
 export interface WorktreeAddOpts {
+  /**
+   * Worktree name within the work — its `wt/<name>` directory and selector.
+   * Defaults to the repo name. Pass a distinct name to add a **second worktree
+   * of the same repo** to one work.
+   */
+  name?: string;
   /** New branch to create (defaults to the work name; reused if it exists). */
   branch?: string;
   /** Base ref to fork from (resolved to a SHA, with an `origin/` fallback). */
@@ -222,6 +231,8 @@ export interface WorktreeAddResult {
   work: string;
   /** Repo name. */
   repo: string;
+  /** Worktree name (the `wt/<name>` selector; equals `repo` unless overridden). */
+  name: string;
   /** Branch the worktree is on. */
   branch: string;
   /** Absolute worktree path. */
@@ -232,12 +243,14 @@ export interface WorktreeAddResult {
 
 /**
  * Create a git worktree for a repo inside a work, registering it in `work.json`
- * and the `.code-workspace`.
+ * and the `.code-workspace`. The worktree's directory/selector is `opts.name`
+ * (default: the repo name); pass a distinct name to hold multiple worktrees of
+ * the same repo in one work.
  *
  * @param root - Runtime root.
  * @param name - Work name.
  * @param repo - Repo to create the worktree from.
- * @param opts - Optional new branch name and base ref.
+ * @param opts - Optional worktree name, new branch name, and base ref.
  * @returns The created worktree's details.
  */
 export function worktreeAdd(
@@ -249,12 +262,22 @@ export function worktreeAdd(
   const work = readWork(root, name);
   const rp = repoGitDir(root, repo);
   if (!isGitRepo(rp)) throw new MxError(`no such repo: ${repo}`, 'NO_REPO');
-  if (findWorktree(work, repo)) {
-    throw new MxError(`work "${name}" already has worktree for ${repo}`, 'EXISTS');
+
+  const wtName = opts.name ?? repo;
+  if (wtName.includes('/') || wtName.includes('\\') || wtName === '.' || wtName === '..') {
+    throw new MxError(`invalid worktree name: ${JSON.stringify(wtName)}`, 'BAD_ARGS');
+  }
+  if (findWorktreeByName(work, wtName)) {
+    throw new MxError(
+      wtName === repo
+        ? `work "${name}" already has a worktree named "${wtName}" — give the new one a name: \`mx work -n ${name} worktree add ${repo} <name>\``
+        : `work "${name}" already has a worktree named "${wtName}"`,
+      'EXISTS',
+    );
   }
 
   const branch = opts.branch || name;
-  const dest = worktreePath(root, name, repo);
+  const dest = worktreePath(root, name, wtName);
   fs.mkdirSync(worktreesDir(root, name), { recursive: true }); // ensure wt/ exists
   if (branchExists(rp, branch)) {
     git(['-C', rp, 'worktree', 'add', dest, branch]);
@@ -273,10 +296,12 @@ export function worktreeAdd(
   }
 
   work.worktrees = work.worktrees ?? [];
-  work.worktrees.push({ repo, branch, ports: {} });
+  // Always record `name` (= repo when not overridden) so every work.json
+  // worktree has the same shape, new or migrated.
+  work.worktrees.push({ repo, name: wtName, branch, ports: {} });
   writeWork(root, work);
-  addFolderToWorkspace(root, name, repo);
-  return { work: name, repo, branch, path: dest, ports: {} };
+  addFolderToWorkspace(root, name, wtName);
+  return { work: name, repo, name: wtName, branch, path: dest, ports: {} };
 }
 
 /**
@@ -298,6 +323,8 @@ export interface WorktreeRemoveResult {
   work: string;
   /** Repo name. */
   repo: string;
+  /** Worktree name that was removed. */
+  name: string;
   /** Branch that was kept. */
   branch: string;
   /** Always true on success. */
@@ -310,22 +337,22 @@ export interface WorktreeRemoveResult {
  *
  * @param root - Runtime root.
  * @param name - Work name.
- * @param repo - Repo (worktree) to remove.
- * @returns The removed worktree's repo and kept branch.
+ * @param wtName - Worktree name (selector) to remove (defaults to the repo name).
+ * @returns The removed worktree's repo/name and kept branch.
  */
-export function worktreeRemove(root: string, name: string, repo: string): WorktreeRemoveResult {
+export function worktreeRemove(root: string, name: string, wtName: string): WorktreeRemoveResult {
   const work = readWork(root, name);
-  const wt = findWorktree(work, repo);
-  if (!wt) throw new MxError(`work "${name}" has no worktree for ${repo}`, 'NO_WORKTREE');
-  const dest = worktreePath(root, name, repo);
+  const wt = findWorktreeByName(work, wtName);
+  if (!wt) throw new MxError(`work "${name}" has no worktree named "${wtName}"`, 'NO_WORKTREE');
+  const dest = worktreePath(root, name, wtName);
   if (exists(dest) && isDirty(dest)) {
-    throw new MxError(`worktree ${repo} has uncommitted changes — commit or discard them first`, 'DIRTY');
+    throw new MxError(`worktree "${wtName}" has uncommitted changes — commit or discard them first`, 'DIRTY');
   }
-  git(['-C', repoGitDir(root, repo), 'worktree', 'remove', dest]); // keeps the branch
-  work.worktrees = work.worktrees.filter((w) => w.repo !== repo);
+  git(['-C', repoGitDir(root, wt.repo), 'worktree', 'remove', dest]); // keeps the branch
+  work.worktrees = work.worktrees.filter((w) => worktreeName(w) !== wtName);
   writeWork(root, work);
-  removeFolderFromWorkspace(root, name, repo);
-  return { work: name, repo, branch: wt.branch, removed: true };
+  removeFolderFromWorkspace(root, name, wtName);
+  return { work: name, repo: wt.repo, name: wtName, branch: wt.branch, removed: true };
 }
 
 /**
@@ -382,8 +409,8 @@ export function workDestroy(
   const work = readWork(root, name);
   const dirty: string[] = [];
   for (const wt of work.worktrees ?? []) {
-    const dest = worktreePath(root, name, wt.repo);
-    if (exists(dest) && isDirty(dest)) dirty.push(wt.repo);
+    const dest = worktreePath(root, name, worktreeName(wt));
+    if (exists(dest) && isDirty(dest)) dirty.push(worktreeName(wt));
   }
   if (dirty.length) {
     throw new MxError(
@@ -393,9 +420,9 @@ export function workDestroy(
   }
   const removed: string[] = [];
   for (const wt of work.worktrees ?? []) {
-    const dest = worktreePath(root, name, wt.repo);
+    const dest = worktreePath(root, name, worktreeName(wt));
     if (exists(dest)) git(['-C', repoGitDir(root, wt.repo), 'worktree', 'remove', dest]); // keeps branch
-    removed.push(wt.repo);
+    removed.push(worktreeName(wt));
   }
   fs.rmSync(workDir(root, name), { recursive: true, force: true });
   return { work: name, removedWorktrees: removed, branchesKept: true };
@@ -435,8 +462,8 @@ export function archiveWork(root: string, name: string): ArchiveResult {
   }
   const dirty: string[] = [];
   for (const wt of work.worktrees ?? []) {
-    const dest = worktreePath(root, name, wt.repo);
-    if (exists(dest) && isDirty(dest)) dirty.push(wt.repo);
+    const dest = worktreePath(root, name, worktreeName(wt));
+    if (exists(dest) && isDirty(dest)) dirty.push(worktreeName(wt));
   }
   if (dirty.length) {
     throw new MxError(
@@ -446,9 +473,9 @@ export function archiveWork(root: string, name: string): ArchiveResult {
   }
   const removed: string[] = [];
   for (const wt of work.worktrees ?? []) {
-    const dest = worktreePath(root, name, wt.repo);
+    const dest = worktreePath(root, name, worktreeName(wt));
     if (exists(dest)) git(['-C', repoGitDir(root, wt.repo), 'worktree', 'remove', dest]); // keeps branch
-    removed.push(wt.repo);
+    removed.push(worktreeName(wt));
   }
   clearWorkspaceFolders(root, name);
   const archived_at = new Date().toISOString();
@@ -464,6 +491,8 @@ export function archiveWork(root: string, name: string): ArchiveResult {
 export interface UnarchiveRestoredWorktree {
   /** Repo name. */
   repo: string;
+  /** Worktree name (the `wt/<name>` selector). */
+  name: string;
   /** Branch the worktree is now checked out on (may differ from the recorded one when overridden). */
   branch: string;
   /** Absolute worktree path. */
@@ -478,7 +507,7 @@ export interface UnarchiveRestoredWorktree {
 export interface UnarchiveResult {
   /** Work name. */
   work: string;
-  /** Restored worktree details, one per repo. */
+  /** Restored worktree details, one per worktree. */
   restored: UnarchiveRestoredWorktree[];
 }
 
@@ -488,14 +517,14 @@ export interface UnarchiveResult {
  * missing. Repopulates the `.code-workspace` and clears the archive flag.
  *
  * If any desired branch (recorded or overridden) does not exist in its
- * pristine clone, throws `NO_REF` listing exactly which repos lack which
+ * pristine clone, throws `NO_REF` listing exactly which worktrees lack which
  * branches, with a hint to re-run with overrides. The overrides map
- * `repo -> branch`; on success, the worktree entries in `work.json` are
- * updated to the actually-used branches.
+ * **worktree name -> branch**; on success, the worktree entries in `work.json`
+ * are updated to the actually-used branches.
  *
  * @param root - Runtime root.
  * @param name - Work name.
- * @param overrides - Optional `repo -> branch` overrides for any worktree.
+ * @param overrides - Optional `<worktree-name> -> branch` overrides.
  * @returns The restored worktrees.
  */
 export function unarchiveWork(
@@ -509,21 +538,22 @@ export function unarchiveWork(
   }
   const desired = (work.worktrees ?? []).map((wt) => ({
     repo: wt.repo,
-    branch: overrides[wt.repo] ?? wt.branch,
+    name: worktreeName(wt),
+    branch: overrides[worktreeName(wt)] ?? wt.branch,
     ports: wt.ports ?? {},
   }));
 
-  const missing: { repo: string; branch: string }[] = [];
+  const missing: { name: string; branch: string }[] = [];
   for (const d of desired) {
     const rp = repoGitDir(root, d.repo);
     if (!isGitRepo(rp)) {
       throw new MxError(`pristine clone missing for repo: ${d.repo}`, 'NO_REPO');
     }
-    if (!branchExists(rp, d.branch)) missing.push({ repo: d.repo, branch: d.branch });
+    if (!branchExists(rp, d.branch)) missing.push({ name: d.name, branch: d.branch });
   }
   if (missing.length) {
-    const list = missing.map((m) => `${m.repo}=${m.branch}`).join(', ');
-    const overrideHint = missing.map((m) => `${m.repo}=<branch>`).join(' ');
+    const list = missing.map((m) => `${m.name}=${m.branch}`).join(', ');
+    const overrideHint = missing.map((m) => `${m.name}=<branch>`).join(' ');
     throw new MxError(
       `cannot unarchive "${name}" — branch(es) not found: ${list}. ` +
         `Re-run with explicit overrides: \`mx work -n ${name} unarchive ${overrideHint}\`.`,
@@ -533,14 +563,14 @@ export function unarchiveWork(
 
   const restored: UnarchiveRestoredWorktree[] = [];
   for (const d of desired) {
-    const dest = worktreePath(root, name, d.repo);
+    const dest = worktreePath(root, name, d.name);
     fs.mkdirSync(worktreesDir(root, name), { recursive: true });
     git(['-C', repoGitDir(root, d.repo), 'worktree', 'add', dest, d.branch]);
-    addFolderToWorkspace(root, name, d.repo);
-    restored.push({ repo: d.repo, branch: d.branch, path: dest, ports: d.ports });
+    addFolderToWorkspace(root, name, d.name);
+    restored.push({ repo: d.repo, name: d.name, branch: d.branch, path: dest, ports: d.ports });
   }
 
-  work.worktrees = restored.map((r) => ({ repo: r.repo, branch: r.branch, ports: r.ports }));
+  work.worktrees = restored.map((r) => ({ repo: r.repo, name: r.name, branch: r.branch, ports: r.ports }));
   work.isArchived = false;
   delete work.archived_at;
   writeWork(root, work);

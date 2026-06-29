@@ -27,8 +27,14 @@ import {
   repoConfigFile,
   readWork,
   writeWork,
+  findWorktreeByName,
+  worktreeName,
   workNew,
   worktreeAdd,
+  worktreeRemove,
+  worktreeList,
+  portList,
+  portUnset,
   archiveWork,
   unarchiveWork,
   workDestroy,
@@ -173,15 +179,23 @@ describe('discoverRuntime', () => {
 describe('inferContext', () => {
   it('infers work and repo from the cwd', () => {
     const root = tmp();
-    fs.mkdirSync(path.join(root, 'works', 'feat', 'wt', 'repoA'), { recursive: true });
+    // A real worktree has a work.json entry; the wt/<name> segment resolves to
+    // its repo via the manifest (name may differ from repo).
+    seedWork(root, {
+      name: 'feat',
+      description: '',
+      worktrees: [{ repo: 'repoA', name: 'wt-a', branch: 'x', ports: {} }],
+    });
+    fs.mkdirSync(path.join(root, 'works', 'feat', 'wt', 'wt-a'), { recursive: true });
     fs.mkdirSync(path.join(root, 'works', 'feat', 'scripts'), { recursive: true });
     fs.mkdirSync(path.join(root, 'repos', 'repoX'), { recursive: true });
 
     process.chdir(path.join(root, 'works', 'feat'));
     expect(inferContext(root)).toEqual({ work: 'feat', repo: null });
 
-    // Worktrees live under <work>/wt/<repo> — that's where a repo is inferred.
-    process.chdir(path.join(root, 'works', 'feat', 'wt', 'repoA'));
+    // Worktrees live under <work>/wt/<name>; the repo is resolved from work.json
+    // (here the worktree is named "wt-a" but belongs to repo "repoA").
+    process.chdir(path.join(root, 'works', 'feat', 'wt', 'wt-a'));
     expect(inferContext(root)).toEqual({ work: 'feat', repo: 'repoA' });
 
     // A non-wt work subdir (scripts/, bin/, files/, tmp/, sessions/) implies no repo.
@@ -707,6 +721,131 @@ describe('work scaffolding has no per-work bin/', () => {
   });
 });
 
+describe('multiple worktrees of one repo', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+  const runGit = (cwd: string, args: string[]) =>
+    execFileSync('git', args, { cwd, stdio: 'ignore' });
+
+  /** A runtime with one local repo "app" and an empty work "feat". */
+  function fixture(): { root: string } {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'x');
+    runGit(src, ['add', '-A']);
+    runGit(src, ['commit', '-qm', 'init']);
+    repoAdd(root, src, 'app');
+    workNew(root, 'feat');
+    return { root };
+  }
+
+  it('every worktree records name (= repo by default) and lives at wt/<name>', () => {
+    const { root } = fixture();
+    const res = worktreeAdd(root, 'feat', 'app', { branch: 'b1' });
+    expect(res.name).toBe('app');
+    expect(res.path).toBe(path.join(root, 'works', 'feat', 'wt', 'app'));
+    const wt = readWork(root, 'feat').worktrees[0];
+    expect(wt.name).toBe('app'); // explicit even when == repo
+    expect(worktreeName(wt)).toBe('app');
+  });
+
+  it('a second worktree of the same repo needs a distinct name', () => {
+    const { root } = fixture();
+    worktreeAdd(root, 'feat', 'app', { branch: 'b1' });
+    // Same repo, no name → collides on the default name and errors with a hint.
+    expect(() => worktreeAdd(root, 'feat', 'app', { branch: 'b2' })).toThrow(/give the new one a name/);
+    // With a distinct name it succeeds, at its own dir, on its own branch.
+    const res = worktreeAdd(root, 'feat', 'app', { name: 'app-2', branch: 'b2' });
+    expect(res.name).toBe('app-2');
+    expect(fs.existsSync(path.join(root, 'works', 'feat', 'wt', 'app-2', 'f.txt'))).toBe(true);
+    const wts = readWork(root, 'feat').worktrees;
+    expect(wts.map((w) => worktreeName(w)).sort()).toEqual(['app', 'app-2']);
+    expect(wts.every((w) => w.repo === 'app')).toBe(true);
+    // Reusing an existing name errors too.
+    expect(() => worktreeAdd(root, 'feat', 'app', { name: 'app-2', branch: 'b3' })).toThrow(/already has a worktree named/);
+  });
+
+  it('rejects an invalid worktree name', () => {
+    const { root } = fixture();
+    expect(() => worktreeAdd(root, 'feat', 'app', { name: 'a/b' })).toThrow(/invalid worktree name/);
+  });
+
+  it('rm targets one worktree by name, leaving the other', () => {
+    const { root } = fixture();
+    worktreeAdd(root, 'feat', 'app', { branch: 'b1' });
+    worktreeAdd(root, 'feat', 'app', { name: 'app-2', branch: 'b2' });
+    const res = worktreeRemove(root, 'feat', 'app-2');
+    expect(res.name).toBe('app-2');
+    expect(res.repo).toBe('app');
+    expect(fs.existsSync(path.join(root, 'works', 'feat', 'wt', 'app-2'))).toBe(false);
+    expect(worktreeList(root, 'feat').map((w) => worktreeName(w))).toEqual(['app']);
+  });
+
+  it('ports are independent per worktree (same service name, distinct ports)', () => {
+    const { root } = fixture();
+    worktreeAdd(root, 'feat', 'app', { branch: 'b1' });
+    worktreeAdd(root, 'feat', 'app', { name: 'app-2', branch: 'b2' });
+    const p1 = portSet(root, 'feat', 'app', 'web');
+    const p2 = portSet(root, 'feat', 'app-2', 'web');
+    expect(p1.port).not.toBe(p2.port); // not a self-collision across worktrees
+    expect(p2.name).toBe('app-2');
+    // portList is keyed by worktree name, so the two don't clobber each other.
+    const list = portList(root, 'feat');
+    expect(list['app'].web).toBe(p1.port);
+    expect(list['app-2'].web).toBe(p2.port);
+    // Re-setting the same slot is idempotent (no self-collision).
+    expect(portSet(root, 'feat', 'app', 'web', p1.port).port).toBe(p1.port);
+    portUnset(root, 'feat', 'app-2', 'web');
+    expect(portList(root, 'feat')['app-2'].web).toBeUndefined();
+  });
+
+  it('archive then unarchive restores every worktree at its name and branch', () => {
+    const { root } = fixture();
+    worktreeAdd(root, 'feat', 'app', { branch: 'b1' });
+    worktreeAdd(root, 'feat', 'app', { name: 'app-2', branch: 'b2' });
+    portSet(root, 'feat', 'app-2', 'web', 4321);
+
+    const arch = archiveWork(root, 'feat');
+    expect(arch.removedWorktrees.sort()).toEqual(['app', 'app-2']);
+    expect(fs.existsSync(path.join(root, 'works', 'feat', 'wt', 'app'))).toBe(false);
+
+    const un = unarchiveWork(root, 'feat');
+    expect(un.restored.map((r) => r.name).sort()).toEqual(['app', 'app-2']);
+    const byName = Object.fromEntries(un.restored.map((r) => [r.name, r]));
+    expect(byName['app-2'].branch).toBe('b2');
+    expect(byName['app-2'].ports.web).toBe(4321); // ports preserved across archive
+    expect(fs.existsSync(path.join(root, 'works', 'feat', 'wt', 'app-2', 'f.txt'))).toBe(true);
+    // Branch is correct in each restored worktree.
+    const b = execFileSync('git', ['-C', byName['app-2'].path, 'rev-parse', '--abbrev-ref', 'HEAD'], {
+      encoding: 'utf8',
+    }).trim();
+    expect(b).toBe('b2');
+  });
+
+  it('back-compat: a name-less (v2-style) work.json still works', () => {
+    const { root } = fixture();
+    // Hand-write a v2-shape entry (no `name`) + create its worktree on disk.
+    const work = readWork(root, 'feat');
+    runGit(repoGitDir(root, 'app'), ['worktree', 'add', '-q', '-b', 'b1',
+      path.join(root, 'works', 'feat', 'wt', 'app')]);
+    work.worktrees.push({ repo: 'app', branch: 'b1', ports: { web: 3999 } } as never);
+    writeWork(root, work);
+
+    const wt = readWork(root, 'feat').worktrees[0];
+    expect(wt.name).toBeUndefined();
+    expect(worktreeName(wt)).toBe('app'); // defaults to repo
+    expect(findWorktreeByName(readWork(root, 'feat'), 'app')?.repo).toBe('app');
+    expect(portList(root, 'feat')['app'].web).toBe(3999); // keyed by effective name
+    // A second worktree of the same repo can still be added alongside it.
+    const res = worktreeAdd(root, 'feat', 'app', { name: 'app-2', branch: 'b2' });
+    expect(res.name).toBe('app-2');
+  });
+});
+
 describe('central hooks hub', () => {
   const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
 
@@ -886,9 +1025,10 @@ describe('runtime versioning + migrate', () => {
       encoding: 'utf8',
     }).trim();
     expect(branch).toBe('feat');
-    // v2→v3: central hooks stamped + repo.json created.
+    // v2→v3: central hooks stamped + repo.json created + work.json name backfilled.
     expect(fs.existsSync(hookScript(root, 'post-worktree-create'))).toBe(true);
     expect(readRepoConfig(root, 'app')?.name).toBe('app');
+    expect(readWork(root, 'feat').worktrees[0].name).toBe('app'); // backfilled
 
     // Idempotent: already current → no-op.
     expect(migrateRuntime(root, TEMPLATES_DIR).applied).toEqual([]);

@@ -538,14 +538,40 @@ export function writeWork(root: string, work: Work): void {
 }
 
 /**
- * Find a worktree entry in a work by repo name.
+ * The effective identifier of a worktree within its work — its `name` when set,
+ * otherwise the repo name. This is the `wt/<…>` directory segment and the
+ * selector for `worktree rm` / `port` / hooks.
+ *
+ * @param wt - The worktree entry.
+ * @returns The effective worktree name.
+ */
+export function worktreeName(wt: Worktree): string {
+  return wt.name ?? wt.repo;
+}
+
+/**
+ * Find the **first** worktree entry in a work that uses a given repo. Use this
+ * for repo-level questions ("is this repo used by the work?"); a work may now
+ * hold several worktrees of the same repo, so prefer `findWorktreeByName` when
+ * you mean a specific worktree.
  *
  * @param work - The work to search.
  * @param repo - Repo name to match.
- * @returns The worktree, or null if not present.
+ * @returns The first matching worktree, or null.
  */
 export function findWorktree(work: Work, repo: string): Worktree | null {
   return (work.worktrees ?? []).find((w) => w.repo === repo) ?? null;
+}
+
+/**
+ * Find a worktree entry by its effective name (the `wt/<name>` selector).
+ *
+ * @param work - The work to search.
+ * @param name - Worktree name to match (defaults compared against the repo name).
+ * @returns The matching worktree, or null.
+ */
+export function findWorktreeByName(work: Work, name: string): Worktree | null {
+  return (work.worktrees ?? []).find((w) => worktreeName(w) === name) ?? null;
 }
 
 /**
@@ -581,9 +607,21 @@ export function inferContext(root: string): InferredContext {
     return rel.split(path.sep);
   };
   const w = segmentsUnder(worksDir(root));
-  // Worktrees live under <work>/wt/<repo>, so the repo is the third segment;
+  // Worktrees live under <work>/wt/<name>, so the third segment is the worktree
+  // NAME (which may differ from the repo). Resolve it to a repo via work.json;
   // other work subdirs (scripts/, files/, tmp/, sessions/) imply no repo.
-  if (w) return { work: w[0], repo: w[1] === 'wt' ? (w[2] ?? null) : null };
+  if (w) {
+    const work = w[0];
+    let repo: string | null = null;
+    if (w[1] === 'wt' && w[2]) {
+      try {
+        repo = findWorktreeByName(readWork(root, work), w[2])?.repo ?? null;
+      } catch {
+        repo = null;
+      }
+    }
+    return { work, repo };
+  }
   const r = segmentsUnder(reposDir(root));
   if (r) return { work: null, repo: r[0] };
   return { work: null, repo: null };

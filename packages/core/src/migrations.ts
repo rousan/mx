@@ -31,6 +31,9 @@ import {
   writeRepoConfig,
   runtimeHooksDir,
   workDir,
+  workManifest,
+  readWork,
+  writeWork,
 } from './runtime';
 
 /**
@@ -157,24 +160,44 @@ const STEPS: Record<number, MigrationStep> = {
         }
       }
 
-      // 3. Per work: drop the per-work hooks/ dir when all of its scripts are
-      //    defaults; keep + warn when any were customized.
+      // 3. Per work: (a) drop the per-work hooks/ dir when all of its scripts
+      //    are defaults (keep + warn when customized); (b) backfill each
+      //    worktree's `name` (= repo) so old and new work.json have one shape.
       for (const work of listWorkNames(root)) {
         const hd = path.join(workDir(root, work), 'hooks');
-        if (!exists(hd)) continue;
-        const files = fs
-          .readdirSync(hd)
-          .filter((f) => fs.statSync(path.join(hd, f)).isFile());
-        const allDefault = files.every((f) =>
-          isDefaultScript(fs.readFileSync(path.join(hd, f), 'utf8')),
-        );
-        if (allDefault) {
-          if (!dryRun) fs.rmSync(hd, { recursive: true, force: true });
-          changed.push(hd);
-        } else {
-          warnings.push(
-            `kept customized ${hd} — per-work hooks are gone in v3; fold its logic into <runtime>/hooks/ (pre/post-work-archive, pre/post-work-unarchive)`,
+        if (exists(hd)) {
+          const files = fs
+            .readdirSync(hd)
+            .filter((f) => fs.statSync(path.join(hd, f)).isFile());
+          const allDefault = files.every((f) =>
+            isDefaultScript(fs.readFileSync(path.join(hd, f), 'utf8')),
           );
+          if (allDefault) {
+            if (!dryRun) fs.rmSync(hd, { recursive: true, force: true });
+            changed.push(hd);
+          } else {
+            warnings.push(
+              `kept customized ${hd} — per-work hooks are gone in v3; fold its logic into <runtime>/hooks/ (pre/post-work-archive, pre/post-work-unarchive)`,
+            );
+          }
+        }
+        // Backfill worktree names in work.json.
+        let w;
+        try {
+          w = readWork(root, work);
+        } catch {
+          continue;
+        }
+        let touched = false;
+        for (const wt of w.worktrees ?? []) {
+          if (wt.name === undefined) {
+            if (!dryRun) wt.name = wt.repo;
+            touched = true;
+          }
+        }
+        if (touched) {
+          if (!dryRun) writeWork(root, w);
+          changed.push(workManifest(root, work));
         }
       }
 

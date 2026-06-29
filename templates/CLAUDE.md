@@ -131,7 +131,7 @@ the script — e.g. a different hydrate for `web` vs `api`, or only for branch `
 | hook | fires | non-zero exit |
 |---|---|---|
 | `pre-worktree-create` | before `mx work worktree add` creates a worktree | **aborts** creation (`HOOK_FAILED`) |
-| `post-worktree-create` | after a worktree is created — the "hydrate" step (cwd = the new worktree) | warning (worktree kept); `worktree hydrate` re-runs it |
+| `post-worktree-create` | after a worktree is created — the "hydrate" step (cwd = the new worktree) | warning (worktree kept) |
 | `pre-worktree-remove` / `post-worktree-remove` | around `mx work worktree rm` | pre **aborts**; post warns |
 | `pre-work-archive` / `post-work-archive` | around `mx work archive` | pre **aborts**; post warns |
 | `pre-work-unarchive` / `post-work-unarchive` | around `mx work unarchive` | pre **aborts**; post warns |
@@ -167,13 +167,14 @@ user/agent files — notes, downloads, temp outputs — not necessary tooling fi
   "name": "feature-a",
   "description": "Add a chatbox to the answer panel",
   "worktrees": [
-    { "repo": "repo-a", "branch": "feature-a", "ports": { "web": 3000, "api": 3001 } },
-    { "repo": "repo-b", "branch": "feature-a", "ports": { "worker": 3002 } }
+    { "repo": "repo-a", "name": "repo-a", "branch": "feature-a", "ports": { "web": 3000, "api": 3001 } },
+    { "repo": "repo-a", "name": "repo-a-pr2", "branch": "fix", "ports": { "web": 3002 } },
+    { "repo": "repo-b", "name": "repo-b", "branch": "feature-a", "ports": { "worker": 3003 } }
   ]
 }
 ```
 
-- One worktree per repo. `ports` is a `service -> port` map local to that worktree.
+- Each worktree has a **`name`** — its `wt/<name>` directory and the selector for `worktree rm` / `port`. It defaults to the repo name, so a work can hold **several worktrees of the same repo** by giving the extras distinct names (above, `repo-a` and `repo-a-pr2`). `ports` is a `service -> port` map local to that worktree.
 - The work's `name` is immutable. There is no port-block concept — each port is allocated
   individually and is unique across **all** works.
 
@@ -302,10 +303,13 @@ clarity; dropping it works while you're inside the work.
 - **Add a repo to the work (needs a worktree):** if a repo you need has no worktree yet, **stop and
   ask the user.** Only when they say so, run:
   ```
-  mx work -n <feature> worktree add <repo> [--branch <b>] [--base <ref>]
+  mx work -n <feature> worktree add <repo> [<name>] [--branch <b>] [--base <ref>]
   ```
-  This creates the worktree from the pristine clone at `works/<feature>/wt/<repo>`, registers it in
+  This creates the worktree from the pristine clone at `works/<feature>/wt/<name>`, registers it in
   `work.json`, and adds it to the workspace — all at once. Never run `git worktree add` yourself.
+  - `<name>` is the worktree's id (its `wt/<name>` dir + selector); it **defaults to the repo name**.
+    Pass a distinct `<name>` to add a **second worktree of the same repo** to one work (e.g.
+    `mx work -n <feature> worktree add app app-pr2 --branch fix`).
   - `--branch <b>` is the **new** branch to create (defaults to the work name; if it already exists, it's reused).
   - `--base <ref>` is where to **fork from** — any ref. A bare branch name (e.g. `main`,
     `migration-to-mt-service-from-cf`) resolves to that local branch or, failing that, `origin/<name>`.
@@ -313,8 +317,8 @@ clarity; dropping it works while you're inside the work.
     `--base` to fork from the pristine clone's current HEAD.
   - After the worktree is created, the central `<runtime>/hooks/post-worktree-create` hook runs with the
     new worktree as the working directory (copy a `.env`, install deps, etc.) — branch on `$MX_REPO` /
-    `$MX_BRANCH` inside it. Pass `--no-hydrate` to skip it, or re-run later with
-    `mx work -n <feature> worktree hydrate <repo>`.
+    `$MX_BRANCH` / `$MX_WORKTREE_NAME` inside it. To skip hydration, make that hook a no-op (there's no
+    `--no-hydrate` flag).
 - **Spin up a quick local app (no remote):** for a throwaway/experiment repo you don't want on GitHub,
   `mx repo new <name>` creates a fresh local repo (git init on `main` + README + initial commit). Add
   `--quick` (and `-o`) to also create a `dev-<name>` work + a worktree on `develop` and open it in one

@@ -22,14 +22,15 @@ import {
 import { existsSync } from 'node:fs';
 import { emit, dim, bold, check, warn, confirmYesNo, tildify } from '../output';
 import { openWorkLayout } from '../open';
-import { runHook, runPreHook, runPostHook } from '../hooks';
+import { runPreHook, runPostHook } from '../hooks';
 import type { Flags } from '../args';
 
 /**
- * Build the `MX_*` env for a worktree-related hook from the work/repo/branch.
+ * Build the `MX_*` env for a worktree-related hook.
  *
  * @param name - Work name.
  * @param repo - Repo name.
+ * @param wtName - Worktree name (the `wt/<name>` selector).
  * @param branch - Worktree branch.
  * @param worktreePathAbs - Absolute worktree path.
  * @param workFolder - Absolute work folder path.
@@ -40,6 +41,7 @@ import type { Flags } from '../args';
 function worktreeHookEnv(
   name: string,
   repo: string,
+  wtName: string,
   branch: string,
   worktreePathAbs: string,
   workFolder: string,
@@ -49,6 +51,7 @@ function worktreeHookEnv(
   return {
     MX_WORK: name,
     MX_REPO: repo,
+    MX_WORKTREE_NAME: wtName,
     MX_BRANCH: branch,
     MX_BASE: base,
     MX_WORKTREE_PATH: worktreePathAbs,
@@ -145,17 +148,22 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         if (wts.length === 0) {
           console.log(`  ${dim('(no worktrees)')}`);
         } else {
-          const repoW = Math.max(...wts.map((t) => t.repo.length));
+          // Row label is the worktree name; annotate the repo when it differs.
+          const wlabel = (t: (typeof wts)[number]): string => {
+            const n = t.name ?? t.repo;
+            return n === t.repo ? n : `${n} (${t.repo})`;
+          };
+          const labelW = Math.max(...wts.map((t) => wlabel(t).length));
           for (const t of wts) {
             // All worktree row content sits at the dim tier so the bold work
             // name above is the only "loud" element in the block.
-            const repo = dim(t.repo.padEnd(repoW));
+            const label = dim(wlabel(t).padEnd(labelW));
             const branch = dim(`[${t.branch}]`);
             const ports = Object.entries(t.ports ?? {})
               .map(([s, p]) => `${dim(`${s}:${p}`)}`)
               .join('  ');
             const portsCol = ports ? `  ${ports}` : '';
-            console.log(`  ${repo}  ${branch}${portsCol}`);
+            console.log(`  ${label}  ${branch}${portsCol}`);
           }
         }
       }
@@ -188,7 +196,9 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
             .map(([s, p]) => `${dim(`${s}:`)}${dim(String(p))}`)
             .join('  ');
           const portsCol = ports ? `  ${ports}` : '';
-          console.log(`      ${dim(wt.repo)}  ${dim(`[${wt.branch}]`)}${portsCol}`);
+          const wn = wt.name ?? wt.repo;
+          const label = wn === wt.repo ? wt.repo : `${wn} (${wt.repo})`;
+          console.log(`      ${dim(label)}  ${dim(`[${wt.branch}]`)}${portsCol}`);
         }
       }, work);
       return;
@@ -291,7 +301,7 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         const eq = tok.indexOf('=');
         if (eq <= 0 || eq === tok.length - 1) {
           throw new MxError(
-            `bad override: "${tok}" — expected <repo>=<branch>`,
+            `bad override: "${tok}" — expected <worktree>=<branch>`,
             'BAD_ARGS',
           );
         }
@@ -333,37 +343,36 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
     case 'add': {
       const repo = need(
         positionals[3],
-        'usage: mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]',
+        'usage: mx work -n <name> worktree add <repo> [<worktree-name>] [--branch <b>] [--base <ref>]',
       );
+      const wtName = positionals[4] || repo; // optional name; defaults to repo
       const workFolder = workPath(root, name).path;
-      const dest = worktreePath(root, name, repo);
+      const dest = worktreePath(root, name, wtName);
       const branch = flags.branch || name; // mirrors worktreeAdd's default
       const gitDir = repoGitDir(root, repo);
       // pre-worktree-create: a non-zero exit vetoes creation (nothing made yet).
       runPreHook(
         root,
         'pre-worktree-create',
-        { cwd: workFolder, env: worktreeHookEnv(name, repo, branch, dest, workFolder, gitDir, flags.base) },
+        { cwd: workFolder, env: worktreeHookEnv(name, repo, wtName, branch, dest, workFolder, gitDir, flags.base) },
         flags.porcelain,
       );
-      const res = worktreeAdd(root, name, repo, { branch: flags.branch, base: flags.base });
+      const res = worktreeAdd(root, name, repo, { name: positionals[4], branch: flags.branch, base: flags.base });
       emit(
-        () =>
-          console.log(
-            `${check()} added worktree ${bold(res.repo)} ${dim(`[${res.branch}]`)} ${dim(`→ ${res.path}`)}`,
-          ),
+        () => {
+          const label = res.name === res.repo ? bold(res.repo) : `${bold(res.name)} ${dim(`(${res.repo})`)}`;
+          console.log(`${check()} added worktree ${label} ${dim(`[${res.branch}]`)} ${dim(`→ ${res.path}`)}`);
+        },
         res,
       );
-      // post-worktree-create (the old "hydrate"): runs in the new worktree;
-      // non-zero is a warning, worktree kept. Skip with --no-hydrate.
-      if (!flags.noHydrate) {
-        runPostHook(
-          root,
-          'post-worktree-create',
-          { cwd: res.path, env: worktreeHookEnv(name, repo, res.branch, res.path, workFolder, gitDir, flags.base) },
-          flags.porcelain,
-        );
-      }
+      // post-worktree-create (the "hydrate" step): runs in the new worktree;
+      // a non-zero exit is a warning, worktree kept.
+      runPostHook(
+        root,
+        'post-worktree-create',
+        { cwd: res.path, env: worktreeHookEnv(name, res.repo, res.name, res.branch, res.path, workFolder, gitDir, flags.base) },
+        flags.porcelain,
+      );
       return;
     }
     case 'ls': {
@@ -373,77 +382,52 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
           console.log(dim('no worktrees yet — `mx work -n <name> worktree add <repo>`'));
           return;
         }
-        const repoW = Math.max(...list.map((wt) => wt.repo.length));
+        // Show the worktree name; annotate the repo when it differs.
+        const label = (wt: (typeof list)[number]): string => {
+          const n = wt.name ?? wt.repo;
+          return n === wt.repo ? n : `${n} (${wt.repo})`;
+        };
+        const w = Math.max(...list.map((wt) => label(wt).length));
         for (const wt of list) {
-          const repo = dim(wt.repo.padEnd(repoW));
           const branch = dim(`[${wt.branch}]`);
           const ports = Object.entries(wt.ports ?? {})
             .map(([s, p]) => `${dim(`${s}:`)}${dim(String(p))}`)
             .join('  ');
           const portsCol = ports ? `  ${ports}` : '';
-          console.log(`${repo}  ${branch}${portsCol}`);
+          console.log(`${dim(label(wt).padEnd(w))}  ${branch}${portsCol}`);
         }
       }, list);
       return;
     }
     case 'rm': {
-      const repo = need(positionals[3], 'usage: mx work -n <name> worktree rm <repo>');
-      const wt = worktreeList(root, name).find((w) => w.repo === repo);
+      const wtName = need(positionals[3], 'usage: mx work -n <name> worktree rm <worktree-name>');
+      const wt = worktreeList(root, name).find((w) => (w.name ?? w.repo) === wtName);
       const workFolder = workPath(root, name).path;
-      const dest = worktreePath(root, name, repo);
+      const dest = worktreePath(root, name, wtName);
+      const repo = wt?.repo ?? wtName;
       const gitDir = repoGitDir(root, repo);
       const branch = wt?.branch ?? '';
       // pre-worktree-remove: worktree still on disk; non-zero vetoes removal.
       runPreHook(
         root,
         'pre-worktree-remove',
-        { cwd: existsSync(dest) ? dest : workFolder, env: worktreeHookEnv(name, repo, branch, dest, workFolder, gitDir) },
+        { cwd: existsSync(dest) ? dest : workFolder, env: worktreeHookEnv(name, repo, wtName, branch, dest, workFolder, gitDir) },
         flags.porcelain,
       );
-      const res = worktreeRemove(root, name, repo);
+      const res = worktreeRemove(root, name, wtName);
       emit(
-        () =>
-          console.log(
-            `${check()} removed worktree ${bold(res.repo)} ${dim(`from ${name} (branch ${res.branch} kept)`)}`,
-          ),
+        () => {
+          const label = res.name === res.repo ? bold(res.repo) : `${bold(res.name)} ${dim(`(${res.repo})`)}`;
+          console.log(`${check()} removed worktree ${label} ${dim(`from ${name} (branch ${res.branch} kept)`)}`);
+        },
         res,
       );
       runPostHook(
         root,
         'post-worktree-remove',
-        { cwd: workFolder, env: worktreeHookEnv(name, repo, res.branch, dest, workFolder, gitDir) },
+        { cwd: workFolder, env: worktreeHookEnv(name, res.repo, res.name, res.branch, dest, workFolder, gitDir) },
         flags.porcelain,
       );
-      return;
-    }
-    case 'hydrate': {
-      // Re-run the post-worktree-create hook against an existing worktree.
-      const repo = need(positionals[3], 'usage: mx work -n <name> worktree hydrate <repo>');
-      const wt = worktreeList(root, name).find((w) => w.repo === repo);
-      if (!wt) throw new MxError(`work "${name}" has no worktree for ${repo}`, 'NO_WORKTREE');
-      const workFolder = workPath(root, name).path;
-      const wtPath = worktreePath(root, name, repo);
-      const outcome = runHook(
-        root,
-        'post-worktree-create',
-        { cwd: wtPath, env: worktreeHookEnv(name, repo, wt.branch, wtPath, workFolder, repoGitDir(root, repo)) },
-        flags.porcelain,
-      );
-      if (outcome.missing) {
-        emit(
-          () => console.log(dim(`no post-worktree-create hook — nothing to run`)),
-          { work: name, repo, ran: false },
-        );
-        return;
-      }
-      // Explicit re-run: a non-zero exit is a hard error (unlike the auto-run).
-      if (!outcome.ok) throw new MxError(`post-worktree-create hook for ${repo} exited non-zero`, 'HOOK_FAILED');
-      emit(() => console.log(`${check()} hydrated ${bold(repo)}`), {
-        work: name,
-        repo,
-        ran: true,
-        ok: true,
-      });
       return;
     }
     default:
@@ -462,8 +446,8 @@ function workPort(root: string, name: string, positionals: string[]): void {
   const sub = positionals[2];
   switch (sub) {
     case 'set': {
-      const usage = 'usage: mx work -n <name> port set <repo> <service> [<port>]';
-      const repo = need(positionals[3], usage);
+      const usage = 'usage: mx work -n <name> port set <worktree> <service> [<port>]';
+      const wtName = need(positionals[3], usage);
       const service = need(positionals[4], usage);
       const portArg = positionals[5];
       let port: number | undefined;
@@ -471,25 +455,25 @@ function workPort(root: string, name: string, positionals: string[]): void {
         port = Number(portArg);
         if (!Number.isInteger(port)) throw new MxError(`invalid port: ${portArg}`, 'BAD_ARGS');
       }
-      const res = portSet(root, name, repo, service, port);
+      const res = portSet(root, name, wtName, service, port);
       emit(
         () =>
           console.log(
-            `${check()} ${res.repo}${dim('.')}${res.service} ${dim('→')} ${dim(String(res.port))}`,
+            `${check()} ${res.name}${dim('.')}${res.service} ${dim('→')} ${dim(String(res.port))}`,
           ),
         res,
       );
       return;
     }
     case 'unset': {
-      const usage = 'usage: mx work -n <name> port unset <repo> <service>';
-      const repo = need(positionals[3], usage);
+      const usage = 'usage: mx work -n <name> port unset <worktree> <service>';
+      const wtName = need(positionals[3], usage);
       const service = need(positionals[4], usage);
-      const res = portUnset(root, name, repo, service);
+      const res = portUnset(root, name, wtName, service);
       emit(
         () =>
           console.log(
-            `${check()} unset ${res.repo}${dim('.')}${res.service} ${dim(`(was ${res.released})`)}`,
+            `${check()} unset ${res.name}${dim('.')}${res.service} ${dim(`(was ${res.released})`)}`,
           ),
         res,
       );
@@ -498,22 +482,22 @@ function workPort(root: string, name: string, positionals: string[]): void {
     case 'ls': {
       const map = portList(root, name);
       emit(() => {
-        const entries: { repo: string; service: string; port: number }[] = [];
-        for (const [repo, ports] of Object.entries(map)) {
+        const entries: { wt: string; service: string; port: number }[] = [];
+        for (const [wt, ports] of Object.entries(map)) {
           for (const [service, port] of Object.entries(ports)) {
-            entries.push({ repo, service, port });
+            entries.push({ wt, service, port });
           }
         }
         if (entries.length === 0) {
-          console.log(dim('no ports allocated yet — `mx work -n <name> port set <repo> <service>`'));
+          console.log(dim('no ports allocated yet — `mx work -n <name> port set <worktree> <service>`'));
           return;
         }
-        const lhsW = Math.max(...entries.map((e) => `${e.repo}.${e.service}`.length));
+        const lhsW = Math.max(...entries.map((e) => `${e.wt}.${e.service}`.length));
         for (const e of entries) {
-          const lhs = `${e.repo}${dim('.')}${e.service}`;
+          const lhs = `${e.wt}${dim('.')}${e.service}`;
           // padEnd works on visible length only since dim() adds invisible ANSI; pad
-          // the plain "repo.service" then re-render.
-          const plain = `${e.repo}.${e.service}`;
+          // the plain "worktree.service" then re-render.
+          const plain = `${e.wt}.${e.service}`;
           const pad = ' '.repeat(lhsW - plain.length);
           console.log(`${lhs}${pad}  ${dim('→')}  ${dim(String(e.port))}`);
         }

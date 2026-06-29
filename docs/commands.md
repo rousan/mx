@@ -150,7 +150,7 @@ Also writes `repo.json` (`{ "name": … }`) into the container.
 
 Create a brand-new **local** repo (no remote) at `<runtime>/repos/<name>/git/`: `git init` on `main`, a starter `README.md`, and an initial commit (so `main` exists and worktrees can fork from it). Writes `repo.json` like `add`. This is the counterpart to `add` for quick experiments and throwaway apps you don't want to push to a remote yet — no more manual `mkdir` + `git init` + commit dance. The initial commit uses your git identity, falling back to a neutral `mx <mx@localhost>` only if none is configured. Errors `EXISTS` if the repo already exists, `BAD_ARGS` on an invalid name (must be a single path segment).
 
-`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and fires the `post-worktree-create` hook (skip with `--no-hydrate`). Pair with `-o`/`--open` to open the work in a fullscreen Terminal (macOS), and `--description <t>` to set the work description. So a fresh experiment is one line:
+`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and fires the `post-worktree-create` hook. Pair with `-o`/`--open` to open the work in a fullscreen Terminal (macOS), and `--description <t>` to set the work description. So a fresh experiment is one line:
 
 ```
 mx repo new exp --quick -o     # repo "exp", work "dev-exp", worktree on "develop", opened
@@ -281,35 +281,31 @@ Open an **existing** work's dev layout — the same thing `mx work new -o` does 
 
 Update the work's description.
 
-### `mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]`
+### `mx work -n <name> worktree add <repo> [<worktree-name>] [--branch <b>] [--base <ref>]`
 
-Create a git worktree of `<repo>` inside the work at `works/<name>/wt/<repo>`, on branch `<b>` (defaults to the work name). If the branch doesn't already exist, it's created. The worktree is also registered in `work.json` and added to the `.code-workspace` (folder path `wt/<repo>`, entry `name` = the repo name).
+Create a git worktree of `<repo>` inside the work at `works/<name>/wt/<worktree-name>`, on branch `<b>` (defaults to the work name). If the branch doesn't already exist, it's created. The worktree is registered in `work.json` (with its `name`) and added to the `.code-workspace`.
 
-`--base <ref>` is where the new branch forks from. Accepts any ref. A bare branch name resolves to a local branch or `origin/<name>` (with fallback). Resolved to a commit SHA before `git worktree add` so git's DWIM can't override `-b`. Omit `--base` to fork from the pristine clone's current HEAD.
+`<worktree-name>` is the worktree's identifier — its `wt/<name>` directory and the selector used by `rm` / `port`. It **defaults to the repo name**. Pass a distinct name to add **multiple worktrees of the same repo** to one work (e.g. `mx work -n feat worktree add app app-pr2 --branch fix`). Adding a repo a second time without a name errors (the default name collides) and tells you to pass one.
 
-Run `mx repo -n <repo> fetch` first if you want the base at its latest upstream commit.
+`--base <ref>` is where the new branch forks from. Accepts any ref. A bare branch name resolves to a local branch or `origin/<name>` (with fallback). Resolved to a commit SHA before `git worktree add` so git's DWIM can't override `-b`. Omit `--base` to fork from the pristine clone's current HEAD. Run `mx repo -n <repo> fetch` first if you want the base at its latest upstream commit.
 
-**Before** creation mx fires the `pre-worktree-create` hook (a non-zero exit aborts with `HOOK_FAILED`); **after** creation it fires `post-worktree-create` — the "hydrate" step — with the new worktree as cwd (see [Hooks](#hooks)). A non-zero exit there is a warning — the worktree is kept. Pass `--no-hydrate` to skip the post hook.
-
-### `mx work -n <name> worktree hydrate <repo>`
-
-Re-run the `post-worktree-create` hook against an existing worktree on demand (same env as the automatic run). In this explicit mode a non-zero exit errors with `HOOK_FAILED`.
+**Before** creation mx fires the `pre-worktree-create` hook (a non-zero exit aborts with `HOOK_FAILED`); **after** creation it fires `post-worktree-create` — the "hydrate" step — with the new worktree as cwd (see [Hooks](#hooks)). A non-zero exit there is a warning — the worktree is kept. (To skip hydration, make the hook a no-op; there is no `--no-hydrate` flag.)
 
 ### `mx work -n <name> worktree ls [--porcelain]`
 
-List the work's worktrees, with branch + ports. Refuses if cwd doesn't imply the work and `-n` is missing.
+List the work's worktrees, with name (repo annotated when it differs), branch, and ports. Refuses if cwd doesn't imply the work and `-n` is missing.
 
-### `mx work -n <name> worktree rm <repo>`
+### `mx work -n <name> worktree rm <worktree-name>`
 
-Remove the worktree (deletes the worktree directory, deregisters in `work.json`). Refuses with `DIRTY` if uncommitted changes. **Branch is kept.**
+Remove the worktree named `<worktree-name>` (defaults to the repo name for single-worktree repos) — deletes the directory, deregisters in `work.json`. Refuses with `DIRTY` if uncommitted changes. **Branch is kept.**
 
-### `mx work -n <name> port set <repo> <service> [<port>]`
+### `mx work -n <name> port set <worktree-name> <service> [<port>]`
 
-Allocate a port for a service inside a worktree. With `<port>`, sets that specific port; without, auto-picks the next free port (unique across **all** works in the runtime). Records in `work.json`.
+Allocate a port for a service inside a worktree (selected by name). With `<port>`, sets that specific port; without, auto-picks the next free port (unique across **all** works in the runtime). Records in `work.json`. Two worktrees of the same repo get independent ports, even for the same service name.
 
 mx records the binding — it does **not** wire the port into the repo's env or config. That's the agent/user's responsibility.
 
-### `mx work -n <name> port unset <repo> <service>`
+### `mx work -n <name> port unset <worktree-name> <service>`
 
 Release a port. Reports which port was freed.
 
@@ -355,7 +351,7 @@ If any recorded branch no longer exists on its pristine clone, errors with `NO_R
 mx: cannot unarchive "feat" — branch(es) not found: app=feature-x. Re-run with explicit overrides: `mx work -n feat unarchive app=<branch>`.
 ```
 
-To override per-repo: pass `<repo>=<branch>` positional args. Overrides update `work.json`'s recorded branches to the actually-used ones.
+To override per-worktree: pass `<worktree-name>=<branch>` positional args (the worktree name defaults to the repo). Overrides update `work.json`'s recorded branches to the actually-used ones.
 
 **Lifecycle hooks:** mx fires the central `pre-work-unarchive` hook before re-creating any worktree (a non-zero exit aborts with `HOOK_FAILED`) and `post-work-unarchive` after restoration (non-zero warns only). See [Hooks](#hooks).
 
@@ -442,6 +438,6 @@ Context arrives as `MX_*` environment variables — always `MX_EVENT` and `MX_RU
 | `CLI_TOO_OLD` | runtime is newer than the CLI supports — upgrade the CLI |
 | `NO_MIGRATION` | no registered migration step for a version gap in the chain |
 | `BAD_VERSION` | malformed `<runtime>/mx.json` file |
-| `HOOK_FAILED` | a hook exited non-zero — a `pre-*` hook aborted the operation, or an explicit `worktree hydrate` failed |
+| `HOOK_FAILED` | a `pre-*` hook exited non-zero and aborted the operation |
 | `UNSUPPORTED` | platform-unsupported action (e.g. `mx work new -o` on non-macOS; downgraded to a warning) |
 | `INTERNAL` | non-`MxError` thrown — bug |

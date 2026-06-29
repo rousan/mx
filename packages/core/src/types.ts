@@ -5,6 +5,15 @@
 export interface Worktree {
   /** Name of the pristine repo this worktree was created from. */
   repo: string;
+  /**
+   * Identifier for this worktree within the work — its directory under `wt/`
+   * and the selector for `worktree rm` / `port` / etc. Lets a work hold several
+   * worktrees of the same repo. **Optional and defaults to `repo`**; only set
+   * when it differs (a second+ worktree of the same repo), so single-worktree
+   * `work.json` entries stay exactly as before. Use `worktreeName(wt)` to read
+   * the effective value.
+   */
+  name?: string;
   /** Branch the worktree is checked out on. */
   branch: string;
   /** Map of service name to allocated port, local to this worktree. */
@@ -20,7 +29,7 @@ export interface Work {
   name: string;
   /** Free-text description of the work. */
   description: string;
-  /** Worktrees in the work, one per repo. */
+  /** Worktrees in the work (a repo may appear more than once, named distinctly). */
   worktrees: Worktree[];
   /**
    * True when the work is archived: its worktrees have been removed but its
