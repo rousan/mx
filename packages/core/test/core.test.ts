@@ -812,12 +812,16 @@ describe('multiple worktrees of one repo', () => {
     const arch = archiveWork(root, 'feat');
     expect(arch.removedWorktrees.sort()).toEqual(['app', 'app-2']);
     expect(fs.existsSync(path.join(root, 'works', 'feat', 'wt', 'app'))).toBe(false);
+    // Archive FREES the ports — the archived manifest carries none, so the
+    // number is reusable while archived.
+    expect(readWork(root, 'feat').worktrees.every((w) => Object.keys(w.ports).length === 0)).toBe(true);
+    expect([...allocatedPorts(root).values()].length).toBe(0);
 
     const un = unarchiveWork(root, 'feat');
     expect(un.restored.map((r) => r.name).sort()).toEqual(['app', 'app-2']);
     const byName = Object.fromEntries(un.restored.map((r) => [r.name, r]));
     expect(byName['app-2'].branch).toBe('b2');
-    expect(byName['app-2'].ports.web).toBe(4321); // ports preserved across archive
+    expect(byName['app-2'].ports).toEqual({}); // freed on archive; re-allocate via hook
     expect(fs.existsSync(path.join(root, 'works', 'feat', 'wt', 'app-2', 'f.txt'))).toBe(true);
     // Branch is correct in each restored worktree.
     const b = execFileSync('git', ['-C', byName['app-2'].path, 'rev-parse', '--abbrev-ref', 'HEAD'], {

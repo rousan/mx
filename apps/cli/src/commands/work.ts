@@ -315,11 +315,26 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         runPreHook(root, 'pre-work-unarchive', { cwd: unarchiveHookEnv.MX_WORK_PATH, env: unarchiveHookEnv }, flags.porcelain);
       }
       const res = unarchiveWork(root, name, overrides);
+      // Each restored worktree is freshly re-created (ports were freed on
+      // archive), so fire post-worktree-create per worktree — the user
+      // re-hydrates and re-allocates ports there, exactly like a fresh add.
+      for (const r of res.restored) {
+        runPostHook(
+          root,
+          'post-worktree-create',
+          {
+            cwd: r.path,
+            env: worktreeHookEnv(name, r.repo, r.name, r.branch, r.path, unarchiveHookEnv.MX_WORK_PATH, repoGitDir(root, r.repo)),
+          },
+          flags.porcelain,
+        );
+      }
       runPostHook(root, 'post-work-unarchive', { cwd: unarchiveHookEnv.MX_WORK_PATH, env: unarchiveHookEnv }, flags.porcelain);
       emit(() => {
         console.log(`${check()} unarchived work ${bold(name)}`);
         for (const r of res.restored) {
-          console.log(`  ${r.repo}  ${dim(`[${r.branch}]`)}  ${dim(`→ ${r.path}`)}`);
+          const label = r.name === r.repo ? r.repo : `${r.name} (${r.repo})`;
+          console.log(`  ${dim(label)}  ${dim(`[${r.branch}]`)}  ${dim(`→ ${r.path}`)}`);
         }
       }, res);
       return;

@@ -323,7 +323,7 @@ worker.billing-worker  →  3002
 
 Soft-delete a work. Removes the worktrees, frees the branches, but **keeps the folder, `work.json`, sessions/, and branches**. Recoverable via `unarchive`.
 
-Sets `isArchived: true` and `archived_at: <ISO>` in `work.json`. Empties the `.code-workspace` `folders` array (settings preserved). Refuses with `DIRTY` if any worktree is dirty; refuses with `ALREADY_ARCHIVED` if already archived.
+Sets `isArchived: true` and `archived_at: <ISO>` in `work.json`. Empties the `.code-workspace` `folders` array (settings preserved). **Frees the worktrees' ports** — they're cleared from `work.json`, so the numbers become reusable while archived (unarchive re-allocates, below). Refuses with `DIRTY` if any worktree is dirty; refuses with `ALREADY_ARCHIVED` if already archived.
 
 **Prompts for confirmation** before doing anything:
 
@@ -343,7 +343,7 @@ Only `y` / `yes` (case-insensitive) proceeds; anything else aborts with `Aborted
 
 ### `mx work -n <name> unarchive [<repo>=<branch>...]`
 
-Restore an archived work. Re-creates worktrees from the branches recorded in `work.json`. Refuses with `NOT_ARCHIVED` if the work isn't archived.
+Restore an archived work. Re-creates worktrees from the branches recorded in `work.json`. Refuses with `NOT_ARCHIVED` if the work isn't archived. Each restored worktree is treated as freshly created — mx fires **`post-worktree-create` per worktree** (the "hydrate" step), so the hook re-installs deps and **re-allocates ports** just like a first-time `worktree add` (ports were freed on archive).
 
 If any recorded branch no longer exists on its pristine clone, errors with `NO_REF` and a precise hint:
 

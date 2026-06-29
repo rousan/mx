@@ -122,7 +122,7 @@ Fields:
 - `name` — immutable; matches the work folder name.
 - `description` — free-text; set on `mx work new --description "…"` or `mx work -n <n> describe "…"`.
 - `worktrees[]` — one entry per worktree. `repo` is the pristine repo; `name` is the worktree's identifier (its `wt/<name>` directory and the `rm`/`port` selector), defaulting to the repo name. A work may hold **several worktrees of the same repo** by giving the extras distinct names (above, `repo-a` and `repo-a-pr2`). `branch` is the worktree's branch; `ports` is a `service → port` map local to that worktree. (Older `work.json` may omit `name`; it then defaults to `repo`, and `mx migrate` backfills it.)
-- `isArchived` — true after `mx work archive`; cleared by `mx work unarchive`.
+- `isArchived` — true after `mx work archive`; cleared by `mx work unarchive`. Archiving also **clears each worktree's `ports`** (frees them); unarchive re-creates the worktrees and fires `post-worktree-create` per worktree, where ports are re-allocated.
 - `archived_at` — ISO-8601 timestamp set when `isArchived` flips to true; deleted on unarchive (absent in JSON, not `null`).
 
 There is **no port-block concept**. Each port is allocated individually and is **unique across all works** in the runtime — when you `mx work -n <n> port set <worktree> <service>`, mx finds a free port across every work's port set.

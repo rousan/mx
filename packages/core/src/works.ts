@@ -476,6 +476,9 @@ export function archiveWork(root: string, name: string): ArchiveResult {
     const dest = worktreePath(root, name, worktreeName(wt));
     if (exists(dest)) git(['-C', repoGitDir(root, wt.repo), 'worktree', 'remove', dest]); // keeps branch
     removed.push(worktreeName(wt));
+    // Free the worktree's ports — the worktree (and whatever server bound them)
+    // is gone. On unarchive, `post-worktree-create` re-allocates from scratch.
+    wt.ports = {};
   }
   clearWorkspaceFolders(root, name);
   const archived_at = new Date().toISOString();
@@ -497,7 +500,7 @@ export interface UnarchiveRestoredWorktree {
   branch: string;
   /** Absolute worktree path. */
   path: string;
-  /** Ports as recorded in `work.json` (unchanged across archive/unarchive). */
+  /** Ports as recorded in `work.json` — empty after an archive freed them; the caller re-allocates via `post-worktree-create`. */
   ports: Record<string, number>;
 }
 
