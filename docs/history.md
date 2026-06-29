@@ -2,6 +2,10 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 2.8.0 — 2026-06-29
+
+**`mx bin ls` spells out the PATH setup.** When `<runtime>/bin/` isn't on your `PATH`, the listing now ends with a clear, multi-line instruction — add `export PATH="$(mx bin path):$PATH"` to your shell startup file (`~/.zshrc`, `~/.bashrc`, …) and restart — instead of a terse one-liner. When it is on `PATH`, it confirms with a ✓. CLI-only cosmetic change.
+
 ## 2.7.0 — 2026-06-29
 
 Four changes in one release: a runtime-wide `bin/`, `mx update` auto-syncing, removal of the redundant per-work `bin/`, and `-o` opening only the Terminal.

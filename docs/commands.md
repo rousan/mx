@@ -388,7 +388,7 @@ With `--force`, prints a loud irreversibility warning to stderr before executing
 
 Manage the runtime-wide `bin/` directory — utility executables shared across every work, meant to be on your `PATH`. mx ships some (currently `dcs` and `lcs` — delete / list Claude Code sessions by name) and you can drop your own in; any executable file is picked up.
 
-- **`mx bin ls`** (or bare `mx bin`) — list the bins, each tagged `mx` (shipped) or `user` (yours), with a warning on any that aren't executable, plus a note on whether `bin/` is currently on your `PATH`. Porcelain returns `{ "dir", "onPath", "bins": [{ "name", "path", "executable", "shipped" }] }`.
+- **`mx bin ls`** (or bare `mx bin`) — list the bins, each tagged `built-in` (shipped) or `user` (yours), with a warning on any that aren't executable. It ends with PATH guidance: a ✓ when `bin/` is already on your `PATH`, otherwise a step-by-step instruction to add `export PATH="$(mx bin path):$PATH"` to your shell startup file (`~/.zshrc`, `~/.bashrc`, …). Porcelain returns `{ "dir", "onPath", "bins": [{ "name", "path", "executable", "shipped" }] }`.
 - **`mx bin path`** — print the absolute `bin/` directory, for wiring it onto `PATH`:
 
   ```
