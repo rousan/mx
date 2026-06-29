@@ -580,7 +580,7 @@ describe('runtime bin directory', () => {
     expect(listRuntimeBins(root)).toEqual([]);
   });
 
-  it('syncRuntime backfills bin/ and never clobbers an existing bin', () => {
+  it('syncRuntime backfills bin/ when missing', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
     const binDir = runtimeBinDir(root);
@@ -590,15 +590,24 @@ describe('runtime bin directory', () => {
     const res = syncRuntime(root, TEMPLATES_DIR);
     expect(res.updated).toContain(path.join(binDir, 'dcs'));
     expect(fs.existsSync(path.join(binDir, 'dcs'))).toBe(true);
+  });
 
-    // Stamp-if-missing: a user edit to a shipped bin + a user-added bin both
-    // survive a second sync untouched.
-    fs.writeFileSync(path.join(binDir, 'dcs'), '#!/usr/bin/env bash\necho mine\n');
-    fs.writeFileSync(path.join(binDir, 'mytool'), '#!/usr/bin/env bash\n');
-    const res2 = syncRuntime(root, TEMPLATES_DIR);
-    expect(res2.updated).not.toContain(path.join(binDir, 'dcs'));
-    expect(fs.readFileSync(path.join(binDir, 'dcs'), 'utf8')).toBe('#!/usr/bin/env bash\necho mine\n');
-    expect(fs.existsSync(path.join(binDir, 'mytool'))).toBe(true);
+  it('syncRuntime re-stamps shipped bins (overwrites) but leaves user bins alone', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const binDir = runtimeBinDir(root);
+    const tmplDcs = fs.readFileSync(path.join(TEMPLATES_DIR, 'bin', 'dcs'), 'utf8');
+    // Edit a shipped bin (dcs) and add a user-owned bin (mytool).
+    fs.writeFileSync(path.join(binDir, 'dcs'), 'edited\n');
+    fs.writeFileSync(path.join(binDir, 'mytool'), 'user-content\n');
+
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    // Shipped bin is mx-owned: always re-stamped back to the template content.
+    expect(res.updated).toContain(path.join(binDir, 'dcs'));
+    expect(fs.readFileSync(path.join(binDir, 'dcs'), 'utf8')).toBe(tmplDcs);
+    // User bin is never touched.
+    expect(res.updated).not.toContain(path.join(binDir, 'mytool'));
+    expect(fs.readFileSync(path.join(binDir, 'mytool'), 'utf8')).toBe('user-content\n');
   });
 });
 

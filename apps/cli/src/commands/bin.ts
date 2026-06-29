@@ -55,7 +55,8 @@ export function dispatchBin(positionals: string[], flags: Flags): void {
           } else {
             const nameW = Math.max(...bins.map((b) => b.name.length));
             for (const b of bins) {
-              const origin = shipped.has(b.name) ? dim('mx') : dim('user');
+              // Tag every bin so it's clear which mx ships vs which you added.
+              const origin = shipped.has(b.name) ? dim('built-in') : dim('user');
               const flag = b.executable ? '' : `  ${warn()} ${dim('not executable (chmod +x)')}`;
               console.log(`  ${bold(b.name.padEnd(nameW))}  ${origin}${flag}`);
             }

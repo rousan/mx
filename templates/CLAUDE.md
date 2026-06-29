@@ -108,9 +108,11 @@ export PATH="$(mx bin path):$PATH"   # add to your shell rc once
 mx bin ls                            # list bins (mx-shipped + your own), and whether bin/ is on PATH
 ```
 
-mx-shipped bins are stamped **only if missing** (so your edits and additions are never clobbered) and
-backfilled by `mx sync`. This is distinct from a work's own `scripts/` folder, which is for scripts
-scoped to that one work; `bin/` is runtime-wide and command-like.
+mx-shipped bins are **mx-owned: re-stamped on every `mx sync`** (overwritten with the current
+version's content, like the runtime `CLAUDE.md`), so improvements ship to you automatically. **Your own
+bins** — any file mx doesn't ship — are never touched. To customize a shipped bin without losing it on
+the next sync, copy it to a new name. This is distinct from a work's own `scripts/` folder, which is for
+scripts scoped to that one work; `bin/` is runtime-wide and command-like.
 
 ## Work lifecycle hooks
 

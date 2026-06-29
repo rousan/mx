@@ -90,6 +90,8 @@ A newer major is available: @roulabs/mx@3.
 
 Crossing a major is always a deliberate user action — `mx update` never does it automatically (a new major implies a runtime migration). `mx update` is **not** subject to the version gate: you may need it precisely because your runtime is a newer major than the CLI on `$PATH`. If `npm` is missing or the install fails, it prints the manual command for you to run instead.
 
+**Auto-sync after update.** When an in-major update actually installs a newer version, `mx update` then runs **`mx sync`** automatically so the runtime picks up the new version's templates and scaffolding (the runtime `CLAUDE.md`, shipped `bin/` utilities, per-work/per-repo files). It does this by shelling out to the freshly-installed global `mx` — the running process is still the pre-update code, so an in-process sync would stamp the *old* templates. Since the update stays in-major, the runtime version still matches and sync isn't gated. It's best-effort: if the sync can't run (e.g. no runtime at the resolved path) `mx update` prints a hint rather than failing. In `--porcelain` mode the sync runs silently so the update's JSON stays the only object on stdout. (Nothing happens when you're already on the latest in-major version.)
+
 ### `mx migrate [--dry-run]`
 
 **Upgrade an older runtime** to the version this CLI supports. This is the only runtime-touching command allowed when the runtime's `mx.json` doesn't match (see [Runtime versioning](#runtime-versioning)).
@@ -393,7 +395,7 @@ Manage the runtime-wide `bin/` directory — utility executables shared across e
   export PATH="$(mx bin path):$PATH"
   ```
 
-The directory is created by `mx init` and backfilled by `mx sync`; mx-shipped bins are **stamp-if-missing** (your edits and your own bins are never clobbered). This is distinct from a work's `scripts/` folder (scoped to one work) — `bin/` is runtime-wide.
+The directory is created by `mx init` and refreshed by `mx sync`. mx-shipped bins are **mx-owned: re-stamped (overwritten) on every sync**, like the runtime `CLAUDE.md`, so improvements land automatically; **your own bins are never touched**. To customize a shipped bin without losing it on the next sync, copy it to a new name. This is distinct from a work's `scripts/` folder (scoped to one work) — `bin/` is runtime-wide.
 
 ## Per-work context-index hook
 

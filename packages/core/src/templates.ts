@@ -70,35 +70,40 @@ const REPO_SCRIPTS = ['hydrate.sh', 'health.sh'] as const;
 
 /**
  * Stamp mx-shipped runtime utility bins from `<templatesDir>/bin/` into the
- * runtime's `<targetDir>/bin/`, **only those not already present** (a user may
- * have edited or replaced one), making each executable. Always ensures the
- * `bin/` directory exists even when there are no templates to stamp, so the user
- * has somewhere to drop their own bins.
+ * runtime's `<targetDir>/bin/`. Shipped bins are **mx-owned and always
+ * re-stamped** (overwritten with the current version's content, like the runtime
+ * `CLAUDE.md`) so improvements ship to users on `mx sync`; **user-added bins**
+ * (any file whose name isn't shipped) are never touched. Each stamped bin is
+ * made executable. Always ensures the `bin/` directory exists even when there
+ * are no templates, so the user has somewhere to drop their own bins.
+ *
+ * To customize a shipped bin without losing it on the next sync, copy it to a
+ * new name (mx only owns the names it ships).
  *
  * @param targetDir - The runtime root to write `bin/` into.
  * @param templatesDir - Directory containing the `bin/<script>` templates.
- * @returns Absolute paths created this call (the dir if newly made, plus each
- *   newly-stamped bin).
+ * @returns Absolute paths written this call (the dir if newly made, plus each
+ *   stamped bin).
  */
 export function stampRuntimeBins(targetDir: string, templatesDir: string): string[] {
-  const created: string[] = [];
+  const written: string[] = [];
   const destDir = path.join(targetDir, 'bin');
   if (!exists(destDir)) {
     fs.mkdirSync(destDir, { recursive: true });
-    created.push(destDir);
+    written.push(destDir);
   }
   const srcDir = path.join(templatesDir, 'bin');
-  if (!exists(srcDir)) return created;
+  if (!exists(srcDir)) return written;
   for (const name of fs.readdirSync(srcDir).sort()) {
     const src = path.join(srcDir, name);
     if (!fs.statSync(src).isFile()) continue;
     const dest = path.join(destDir, name);
-    if (exists(dest)) continue;
+    // Always (re)stamp shipped bins — mx-owned, like CLAUDE.md.
     fs.copyFileSync(src, dest);
     fs.chmodSync(dest, 0o755);
-    created.push(dest);
+    written.push(dest);
   }
-  return created;
+  return written;
 }
 
 /**

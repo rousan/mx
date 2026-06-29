@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import * as path from 'node:path';
 import {
   initRuntime,
@@ -119,6 +120,11 @@ export function runGlobal(positionals: string[], flags: Flags): void {
       // exists (crossing a major is a deliberate user action + `mx migrate`).
       const info = selfUpdate(flags.porcelain);
       emit(() => renderSelfUpdate(info), info);
+      // After an actual in-major update, run `mx sync` so the runtime picks up
+      // the new version's templates/scaffolding. Must shell out to the freshly
+      // installed global `mx` (this process is still the old code), so the NEW
+      // templates are what get stamped.
+      if (info.updated) autoSyncAfterUpdate(flags);
       return;
     }
     default:
@@ -151,6 +157,33 @@ function renderSelfUpdate(info: SelfUpdateInfo): void {
     console.log(`${warn()} A new major release ${bold(`mx v${info.newMajor}`)} is available.`);
     console.log(
       `  ${dim(`Upgrade (optional): npm i -g ${info.package}@${info.newMajor}, then `)}${bold('mx migrate')}`,
+    );
+  }
+}
+
+/**
+ * Run `mx sync` after a successful self-update, via the freshly-installed global
+ * `mx` (this process is still the pre-update code, so an in-process `syncRuntime`
+ * would stamp the *old* templates). Same-major update → runtime version still
+ * matches, so sync isn't gated. Best-effort: a failure (e.g. no runtime at the
+ * resolved path) is surfaced as a hint, never a hard error — the update itself
+ * already succeeded.
+ *
+ * In `--porcelain` mode the sync runs silently so the update's JSON stays the
+ * only object on stdout.
+ *
+ * @param flags - Parsed flags (forwards `--runtime` / `--porcelain`).
+ */
+function autoSyncAfterUpdate(flags: Flags): void {
+  const args = ['sync'];
+  if (flags.runtime) args.push('--runtime', flags.runtime);
+  if (!flags.porcelain) console.log(`\n${dim('Syncing runtime with the new version…')}`);
+  const r = spawnSync('mx', args, {
+    stdio: flags.porcelain ? ['ignore', 'ignore', 'ignore'] : 'inherit',
+  });
+  if (r.status !== 0 && !flags.porcelain) {
+    process.stderr.write(
+      `${warn()} ${dim('could not run `mx sync` automatically — run it yourself to finish updating the runtime')}\n`,
     );
   }
 }

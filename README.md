@@ -89,7 +89,7 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 | `mx init [path]` | scaffold/adopt a runtime (`repos/`, `works/`, `.mx-root`, `mx.json`, `CLAUDE.md`, `context/INDEX.json`) |
 | `mx info [--all] [--porcelain]` | list repos, works, worktrees, and ports (active works only by default; `--all` includes archived) |
 | `mx sync` | re-sync runtime with current mx version: re-stamp `CLAUDE.md`, backfill `context/INDEX.json`, the runtime `bin/` + shipped utility bins, per-work dirs (`wt/`/`scripts/`/`files/`/`tmp/`/`hooks/`/`sessions/`) + work `CLAUDE.md` + `.claude/settings.json` + lifecycle hooks (`hooks/{pre,post}-{archive,unarchive}.sh`), per-repo `hydrate.sh`/`health.sh` if missing. Same-major, non-destructive. |
-| `mx update` | self-update the CLI within its major (`npm i -g`); reports a newer major if available. Not runtime-gated. |
+| `mx update` | self-update the CLI within its major (`npm i -g`), then auto-run `mx sync` to refresh the runtime; reports a newer major if available. Not runtime-gated. |
 | `mx migrate [--dry-run]` | upgrade an older-version runtime to the version this CLI supports (only command allowed on a version mismatch); `--dry-run` previews the plan without changing anything |
 | `mx repo add <git-url> [--name <n>]` | clone a pristine repo into `repos/<repo>/git` (stamps its `hydrate.sh`/`health.sh`) |
 | `mx repo new <name> [--quick] [-o]` | create a fresh **local** repo (no remote): `git init` on main + README + initial commit. `--quick` also makes a `dev-<name>` work + a `develop` worktree (a one-shot for quick experiments) |
