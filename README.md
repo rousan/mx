@@ -104,6 +104,7 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 | `mx work -n <name> destroy --force` | **permanent**: delete the work folder (incl. sessions); branches kept. Prefer archive. |
 | `mx work health` / `mx work -n <name> health` | local-only work-folder audit: stray files in the work root, worktree presence vs work.json, cross-work port collisions, archive invariants; augmented by the central `work-health` hook (`--all` includes archived) |
 | `mx health [--all]` | whole-runtime overview: every repo's health + every active work's health in one view (`--all` includes archived works) |
+| `mx mission-control [--port <n>] [-o]` (alias `mx mc`) | start a local, read-only **live web dashboard** — calm monochrome view of all repo/work health and a consolidated ports board (port → service → worktree → work → URL), streamed over SSE. `-o` opens the browser |
 | `mx bin ls` / `mx bin path` (alias `mx bins`) | list the runtime's `bin/` utility executables (mx-shipped + your own); `path` prints the dir for `export PATH="$(mx bin path):$PATH"` |
 
 Read commands take `--porcelain` for stable JSON; mutations echo the resulting object; errors are `{"error","code"}` with a non-zero exit. `-n <name>` can be omitted when your cwd implies it (inside a work folder/worktree, or a pristine clone).
@@ -120,6 +121,7 @@ See **[docs/release.md](docs/release.md)** for the full runbook, the `NPM_TOKEN`
 - [x] Runtime versioning (`mx.json` + version gate) and `mx migrate`; container repo layout (`repos/<repo>/git` + `repo.json`)
 - [x] Central hook hub (`<runtime>/hooks/`): worktree create/remove, work archive/unarchive, repo fetch, repo-health, work-health — any language, branch on `MX_*`
 - [x] Health: `mx repo health`, `mx work health`, and `mx health` (whole-runtime overview)
+- [x] `mx mission-control` — live web dashboard (zero-dep server + single-file React/Vite/Tailwind UI)
 - [x] Multiple worktrees of one repo per work (named worktrees; `wt/<name>`)
 - [x] `mx work new -o` — fullscreen Terminal in the work folder (macOS)
 - [x] Env-based runtime discovery (`--runtime` / `$MX_RUNTIME` / default `~/mx`)

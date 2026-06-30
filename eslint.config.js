@@ -12,7 +12,18 @@ import prettier from 'eslint-config-prettier';
  * concerns are owned entirely by Prettier.
  */
 export default tseslint.config(
-  { ignores: ['**/dist/**', '**/node_modules/**', 'npm/bin/**', 'npm/templates/**'] },
+  {
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      'npm/bin/**',
+      'npm/templates/**',
+      'npm/mission-control/**',
+      // The dashboard is a React/Vite app with its own conventions; the repo's
+      // JSDoc-on-everything TS config doesn't apply to JSX components.
+      'apps/mission-control/**',
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   jsdoc.configs['flat/recommended-typescript'],

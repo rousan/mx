@@ -1,0 +1,48 @@
+@import 'tailwindcss';
+
+/*
+ * Monochrome, calm, display-oriented theme that AUTO-SYNCS with the OS light/dark
+ * setting via `prefers-color-scheme` (Tailwind v4's default `dark:` variant). A
+ * tight grayscale type/border scale with a single amber accent for warnings.
+ * Tuned to read from a 32" monitor across the room and a 15" laptop up close.
+ */
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #fafafa; /* zinc-50 — light canvas */
+  color: #18181b; /* zinc-900 */
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #09090b; /* zinc-950 — dark canvas */
+    color: #d4d4d8; /* zinc-300 */
+  }
+}
+
+/* Subtle pulse for the live indicator dot. */
+@keyframes mc-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.mc-live {
+  animation: mc-pulse 2s ease-in-out infinite;
+}

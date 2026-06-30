@@ -10,6 +10,7 @@ import { dispatchRepo } from './commands/repo';
 import { dispatchWork } from './commands/work';
 import { dispatchBin } from './commands/bin';
 import { dispatchHealth } from './commands/health';
+import { dispatchMissionControl } from './commands/missionControl';
 
 /**
  * CLI version, surfaced by `mx version` / `mx --version`. Read from the
@@ -63,6 +64,9 @@ export function main(): void {
         return dispatchBin(positionals, flags);
       case 'health':
         return dispatchHealth(positionals, flags);
+      case 'mission-control':
+      case 'mc':
+        return dispatchMissionControl(positionals, flags);
       default:
         throw new MxError(`unknown command: ${positionals[0]}`, 'BAD_ARGS');
     }

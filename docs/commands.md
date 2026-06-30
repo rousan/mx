@@ -370,6 +370,17 @@ Each failing check's detail rides inline as a hint on its own row (no separate "
 
 Whole-runtime health overview: every repo's health block (identical to `mx repo health`) followed by every active work's health block (identical to `mx work health`). `--all` includes archived works in the works section. Porcelain returns `{ "repos": [...], "works": [...] }` with the full snapshots.
 
+### `mx mission-control [--port <n>] [--open|-o]` (alias `mx mc`)
+
+Start a local, **read-only live web dashboard** for the runtime and block until interrupted (Ctrl-C). Open the printed `http://localhost:<port>` in a browser (a second monitor works well) for a calm, monochrome, auto-refreshing overview:
+
+- a consolidated **ports board** — every allocated port across **all** works (active and archived), as a nested tree **work → worktree → (service · port · url)** so names aren't repeated; collisions across works flagged in red, archived works dimmed (the fast "which work owns which port, give me the URL" view);
+- a **repos** grid and a **works** grid, each card showing the same health metrics as `mx repo health` / `mx work health` with an aggregate ✓/⚠ per card. The works grid shows **active works only by default**; a "show archived" checkbox reveals archived ones. (The ports board is independent — it always covers every work.)
+
+**How it's served.** A zero-dependency `node:http` server serves a single self-contained HTML page (`GET /`) plus a JSON API: `GET /api/state` (one-shot snapshot) and `GET /api/stream` (Server-Sent Events). The page subscribes to the stream; the server recomputes on a short timer and pushes instantly on manifest changes (it `fs.watch`es `works/`, `repos/`, `mx.json`). The UI is built from `apps/mission-control/` (React + Vite + Tailwind) into one inlined `index.html` at build time and bundled into the package — **nothing from it is a runtime dependency**.
+
+`--port` sets the starting port (default `7777`; walks upward if busy). `-o`/`--open` opens the browser (macOS). Read-only — it never mutates the runtime.
+
 ### `mx bin ls` · `mx bin path` (alias `mx bins`)
 
 Manage the runtime-wide `bin/` directory — utility executables shared across every work, meant to be on your `PATH`. mx ships some (currently `dcs` and `lcs` — delete / list Claude Code sessions by name) and you can drop your own in; any executable file is picked up.

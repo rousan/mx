@@ -2,6 +2,16 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 3.1.0 — 2026-06-30
+
+**`mx mission-control` — a live web dashboard (alias `mx mc`).** Run it to start a local, **read-only** dashboard for the whole runtime and open `http://localhost:7777` (a second monitor works well): a calm, monochrome, auto-refreshing view of every repo's and work's health, plus a consolidated **ports board** (port → url → service → worktree → work, collisions flagged, archived dimmed) for the fast "which work owns which port, give me the URL" lookup.
+
+- **Zero-dependency server.** A hand-written `node:http` server serves a single self-contained HTML page (`/`), a JSON snapshot (`/api/state`), and a **Server-Sent Events** stream (`/api/stream`). It recomputes on a short timer and pushes instantly on manifest changes (`fs.watch` on `works/`, `repos/`, `mx.json`). `--port` walks upward if busy (default 7777); `-o` opens the browser.
+- **UI ships as a prebuilt static file.** New private workspace `apps/mission-control/` (React + Vite + Tailwind) builds to one inlined `index.html` (`vite-plugin-singlefile`), copied into `npm/mission-control/` at build time. React/Vite/Tailwind are dev-only — the published `@roulabs/mx` keeps **zero runtime dependencies**. `pnpm build` builds the dashboard before the CLI so the copy step finds `dist/`.
+- **Code:** `commands/missionControl.ts` + `paths.ts#missionControlHtml()` in the CLI; `--port` flag; reuses `listRepoHealth` / `listWorkHealth` from `@mx/core`. Read-only — never mutates the runtime. Minor — runtime stays v3, no migration.
+
+Also cleaned two stale references to the removed `mx work worktree hydrate` command / `--no-hydrate` flag in the stamped `templates/` (the `post-worktree-create` hook header and the runtime `CLAUDE.md`).
+
 ## 3.0.0 — 2026-06-29
 
 **Hooks are centralized into one runtime-wide hub — a breaking layout change (runtime v3).** The per-repo `hydrate.sh`/`health.sh` and per-work `hooks/` are gone; all lifecycle hooks now live in **`<runtime>/hooks/`**, one executable per event, and you branch on `MX_*` context inside.

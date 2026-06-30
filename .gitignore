@@ -8,10 +8,14 @@ dist/
 # publishable package built by `pnpm build` (npm/package.json and npm/README.md are committed)
 npm/bin/
 npm/templates/
+npm/mission-control/
 npm/LICENSE
 
 # dependencies
 node_modules/
+
+# playwright screenshot/console artifacts
+.playwright-mcp/
 
 # macOS
 .DS_Store

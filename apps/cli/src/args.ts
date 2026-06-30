@@ -35,6 +35,8 @@ export interface Flags {
   branch?: string;
   /** Base ref from `--base`. */
   base?: string;
+  /** Port for `mx mission-control --port <n>`. */
+  port?: number;
 }
 
 /**
@@ -105,6 +107,13 @@ export function parseArgs(argv: string[]): ParsedArgs {
       flags.dryRun = true;
     } else if (a === '--quick') {
       flags.quick = true;
+    } else if (a === '--port' || a.startsWith('--port=')) {
+      const v = a.startsWith('--port=') ? a.slice('--port='.length) : argv[++i];
+      const n = Number(v);
+      if (!Number.isInteger(n) || n <= 0 || n > 65535) {
+        throw new MxError(`invalid --port: ${v ?? '(missing)'}`, 'BAD_ARGS');
+      }
+      flags.port = n;
     } else if (a.startsWith('--') && a.includes('=')) {
       const eq = a.indexOf('=');
       const key = VALUE_FLAGS[a.slice(0, eq)];

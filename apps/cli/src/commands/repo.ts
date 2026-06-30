@@ -309,18 +309,20 @@ export function renderHealthDetail(h: RepoHealth, indent = ''): void {
   // Only health metrics (rows that carry a ✓/⚠) are shown — informational
   // fields like default branch, last fetched, and worktree count live in
   // `mx repo info`. `current branch` is the metric: ✓ when it matches the
-  // default, ⚠ otherwise.
+  // default. With no remote (no origin/HEAD, e.g. a `mx repo new` repo) there's
+  // no default to compare against, so any branch is fine — only a detached HEAD
+  // is flagged. Matches `@mx/core`, which adds an issue only when a default exists.
   const currentBranchText = h.currentBranch ?? '(detached HEAD)';
-  const branchOk = h.currentBranch !== null && h.isOnDefault;
+  const branchOk = h.currentBranch !== null && (h.defaultBranch === null || h.isOnDefault);
   addRow(
     'current branch',
     currentBranchText,
     branchOk,
-    branchOk
-      ? undefined
-      : h.currentBranch === null
-        ? 'HEAD is detached'
-        : `should be ${h.defaultBranch ?? '(default)'}`,
+    h.currentBranch === null
+      ? 'HEAD is detached'
+      : h.defaultBranch !== null && !h.isOnDefault
+        ? `should be ${h.defaultBranch}`
+        : undefined,
   );
   addRow(
     'uncommitted',

@@ -318,8 +318,7 @@ clarity; dropping it works while you're inside the work.
     `--base` to fork from the pristine clone's current HEAD.
   - After the worktree is created, the central `<runtime>/hooks/post-worktree-create` hook runs with the
     new worktree as the working directory (copy a `.env`, install deps, etc.) — branch on `$MX_REPO` /
-    `$MX_BRANCH` / `$MX_WORKTREE_NAME` inside it. To skip hydration, make that hook a no-op (there's no
-    `--no-hydrate` flag).
+    `$MX_BRANCH` / `$MX_WORKTREE_NAME` inside it. To skip hydration, make that hook a no-op.
 - **Spin up a quick local app (no remote):** for a throwaway/experiment repo you don't want on GitHub,
   `mx repo new <name>` creates a fresh local repo (git init on `main` + README + initial commit). Add
   `--quick` (and `-o`) to also create a `dev-<name>` work + a worktree on `develop` and open it in one
@@ -332,6 +331,10 @@ clarity; dropping it works while you're inside the work.
   (stray files in a work root, worktree presence vs `work.json`, cross-work port collisions, archive
   invariants); `mx health` shows both for the whole runtime (`--all` includes archived works). All are
   purely local. Each runs its central hook (`repo-health` / `work-health`) and captures the stdout as `extra`.
+- **Live dashboard:** `mx mission-control` (alias `mx mc`) starts a local read-only web dashboard — a calm
+  monochrome view of all repo/work health and a consolidated ports board (which work owns which port, with a
+  `localhost` URL). Updates live over SSE. `--port <n>` sets the port (default 7777), `-o` opens the browser.
+  Long-running (Ctrl-C to stop) — if you start it for the user, tell them the URL.
 - **Tear down (user-initiated, after merge):** `mx work -n <feature> destroy` removes the worktrees
   and the work folder but **keeps the branches**. It refuses if any worktree has uncommitted changes.
 
