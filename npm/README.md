@@ -44,17 +44,19 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 | `mx sync` | re-stamp the runtime's mx-owned files (`CLAUDE.md`, per-repo/per-work scaffolding) from the current CLI — same-major, non-destructive |
 | `mx update` | self-update the CLI within its major (`npm i -g`), then auto-run `mx sync`; flags a newer major if one exists |
 | `mx migrate [--dry-run]` | upgrade an older-version runtime to the version this CLI supports (the only command allowed on a version-mismatched runtime); `--dry-run` previews the plan without changing anything |
-| `mx repo add <git-url> [--name <n>]` | clone a pristine repo (into `repos/<repo>/git`; stamps its `hydrate.sh`/`health.sh`) |
+| `mx repo add <git-url> [--name <n>]` | clone a pristine repo (into `repos/<repo>/git`; writes its `repo.json`) |
 | `mx repo new <name> [--quick] [-o]` | create a fresh local repo with no remote (git init on main + README + initial commit); `--quick` also makes a `dev-<name>` work + a `develop` worktree (quick-experiment one-shot) |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
-| `mx repo health` / `mx repo -n <name> health` | local-only health check (augmented by the repo's `health.sh`) |
+| `mx repo health` / `mx repo -n <name> health` | local-only health check (augmented by the central `repo-health` hook) |
 | `mx work new <name> [--description <t>] [-o]` | create a work; `-o` opens a fullscreen Terminal in the work folder (macOS) |
 | `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works |
-| `mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]` | add a worktree (runs the repo's `hydrate.sh` unless `--no-hydrate`) |
-| `mx work -n <name> worktree ls\|rm\|hydrate <repo>` | list / remove / re-run hydrate for a worktree |
-| `mx work -n <name> port set\|unset\|ls <repo> <service> [<port>]` | allocate/release ports |
-| `mx work -n <name> archive [--yes]` / `unarchive` | soft-delete / restore a work (keeps branches); runs the work's `hooks/{pre,post}-{archive,unarchive}.sh` (a `pre-*` non-zero exit aborts) |
+| `mx work -n <name> worktree add <repo> [<wt-name>] [--branch <b>] [--base <ref>]` | add a worktree (fires `pre/post-worktree-create`); `<wt-name>` defaults to the repo — pass a distinct one for multiple worktrees of the same repo |
+| `mx work -n <name> worktree ls\|rm <wt-name>` | list / remove a worktree (by name; defaults to the repo) |
+| `mx work -n <name> port set\|unset\|ls <wt-name> <service> [<port>]` | allocate/release ports per worktree (omit `<port>` to auto-pick) |
+| `mx work -n <name> archive [--yes]` / `unarchive` | soft-delete / restore a work (keeps branches); fires the central `pre/post-work-archive` / `pre/post-work-unarchive` hooks (a `pre-*` non-zero exit aborts) |
 | `mx work -n <name> destroy --force` | permanently remove the work folder (keeps branches) |
+| `mx work health` / `mx work -n <name> health` | local-only work-folder audit (stray files, worktree presence, cross-work port collisions, archive invariants); augmented by the central `work-health` hook (`--all` includes archived) |
+| `mx health [--all]` | whole-runtime overview: every repo's health + every active work's health |
 | `mx bin ls` / `mx bin path` (alias `mx bins`) | list the runtime's `bin/` utility executables (mx-shipped + your own); `path` prints the dir for `export PATH="$(mx bin path):$PATH"` |
 
 ## License

@@ -8,9 +8,9 @@ Every command supported by `mx`, with flags, semantics, and examples.
 
 Scaffold or adopt a runtime. Target resolution: positional `path` arg → `$MX_RUNTIME` → `~/mx`.
 
-Creates: `repos/`, `works/`, `.mx-root`, `mx.json` (stamped with the runtime version this CLI supports), `CLAUDE.md` (stamped), `context/INDEX.json` (only if missing). Idempotent.
+Creates: `repos/`, `works/`, `.mx-root`, `mx.json` (stamped with the runtime version this CLI supports), `CLAUDE.md` (stamped), the central `hooks/` hub (one stamped no-op per event), the runtime `bin/` (+ shipped utilities), `context/INDEX.json` (only if missing). Idempotent.
 
-On a fresh runtime, `mx init` stamps `mx.json` with the runtime version this CLI supports (currently `2`). When adopting an existing runtime, it refuses if that runtime's `mx.json` differs from what this CLI supports — pointing you at `mx migrate` (if the runtime is older) or at upgrading the CLI (if the runtime is newer). See [Runtime versioning](#runtime-versioning).
+On a fresh runtime, `mx init` stamps `mx.json` with the runtime version this CLI supports (currently `3`). When adopting an existing runtime, it refuses if that runtime's `mx.json` differs from what this CLI supports — pointing you at `mx migrate` (if the runtime is older) or at upgrading the CLI (if the runtime is newer). See [Runtime versioning](#runtime-versioning).
 
 Prints a contextual hint about `$MX_RUNTIME`:
 - If `$MX_RUNTIME` already points at this runtime: confirms you're set.
@@ -60,10 +60,9 @@ Re-sync the runtime with the current mx version (this is the command formerly ca
 
 - re-stamps `<runtime>/CLAUDE.md` from `templates/CLAUDE.md` (always rewritten, mx-owned)
 - stamps `<runtime>/context/INDEX.json` **only if missing** (existing index content is preserved)
-- backfills the runtime `bin/` and its shipped utility bins, and mx-owned structural directories across every work — `<work>/wt/`, `scripts/`, `files/`, `tmp/`, `hooks/`, and `sessions/` for any work that pre-dates that scaffolding (plus the per-repo `hydrate.sh`/`health.sh`, the work `CLAUDE.md`, `.claude/settings.json`, and the lifecycle hook scripts — all stamp-if-missing)
+- backfills the central `hooks/` hub (stamp-if-missing per event), the runtime `bin/` and its shipped utility bins, and mx-owned structural directories across every work — `<work>/wt/`, `scripts/`, `files/`, `tmp/`, and `sessions/` for any work that pre-dates that scaffolding
+- writes each repo's `repo.json`, **only if missing**
 - stamps the per-work `CLAUDE.md`, **stamp-if-missing** (stamped once, then user-owned — see [The work folder](runtime-model.md#the-work-folder))
-- backfills per-repo `hydrate.sh` / `health.sh` in each repo container, **stamp-if-missing** and executable (see [Per-repo scripts](#per-repo-scripts))
-- generates each work's `.claude/settings.json` context-index hook, **stamp-if-missing** (see [Per-work context-index hook](#per-work-context-index-hook))
 - removes a stale `<runtime>/README.md` if one lingers (legacy cleanup)
 
 Output enumerates every path actually written:
@@ -71,9 +70,10 @@ Output enumerates every path actually written:
 ```
 ✓ Synced runtime at /Users/rousan/mx
   + /Users/rousan/mx/CLAUDE.md
-  + /Users/rousan/mx/repos/app/hydrate.sh
+  + /Users/rousan/mx/hooks/post-worktree-create
+  + /Users/rousan/mx/repos/app/repo.json
   + /Users/rousan/mx/works/old-feat/sessions
-  + /Users/rousan/mx/works/old-feat/.claude/settings.json
+  + /Users/rousan/mx/works/old-feat/CLAUDE.md
 ```
 
 ### `mx update`
@@ -102,10 +102,18 @@ It validates the **full migration chain** (`v_current → … → supported`) *b
 - errors `CLI_TOO_OLD` if the runtime is **newer** than this CLI supports (upgrade the CLI with `mx update` instead)
 - a friendly no-op if the runtime is already at the supported version
 
-The registered **v1 → v2** step upgrades **both** the repo and work layouts in one pass:
+The registered steps:
+
+**v1 → v2** upgrades the repo and work layouts in one pass:
 
 - moves each pristine clone from `repos/<repo>/` into `repos/<repo>/git/` and runs `git worktree repair` so existing worktrees relink to the moved clone;
 - restructures every work — moves its flat worktrees from `works/<work>/<repo>` into `works/<work>/wt/<repo>` (via `git worktree move`), creates the new `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/` folders, stamps the work `CLAUDE.md`, and rewrites the `.code-workspace` folder paths to `wt/<repo>`.
+
+**v2 → v3** centralizes hooks:
+
+- stamps the central `<runtime>/hooks/` hub (one executable per event);
+- writes each repo's `repo.json`;
+- **retires the old per-repo `hydrate.sh`/`health.sh` and per-work `hooks/`** — removes them when they're unchanged from the mx default, but **keeps them with a warning** (surfaced in the output and in `warnings`/porcelain) when you customized them, so you can fold the logic into the central hooks.
 
 **`--dry-run`** previews the migration without touching anything: it runs the same up-front validation (so an impossible migration still errors `NO_MIGRATION` / `CLI_TOO_OLD`), then prints every path it *would* move, stamp, or create and ends with "No changes were made." Nothing is moved and the runtime's `mx.json` version is left untouched, so you can review the plan before letting migrate run against an old runtime. In `--porcelain` mode the result object carries `"dryRun": true` and the planned paths in `changed`. Run it again without the flag to apply.
 
@@ -115,9 +123,9 @@ Print help text or version (read from `<pkg>/package.json` at startup). Allowed 
 
 ## Runtime versioning
 
-A runtime carries its layout version in `<runtime>/mx.json` — an integer (currently `2`). An **absent** `mx.json` file means a legacy **v1** runtime.
+A runtime carries its layout version in `<runtime>/mx.json` — an integer (currently `3`). An **absent** `mx.json` file means a legacy **v1** runtime.
 
-This CLI supports a single runtime version (`RUNTIME_VERSION = 2`), and the mapping is fixed: **CLI major version ⇄ runtime version** (CLI 2.x supports runtime v2, CLI 3.x will support v3, …).
+This CLI supports a single runtime version (`RUNTIME_VERSION = 3`), and the mapping is fixed: **CLI major version ⇄ runtime version** (CLI 3.x supports runtime v3, CLI 2.x supported v2, …).
 
 **The version gate.** Before any runtime-touching command runs, mx compares the runtime's `mx.json` to the version it supports. On a mismatch it **refuses** the command with error code `RUNTIME_VERSION_MISMATCH` and points you at `mx migrate`. The only commands allowed on a mismatched runtime are:
 
@@ -129,19 +137,19 @@ A malformed `mx.json` file errors with `BAD_VERSION`.
 
 ## Repos (pristine clones)
 
-Each repo lives in a **container** at `<runtime>/repos/<repo>/`, holding the pristine clone at `git/` plus mx-owned per-repo scripts (`hydrate.sh`, `health.sh`). The commands below report the repo `path` as the container (`repos/<repo>`), not the inner git dir.
+Each repo lives in a **container** at `<runtime>/repos/<repo>/`, holding the pristine clone at `git/` plus a `repo.json` metadata file (`{ "name": … }`, extensible). The commands below report the repo `path` as the container (`repos/<repo>`), not the inner git dir. (Lifecycle hooks are central — `<runtime>/hooks/` — not per-repo.)
 
 ### `mx repo add <git-url> [--name <n>]`
 
 Clone a repo into its container at `<runtime>/repos/<repo>/git/`. The only command that clones. Name is derived from the URL (last segment minus `.git`) unless `--name` overrides.
 
-Also stamps the per-repo scripts `hydrate.sh` and `health.sh` into the container (see [Per-repo scripts](#per-repo-scripts)).
+Also writes `repo.json` (`{ "name": … }`) into the container.
 
 ### `mx repo new <name> [--quick] [-o] [--description <t>]`
 
-Create a brand-new **local** repo (no remote) at `<runtime>/repos/<name>/git/`: `git init` on `main`, a starter `README.md`, and an initial commit (so `main` exists and worktrees can fork from it). Stamps `hydrate.sh`/`health.sh` like `add`. This is the counterpart to `add` for quick experiments and throwaway apps you don't want to push to a remote yet — no more manual `mkdir` + `git init` + commit dance. The initial commit uses your git identity, falling back to a neutral `mx <mx@localhost>` only if none is configured. Errors `EXISTS` if the repo already exists, `BAD_ARGS` on an invalid name (must be a single path segment).
+Create a brand-new **local** repo (no remote) at `<runtime>/repos/<name>/git/`: `git init` on `main`, a starter `README.md`, and an initial commit (so `main` exists and worktrees can fork from it). Writes `repo.json` like `add`. This is the counterpart to `add` for quick experiments and throwaway apps you don't want to push to a remote yet — no more manual `mkdir` + `git init` + commit dance. The initial commit uses your git identity, falling back to a neutral `mx <mx@localhost>` only if none is configured. Errors `EXISTS` if the repo already exists, `BAD_ARGS` on an invalid name (must be a single path segment).
 
-`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and runs the repo's `hydrate.sh` (skip with `--no-hydrate`). Pair with `-o`/`--open` to open the work in a fullscreen Terminal (macOS), and `--description <t>` to set the work description. So a fresh experiment is one line:
+`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and fires the `post-worktree-create` hook. Pair with `-o`/`--open` to open the work in a fullscreen Terminal (macOS), and `--description <t>` to set the work description. So a fresh experiment is one line:
 
 ```
 mx repo new exp --quick -o     # repo "exp", work "dev-exp", worktree on "develop", opened
@@ -183,71 +191,36 @@ Detail block for one repo: name, path (the container `repos/<repo>`), current br
 
 Purely-local health check. **No network, no fetch.** Surfaces drift from the expected "checked-out on default branch, clean working tree, in sync with origin" state.
 
-**Checks**: default branch (from `origin/HEAD` symbolic ref, set at clone time), current branch, uncommitted changes, untracked files, ahead/behind origin/<branch> (compared against last fetch), last-fetched timestamp (`.git/FETCH_HEAD` mtime), worktrees-in-works.
+**Metrics shown** (only rows that carry a ✓/⚠ — purely informational fields like default branch and worktrees-in-works live in `mx repo info`): current branch (✓ when it matches the default), uncommitted changes, untracked files, ahead/behind origin/<branch> (only when an upstream exists), and last fetched — shown for remote-backed repos with a 24h freshness rule (✓ within 24h, ⚠ stale otherwise). Local repos (no remote) omit ahead/behind and last fetched.
 
-These structured checks are mx's built-in **typed source of truth** for repo health. In addition, `mx repo health` now also runs the repo's `health.sh` hook (if any) and captures its stdout into a separate `extra` field — see [Per-repo scripts](#per-repo-scripts). A missing, empty, or failing hook yields `extra: null` and never affects `healthy` / `issues`.
+These structured checks are mx's built-in **typed source of truth** for repo health. In addition, `mx repo health` runs the central `repo-health` hook (`<runtime>/hooks/repo-health`) with `MX_REPO` set and captures its stdout into a separate `extra` field — see [Hooks](#hooks). The hook convention is **silent when healthy**: empty output (or a bare `ok`/`OK`) renders the `extra` row as ✓ `OK`, any other output renders it with a ⚠ (and the message). A missing or failing hook yields `extra: null`.
 
-**List mode** (no `-n`): one line per repo with ✓/⚠ at the start, issues summarized inline:
-
-```
-⚠ analytics      2 untracked files
-✓ app          
-⚠ web-marketing  1 commit behind origin/main
-✓ worker       
-```
-
-**Detail mode** (`-n <name>`): structured per-metric block with ✓/⚠ markers aligned in a column:
+Both forms render the **same per-repo detail block** — a structured per-metric block with ✓/⚠ markers aligned in a column. The **repo name carries an aggregate ✓/⚠** so you can scan green-vs-needs-attention at a glance (✓ only when every checked row, including `extra`, is a tick). `-n <name>` shows one repo; without `-n`, every repo's block is printed in turn (alphabetical), separated by a blank line.
 
 ```
-worker
-  default branch      main        
-  current branch      main          ✓
-  uncommitted         0 changes     ✓
-  untracked           0 files       ✓
-  ahead of origin     0 commits     ✓
-  behind of origin    1 commit      ⚠  run `mx repo -n worker fetch`
-  last fetched        2 hours ago    
-  worktrees in works  1                used by: checkout-revamp
-
-  health.sh
-    <captured stdout of the repo's health.sh, if it produced any>
+api  ⚠
+  current branch    main          ✓
+  uncommitted       0 changes     ✓
+  untracked         0 files       ✓
+  ahead of origin   0 commits     ✓
+  behind of origin  1 commit      ⚠  run `mx repo -n api fetch`
+  last fetched      2 days ago    ⚠  stale — run `mx repo -n api fetch`
+  extra             OK            ✓
 ```
 
-The `health.sh` section appears only when the hook produced output. In porcelain, the captured output is the string field `extra` (or `null`).
+The `extra` row sits inline right after the metrics (no blank line); multi-line hook output continues on aligned rows below. In porcelain, the captured output is the string field `extra` (or `null`).
 
 **Exit code is 0** even when issues are found (read-only convention). To refresh the "behind" numbers against actual origin, run `mx repo -n <name> fetch` first.
 
 ### `mx repo -n <name> rm`
 
-Remove the repo container (clone + scripts). Refuses with `IN_USE` if any work still has a worktree of it.
-
-## Per-repo scripts
-
-Each repo container holds two mx-owned-but-user-customizable hooks: `repos/<repo>/hydrate.sh` and `repos/<repo>/health.sh`. Both are stamped on `mx repo add` and backfilled by `mx sync` — always **stamp-if-missing** and executable, so your edits are preserved.
-
-### `hydrate.sh` — runs after `worktree add`
-
-Default body just `echo "Setup is done"`. It runs **automatically after** `mx work … worktree add <repo>`, with the **new worktree as the working directory**. Context is passed both ways:
-
-- **positional args**: `$1` = worktree path, `$2` = branch
-- **env vars**: `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_RUNTIME`
-
-A non-zero exit during automatic post-`worktree add` execution is a **warning** — the worktree is kept.
-
-Typical uses: copy a `.env`, allocate a port with `mx work … port set` and wire it into config, install dependencies.
-
-- Pass `--no-hydrate` to `worktree add` to skip running it.
-- Re-run it on demand with `mx work -n <name> worktree hydrate <repo>` (see below) — in that explicit mode, a non-zero exit errors with `HYDRATE_FAILED`.
-
-### `health.sh` — augments `mx repo health`
-
-Default is a documented no-op (no output). When present and producing output, its stdout is captured into the `extra` field of `mx repo health` (shown as a `health.sh` section in detail view). It runs with the **git clone** as cwd; env: `MX_REPO`, `MX_REPO_PATH`, `MX_GIT_DIR`, `MX_RUNTIME`. A missing / empty / failing hook yields `extra: null` and never affects `healthy` / `issues`.
+Remove the repo container (clone + `repo.json`). Refuses with `IN_USE` if any work still has a worktree of it.
 
 ## Works (features)
 
 ### `mx work new <name> [--description <text>] [--open|-o]`
 
-Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `files/`, `tmp/`, `hooks/`, and `sessions/`, the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)), `.claude/settings.json` (the per-work context-index hook — see [Per-work context-index hook](#per-work-context-index-hook)), and the lifecycle hook scripts in `hooks/` (see [Work lifecycle hooks](#work-lifecycle-hooks)). Prints the absolute path. All of these are **stamp-if-missing**.
+Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `files/`, `tmp/`, and `sessions/`, and the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)). Prints the absolute path. All of these are **stamp-if-missing**. (Lifecycle hooks are central, not per-work — see [Hooks](#hooks).)
 
 The name is immutable.
 
@@ -294,35 +267,31 @@ Open an **existing** work's dev layout — the same thing `mx work new -o` does 
 
 Update the work's description.
 
-### `mx work -n <name> worktree add <repo> [--branch <b>] [--base <ref>] [--no-hydrate]`
+### `mx work -n <name> worktree add <repo> [<worktree-name>] [--branch <b>] [--base <ref>]`
 
-Create a git worktree of `<repo>` inside the work at `works/<name>/wt/<repo>`, on branch `<b>` (defaults to the work name). If the branch doesn't already exist, it's created. The worktree is also registered in `work.json` and added to the `.code-workspace` (folder path `wt/<repo>`, entry `name` = the repo name).
+Create a git worktree of `<repo>` inside the work at `works/<name>/wt/<worktree-name>`, on branch `<b>` (defaults to the work name). If the branch doesn't already exist, it's created. The worktree is registered in `work.json` (with its `name`) and added to the `.code-workspace`.
 
-`--base <ref>` is where the new branch forks from. Accepts any ref. A bare branch name resolves to a local branch or `origin/<name>` (with fallback). Resolved to a commit SHA before `git worktree add` so git's DWIM can't override `-b`. Omit `--base` to fork from the pristine clone's current HEAD.
+`<worktree-name>` is the worktree's identifier — its `wt/<name>` directory and the selector used by `rm` / `port`. It **defaults to the repo name**. Pass a distinct name to add **multiple worktrees of the same repo** to one work (e.g. `mx work -n feat worktree add app app-pr2 --branch fix`). Adding a repo a second time without a name errors (the default name collides) and tells you to pass one.
 
-Run `mx repo -n <repo> fetch` first if you want the base at its latest upstream commit.
+`--base <ref>` is where the new branch forks from. Accepts any ref. A bare branch name resolves to a local branch or `origin/<name>` (with fallback). Resolved to a commit SHA before `git worktree add` so git's DWIM can't override `-b`. Omit `--base` to fork from the pristine clone's current HEAD. Run `mx repo -n <repo> fetch` first if you want the base at its latest upstream commit.
 
-**After** the worktree is created, the repo's `hydrate.sh` runs automatically with the new worktree as cwd (see [Per-repo scripts](#per-repo-scripts)). A non-zero exit here is a warning — the worktree is kept. Pass `--no-hydrate` to skip running it.
-
-### `mx work -n <name> worktree hydrate <repo>`
-
-Re-run the repo's `hydrate.sh` against an existing worktree on demand (same env + positional args as the automatic run). In this explicit mode a non-zero exit errors with `HYDRATE_FAILED`.
+**Before** creation mx fires the `pre-worktree-create` hook (a non-zero exit aborts with `HOOK_FAILED`); **after** creation it fires `post-worktree-create` — the "hydrate" step — with the new worktree as cwd (see [Hooks](#hooks)). A non-zero exit there is a warning — the worktree is kept. (To skip hydration, make the hook a no-op; there is no `--no-hydrate` flag.)
 
 ### `mx work -n <name> worktree ls [--porcelain]`
 
-List the work's worktrees, with branch + ports. Refuses if cwd doesn't imply the work and `-n` is missing.
+List the work's worktrees, with name (repo annotated when it differs), branch, and ports. Refuses if cwd doesn't imply the work and `-n` is missing.
 
-### `mx work -n <name> worktree rm <repo>`
+### `mx work -n <name> worktree rm <worktree-name>`
 
-Remove the worktree (deletes the worktree directory, deregisters in `work.json`). Refuses with `DIRTY` if uncommitted changes. **Branch is kept.**
+Remove the worktree named `<worktree-name>` (defaults to the repo name for single-worktree repos) — deletes the directory, deregisters in `work.json`. Refuses with `DIRTY` if uncommitted changes. **Branch is kept.**
 
-### `mx work -n <name> port set <repo> <service> [<port>]`
+### `mx work -n <name> port set <worktree-name> <service> [<port>]`
 
-Allocate a port for a service inside a worktree. With `<port>`, sets that specific port; without, auto-picks the next free port (unique across **all** works in the runtime). Records in `work.json`.
+Allocate a port for a service inside a worktree (selected by name). With `<port>`, sets that specific port; without, auto-picks the next free port (unique across **all** works in the runtime). Records in `work.json`. Two worktrees of the same repo get independent ports, even for the same service name.
 
 mx records the binding — it does **not** wire the port into the repo's env or config. That's the agent/user's responsibility.
 
-### `mx work -n <name> port unset <repo> <service>`
+### `mx work -n <name> port unset <worktree-name> <service>`
 
 Release a port. Reports which port was freed.
 
@@ -340,7 +309,7 @@ worker.billing-worker  →  3002
 
 Soft-delete a work. Removes the worktrees, frees the branches, but **keeps the folder, `work.json`, sessions/, and branches**. Recoverable via `unarchive`.
 
-Sets `isArchived: true` and `archived_at: <ISO>` in `work.json`. Empties the `.code-workspace` `folders` array (settings preserved). Refuses with `DIRTY` if any worktree is dirty; refuses with `ALREADY_ARCHIVED` if already archived.
+Sets `isArchived: true` and `archived_at: <ISO>` in `work.json`. Empties the `.code-workspace` `folders` array (settings preserved). **Frees the worktrees' ports** — they're cleared from `work.json`, so the numbers become reusable while archived (unarchive re-allocates, below). Refuses with `DIRTY` if any worktree is dirty; refuses with `ALREADY_ARCHIVED` if already archived.
 
 **Prompts for confirmation** before doing anything:
 
@@ -356,11 +325,11 @@ Only `y` / `yes` (case-insensitive) proceeds; anything else aborts with `Aborted
 
 `--yes` / `-y` skips the prompt. **Required** when stdin isn't a TTY (piped, scripted) or with `--porcelain` — otherwise mx errors with code `NEED_CONFIRMATION`.
 
-**Lifecycle hooks:** after confirmation, mx runs `works/<name>/hooks/pre-archive.sh` (worktrees still on disk). A non-zero exit **aborts** the archive with `HOOK_FAILED` — nothing is mutated. After a successful archive it runs `hooks/post-archive.sh`; a non-zero exit there is a warning only (the archive already happened). See [Work lifecycle hooks](#work-lifecycle-hooks).
+**Lifecycle hooks:** after confirmation, mx fires the central `pre-work-archive` hook (worktrees still on disk). A non-zero exit **aborts** the archive with `HOOK_FAILED` — nothing is mutated. After a successful archive it fires `post-work-archive`; a non-zero exit there is a warning only. See [Hooks](#hooks).
 
-### `mx work -n <name> unarchive [<repo>=<branch>...]`
+### `mx work -n <name> unarchive [<worktree>=<branch>...]`
 
-Restore an archived work. Re-creates worktrees from the branches recorded in `work.json`. Refuses with `NOT_ARCHIVED` if the work isn't archived.
+Restore an archived work. Re-creates worktrees from the branches recorded in `work.json`. Refuses with `NOT_ARCHIVED` if the work isn't archived. Each restored worktree is treated as freshly created — mx fires **`post-worktree-create` per worktree** (the "hydrate" step), so the hook re-installs deps and **re-allocates ports** just like a first-time `worktree add` (ports were freed on archive).
 
 If any recorded branch no longer exists on its pristine clone, errors with `NO_REF` and a precise hint:
 
@@ -368,9 +337,9 @@ If any recorded branch no longer exists on its pristine clone, errors with `NO_R
 mx: cannot unarchive "feat" — branch(es) not found: app=feature-x. Re-run with explicit overrides: `mx work -n feat unarchive app=<branch>`.
 ```
 
-To override per-repo: pass `<repo>=<branch>` positional args. Overrides update `work.json`'s recorded branches to the actually-used ones.
+To override per-worktree: pass `<worktree-name>=<branch>` positional args (the worktree name defaults to the repo). Overrides update `work.json`'s recorded branches to the actually-used ones.
 
-**Lifecycle hooks:** mx runs `hooks/pre-unarchive.sh` before re-creating any worktree (a non-zero exit aborts with `HOOK_FAILED`) and `hooks/post-unarchive.sh` after restoration (non-zero warns only). See [Work lifecycle hooks](#work-lifecycle-hooks).
+**Lifecycle hooks:** mx fires the central `pre-work-unarchive` hook before re-creating any worktree (a non-zero exit aborts with `HOOK_FAILED`) and `post-work-unarchive` after restoration (non-zero warns only). See [Hooks](#hooks).
 
 ### `mx work -n <name> destroy --force`
 
@@ -383,6 +352,23 @@ mx: refusing to destroy "feat" — destroy is permanent and removes the work fol
 ```
 
 With `--force`, prints a loud irreversibility warning to stderr before executing.
+
+### `mx work health [--all] [--porcelain]` / `mx work -n <name> health [--porcelain]`
+
+Purely-local health audit of a work folder against the mx contract. With `-n <name>` (or when your cwd implies a work) it prints one work's detail block; bare `mx work health` prints a block for every **active** work, and `--all` adds archived ones.
+
+Only health metrics (rows carrying a ✓/⚠) are shown — informational fields like the work's status and its port count live in `mx work info`. Built-in checks (the typed source of truth, surfaced as `issues` / `healthy`):
+
+- **Stray root entries** — anything in the work-folder root that isn't mx-native (`work.json`, the `.code-workspace`, `CLAUDE.md`, and the `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/` dirs). Ad-hoc files belong under `files/`, `tmp/`, or `scripts/`. Dot-prefixed entries are tolerated (the tooling-file exception, e.g. an MCP connection file).
+- **Worktree presence** — the `worktrees` row shows the count with a ✓/⚠ for whether they're all as expected (recorded worktrees present on disk for an active work; removed for an archived one). It does not list worktree names — use `mx work -n <name> info` for the per-worktree detail.
+- **Cross-work port collisions** — a port this work allocates that another work also allocates. `mx port set` keeps ports unique, so a collision means `work.json` was hand-edited.
+- **Archive invariants** — an archived work should have its ports freed and its worktrees removed (archive does both). A leftover port or on-disk worktree is flagged.
+
+Each failing check's detail rides inline as a hint on its own row (no separate "issues" section), and the **work name carries an aggregate ✓/⚠** (✓ only when every checked row, including `extra`, is a tick). In addition, the command runs the central `work-health` hook (`<runtime>/hooks/work-health`) with `MX_WORK` set and the work folder as cwd, capturing its stdout into the `extra` row — same **silent-when-healthy** convention as `repo-health` (empty or `ok`/`OK` → ✓ `OK`, any other output → ⚠ with the message). A missing or failing hook yields `extra: null`.
+
+### `mx health [--all] [--porcelain]`
+
+Whole-runtime health overview: every repo's health block (identical to `mx repo health`) followed by every active work's health block (identical to `mx work health`). `--all` includes archived works in the works section. Porcelain returns `{ "repos": [...], "works": [...] }` with the full snapshots.
 
 ### `mx bin ls` · `mx bin path` (alias `mx bins`)
 
@@ -397,33 +383,28 @@ Manage the runtime-wide `bin/` directory — utility executables shared across e
 
 The directory is created by `mx init` and refreshed by `mx sync`. mx-shipped bins are **mx-owned: re-stamped (overwritten) on every sync**, like the runtime `CLAUDE.md`, so improvements land automatically; **your own bins are never touched**. To customize a shipped bin without losing it on the next sync, copy it to a new name. This is distinct from a work's `scripts/` folder (scoped to one work) — `bin/` is runtime-wide.
 
-## Per-work context-index hook
+## Loading the context-registry index
 
-`mx work new` and `mx sync` generate `works/<feature>/.claude/settings.json`, a Claude Code `SessionStart` hook that prints the runtime's `context/INDEX.json` into every session launched in that work folder. This loads the context-registry catalog **deterministically** every session (relying on CLAUDE.md prose alone proved unreliable).
+There is **no** `SessionStart` hook. mx through v2 stamped a per-work `.claude/settings.json` whose `SessionStart` hook printed `context/INDEX.json` into every session, but Claude Code caps hook output (~2KB) so a non-trivial index was silently truncated. v3 drops the hook; `mx work new` and `mx sync` no longer stamp it, and `mx migrate` removes a default-stamped one (a customized `settings.json` is kept with a warning).
 
-The hook is **per-work** (not at the runtime root) because Claude Code reads `.claude/settings.json` only from the session's launch directory, and mx sessions launch in the work folder. It is **stamp-if-missing** — user edits are preserved.
+Loading the index is now the session's own job: the runtime `CLAUDE.md` instructs it to read the whole `context/INDEX.json`, uncapped, on every task. To force a fresh full load mid-session, tell the session something like "load the mx ctx index as whole".
 
-## Work lifecycle hooks
+## Hooks
 
-`mx work new` and `mx sync` stamp four documented, executable **no-op** scripts into `works/<feature>/hooks/`, run around archive/unarchive:
+All lifecycle hooks live in **one place** — `<runtime>/hooks/` — with **one executable per event**, named exactly for the event (no extension). `mx init` stamps a documented no-op for each; `mx sync` backfills any that are missing but **never overwrites** your edits. Because the hooks are runtime-wide (shared by every repo and work), you branch on the context **inside** the script. Write them in **any language** — bash, Node, Python — just set the shebang and keep the file executable. Delete a hook file to disable that event.
 
-| hook | runs | non-zero exit |
+| event | fires | non-zero exit |
 |---|---|---|
-| `pre-archive.sh` | before `archive` removes worktrees (worktrees on disk) | **aborts** the archive (`HOOK_FAILED`); nothing mutated |
-| `post-archive.sh` | after a successful archive (worktrees gone) | warning only |
-| `pre-unarchive.sh` | before `unarchive` re-creates worktrees (none on disk) | **aborts** the unarchive (`HOOK_FAILED`) |
-| `post-unarchive.sh` | after worktrees are restored | warning only |
+| `pre-worktree-create` | before `worktree add` creates a worktree | **aborts** (`HOOK_FAILED`) |
+| `post-worktree-create` | after a worktree is created — the "hydrate" step (cwd = the new worktree) | warning (worktree kept) |
+| `pre-worktree-remove` / `post-worktree-remove` | around `worktree rm` | pre **aborts**; post warns |
+| `pre-work-archive` / `post-work-archive` | around `mx work archive` | pre **aborts**; post warns |
+| `pre-work-unarchive` / `post-work-unarchive` | around `mx work unarchive` | pre **aborts**; post warns |
+| `pre-repo-fetch` / `post-repo-fetch` | around `mx repo fetch` | pre **aborts**; post warns |
+| `repo-health` | during `mx repo health` (cwd = the pristine clone) | stdout captured into the report |
+| `work-health` | during `mx work health` / `mx health` (cwd = the work folder) | stdout captured into the report |
 
-Each runs with the **work folder** as the working directory. Context is passed as positional args and environment variables:
-
-```
-$1 / $MX_EVENT       the event name (e.g. "pre-archive")
-$2 / $MX_WORK_PATH   absolute path to the work folder
-$MX_WORK             work name
-$MX_RUNTIME          runtime root
-```
-
-A `pre-*` hook is a veto point (block archive on unpushed commits, snapshot state, etc.); a `post-*` hook is for after-the-fact cleanup or notification. The default scripts just `exit 0`, so an un-customized hook is inert. They are mx-owned but **user-editable** — `mx sync` re-stamps a script only if it's missing (never clobbering edits) and backfills `hooks/` for works created before this feature. In `--porcelain` mode hook stdio is suppressed to keep output clean, but a `pre-*` veto still aborts with a JSON `HOOK_FAILED` error.
+Context arrives as `MX_*` environment variables — always `MX_EVENT` and `MX_RUNTIME`, plus event-specific ones: `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_GIT_DIR`, `MX_REPO_PATH`. Each shipped hook's header documents its own set and working directory. A `pre-*` non-zero exit **aborts** the operation (`HOOK_FAILED`, nothing mutated) — even in `--porcelain` mode (where hook stdio is suppressed, the abort still surfaces as a JSON `HOOK_FAILED` error); a `post-*` non-zero exit is only a warning.
 
 ## Output conventions
 
@@ -461,7 +442,6 @@ A `pre-*` hook is a veto point (block archive on unpushed commits, snapshot stat
 | `CLI_TOO_OLD` | runtime is newer than the CLI supports — upgrade the CLI |
 | `NO_MIGRATION` | no registered migration step for a version gap in the chain |
 | `BAD_VERSION` | malformed `<runtime>/mx.json` file |
-| `HYDRATE_FAILED` | explicit `worktree hydrate` hook exited non-zero |
-| `HOOK_FAILED` | a `pre-archive`/`pre-unarchive` work lifecycle hook exited non-zero — the operation was aborted |
+| `HOOK_FAILED` | a `pre-*` hook exited non-zero and aborted the operation |
 | `UNSUPPORTED` | platform-unsupported action (e.g. `mx work new -o` on non-macOS; downgraded to a warning) |
 | `INTERNAL` | non-`MxError` thrown — bug |

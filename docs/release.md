@@ -123,7 +123,7 @@ Semver, loosely interpreted (mx is at 2.x, internal-use):
 
 - **Patch (`X.Y.Z+1`)** — bug fixes, doc-only changes, presentation tweaks, behaviour clarifications that don't change CLI surface or schema.
 - **Minor (`X.Y+1.0`)** — new commands, new flags, additive porcelain fields, runtime CLAUDE.md template changes (since they're a deliberate contract update requiring `mx sync`).
-- **Major (`X+1.0.0`)** — a change to the **runtime layout version**. The CLI major maps 1:1 to the runtime version it supports (CLI 2.x ⇄ runtime v2), so a layout migration is a major bump and ships a registered `mx migrate` step. 2.0.0 was the first major (container repo layout + `mx.json` gate). Smaller breaking tweaks have historically ridden minor bumps (e.g. `--all` semantics flipping in 1.9.0) since mx is internal-use; document them clearly in the commit message.
+- **Major (`X+1.0.0`)** — a change to the **runtime layout version**. The CLI major maps 1:1 to the runtime version it supports (CLI 3.x ⇄ runtime v3), so a layout migration is a major bump and ships a registered `mx migrate` step. 2.0.0 was the first major (container repo layout + `mx.json` gate); 3.0.0 centralized hooks into `<runtime>/hooks/` and added `repo.json`. Smaller breaking tweaks have historically ridden minor bumps (e.g. `--all` semantics flipping in 1.9.0) since mx is internal-use; document them clearly in the commit message.
 
 ## Where to look when something is wrong
 

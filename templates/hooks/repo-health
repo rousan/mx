@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#
+# mx hook: repo-health
+#
+# Runs during `mx repo health` to augment the report with your own checks.
+#
+# Convention: report healthy by printing NOTHING (or a bare "ok"), and report a
+# problem by printing an error message (one or more lines). mx shows the captured
+# output as the `extra` row — empty / "ok" renders a tick (healthy), any other
+# output renders a warning and flags the whole block. Stay silent on the happy path.
+#
+# This is a shared, runtime-wide hook — it fires for EVERY repo, so branch on the
+# context below. Write it in any language: just set the shebang and keep the file
+# executable (e.g. #!/usr/bin/env node or #!/usr/bin/env python3).
+#
+# Working directory: the pristine clone.
+# Context (environment variables):
+#     $MX_REPO — repo name
+#     $MX_REPO_PATH — repo container
+#     $MX_GIT_DIR — the pristine clone
+#     $MX_EVENT (this event name), $MX_RUNTIME (runtime root)
+#
+# No-op by default — delete this file to disable the hook entirely.
+set -euo pipefail
+
+# Example: flag missing deps for the web repo (silent when present).
+#   case "$MX_REPO" in
+#     web) [ -d node_modules ] || echo "node_modules missing — run npm install" ;;
+#   esac
+
+exit 0

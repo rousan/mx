@@ -21,8 +21,6 @@ export interface Flags {
   archived: boolean;
   /** Open the work's dev layout after creating it (currently: `mx work new -o`, macOS). */
   open: boolean;
-  /** Skip running a repo's `hydrate.sh` after `worktree add`. */
-  noHydrate: boolean;
   /** Plan only, mutate nothing (currently: `mx migrate --dry-run`). */
   dryRun: boolean;
   /** Quick-start a work + worktree (currently: `mx repo new <name> --quick`). */
@@ -82,7 +80,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
     all: false,
     archived: false,
     open: false,
-    noHydrate: false,
     dryRun: false,
     quick: false,
   };
@@ -104,8 +101,6 @@ export function parseArgs(argv: string[]): ParsedArgs {
       flags.archived = true;
     } else if (a === '--open' || a === '-o') {
       flags.open = true;
-    } else if (a === '--no-hydrate') {
-      flags.noHydrate = true;
     } else if (a === '--dry-run') {
       flags.dryRun = true;
     } else if (a === '--quick') {

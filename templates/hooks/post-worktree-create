@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#
+# mx hook: post-worktree-create
+#
+# Runs AFTER a worktree is created — this is the v2 "hydrate" hook. Re-run on demand with `mx work worktree hydrate <repo>`.
+# A non-zero exit is a warning on auto-run (worktree kept); the explicit `worktree hydrate` reports HOOK_FAILED.
+#
+# This is a shared, runtime-wide hook — it fires for EVERY repo/work, so branch
+# on the context below. Write it in any language: just set the shebang and keep
+# the file executable (e.g. #!/usr/bin/env node or #!/usr/bin/env python3).
+#
+# Working directory: the new worktree.
+# Context (environment variables):
+#     $MX_WORK — work name
+#     $MX_REPO — repo name
+#     $MX_WORKTREE_NAME — worktree name (the wt/<name> selector; = repo unless renamed)
+#     $MX_BRANCH — branch the worktree is on
+#     $MX_BASE — base ref it forked from (may be empty)
+#     $MX_WORKTREE_PATH — absolute path to the new worktree
+#     $MX_WORK_PATH — absolute work folder
+#     $MX_GIT_DIR — the repo pristine clone
+#     $MX_EVENT (this event name), $MX_RUNTIME (runtime root)
+#
+# No-op by default — delete this file to disable the hook entirely.
+set -euo pipefail
+
+# Branch on the context to do per-repo / per-work / per-branch logic, e.g.:
+#   case "${MX_REPO:-}" in
+#     web)  npm --prefix "$MX_WORKTREE_PATH" install ;;
+#     api)  cp "$MX_RUNTIME/secrets/api.env" "$MX_WORKTREE_PATH/.env" ;;
+#   esac
+
+exit 0

@@ -2,6 +2,28 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 3.0.0 — 2026-06-29
+
+**Hooks are centralized into one runtime-wide hub — a breaking layout change (runtime v3).** The per-repo `hydrate.sh`/`health.sh` and per-work `hooks/` are gone; all lifecycle hooks now live in **`<runtime>/hooks/`**, one executable per event, and you branch on `MX_*` context inside.
+
+- **Events:** `pre/post-worktree-create` (post = the old "hydrate"), `pre/post-worktree-remove`, `pre/post-work-archive`, `pre/post-work-unarchive`, `pre/post-repo-fetch`, `repo-health`, and `work-health`. `pre-*` non-zero exit aborts the operation (`HOOK_FAILED`); `post-*` warns; `repo-health` / `work-health` stdout feeds `mx repo health` / `mx work health`.
+- **Any language.** A hook is just an executable — bash, Node, Python — keyed off its shebang. mx stamps a documented no-op per event (stamp-if-missing, so your logic is never clobbered); delete a file to disable that event.
+- **Repos** now carry a `repo.json` (`{ "name": … }`, extensible) and **no scripts**. `mx repo add`/`new` write it; the CLI fires hooks around `worktree add`/`rm`, `archive`/`unarchive`, and `repo fetch`.
+- **Migration v2 → v3** (`mx migrate`): stamps the `hooks/` hub, writes each `repo.json`, and **retires the old scripts — deleting defaults, but keeping anything you customized with a warning** so you can fold the logic into the central hooks. `--dry-run` previews the plan + warnings.
+- **CLI:** new `apps/cli/src/hooks.ts` runner (replaces `hydrate.ts` + `workhooks.ts`); `HYDRATE_FAILED` folded into `HOOK_FAILED`. **Core:** `HOOK_EVENTS` / `hookScript` / `runtimeHooksDir`, `repoConfigFile` / `readRepoConfig` / `writeRepoConfig`, `stampRuntimeHooks` in `@mx/core`; `RUNTIME_VERSION = 3`.
+
+**Multiple worktrees of one repo per work.** Each worktree now has a **`name`** (its `wt/<name>` directory and the `rm`/`port`/unarchive selector), defaulting to the repo name. Pass a distinct name to add several worktrees of the same repo to one work: `mx work -n feat worktree add app app-pr2 --branch fix`. Selectors (`worktree rm`, `port set`, `unarchive <name>=<branch>`) are by worktree name; ports are independent per worktree. `work.json` now always records `name` (uniform shape — `mx migrate` backfills it into existing manifests, `= repo`). Back-compatible: a name-less entry defaults to `repo`, and v2 couldn't hold two worktrees of one repo, so nothing needs moving. New `worktreeName` / `findWorktreeByName` in `@mx/core`; hooks gain `$MX_WORKTREE_NAME`.
+
+**Archive frees ports; unarchive re-hydrates per worktree.** `mx work archive` now clears each worktree's `ports` (the worktrees and their servers are gone, so the numbers become reusable). `mx work unarchive` re-creates the worktrees and fires `post-worktree-create` for **each** one, so the hook re-installs and re-allocates ports exactly like a fresh `worktree add`.
+
+**Dropped `mx work worktree hydrate` and `--no-hydrate`.** With hooks as the source of truth, the dedicated subcommand and flag are redundant: `post-worktree-create` always fires on `worktree add` (make it a no-op to skip), and you re-run it by re-invoking the hook yourself.
+
+**Work health + a whole-runtime overview.** New `mx work health` (and `mx work -n <name> health`) audits a work folder the way `mx repo health` audits a clone — purely local: stray non-mx-native files in the work root, worktrees recorded in `work.json` but missing on disk, cross-work port collisions (which only happen via a hand-edited `work.json`), and archive invariants (an archived work should have its ports freed and worktrees removed). Bare `mx work health` covers every active work; `--all` adds archived. New `mx health [--all]` prints every repo's block followed by every active work's block in one view. Adds the `work-health` central hook (captured as `extra`), `workHealth` / `listWorkHealth` / `WorkHealth` in `@mx/core`, and `commands/health.ts` in the CLI.
+
+**Removed the per-work `SessionStart` context-index hook.** v2 stamped `works/<feature>/.claude/settings.json` with a `SessionStart` hook that printed `context/INDEX.json` into each session, but Claude Code caps hook output (~2KB), so a real index was truncated. v3 drops it: `mx work new`/`mx sync` no longer stamp it, and `mx migrate` removes a default-stamped one (a customized `settings.json` is kept with a warning). Loading the index is now the session's job — the runtime `CLAUDE.md` says to read the whole `INDEX.json` uncapped, and you can say "load the mx ctx index as whole" to force a fresh read. New `isDefaultClaudeSettings()` in the v2 → v3 migration.
+
+After upgrading the CLI (`npm i -g @roulabs/mx@latest`), run **`mx migrate`** once per runtime.
+
 ## 2.8.0 — 2026-06-29
 
 **`mx bin ls` spells out the PATH setup.** When `<runtime>/bin/` isn't on your `PATH`, the listing now ends with a clear, multi-line instruction — add `export PATH="$(mx bin path):$PATH"` to your shell startup file (`~/.zshrc`, `~/.bashrc`, …) and restart — instead of a terse one-liner. When it is on `PATH`, it confirms with a ✓. CLI-only cosmetic change.

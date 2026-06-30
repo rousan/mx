@@ -9,7 +9,7 @@ import {
   stampClaudeMd,
   stampContextIndex,
   removeStaleRuntimeReadme,
-  stampRepoScripts,
+  stampRuntimeHooks,
   stampRuntimeBins,
 } from './templates';
 import type { Work, Worktree, RuntimeOpts, InferredContext } from './types';
@@ -97,8 +97,9 @@ export const repoPath = (root: string, name: string): string => path.join(reposD
 
 /**
  * Path to a repo's git clone — the `git/` subfolder inside the per-repo
- * container. The container (`repoPath`) holds the clone plus mx-owned per-repo
- * tooling (e.g. `hydrate.sh`, `health.sh`); the actual git repository lives here.
+ * container. The container (`repoPath`) holds the clone plus `repo.json`; the
+ * actual git repository lives here. (Per-repo `hydrate.sh`/`health.sh` were
+ * removed in v3 — those hooks are now central, in `<runtime>/hooks/`.)
  *
  * @param root - Runtime root.
  * @param name - Repo name.
@@ -108,26 +109,49 @@ export const repoGitDir = (root: string, name: string): string =>
   path.join(repoPath(root, name), 'git');
 
 /**
- * Path to a repo's per-worktree hydrate hook (`repos/<name>/hydrate.sh`), run
- * after a worktree is created for that repo.
+ * Path to a repo's `repo.json` metadata file (`repos/<name>/repo.json`).
  *
  * @param root - Runtime root.
  * @param name - Repo name.
- * @returns Absolute path to the repo's `hydrate.sh`.
+ * @returns Absolute path to `repos/<name>/repo.json`.
  */
-export const repoHydrateScript = (root: string, name: string): string =>
-  path.join(repoPath(root, name), 'hydrate.sh');
+export const repoConfigFile = (root: string, name: string): string =>
+  path.join(repoPath(root, name), 'repo.json');
 
 /**
- * Path to a repo's health hook (`repos/<name>/health.sh`), whose stdout
- * augments `mx repo health` output.
+ * Shape of a repo's `repo.json`. Intentionally minimal for now (`name`);
+ * extensible later, and unknown keys are preserved across writes.
+ */
+export interface RepoConfig {
+  /** Repo name (matches the container folder name). */
+  name: string;
+  /** Forward-compatible: unknown keys are preserved. */
+  [key: string]: unknown;
+}
+
+/**
+ * Read a repo's `repo.json`, or null when it doesn't exist yet.
  *
  * @param root - Runtime root.
  * @param name - Repo name.
- * @returns Absolute path to the repo's `health.sh`.
+ * @returns The parsed config, or null.
  */
-export const repoHealthScript = (root: string, name: string): string =>
-  path.join(repoPath(root, name), 'health.sh');
+export function readRepoConfig(root: string, name: string): RepoConfig | null {
+  const f = repoConfigFile(root, name);
+  if (!exists(f)) return null;
+  return readJson<RepoConfig>(f);
+}
+
+/**
+ * Write a repo's `repo.json`, preserving any other keys already present.
+ *
+ * @param root - Runtime root.
+ * @param name - Repo name.
+ */
+export function writeRepoConfig(root: string, name: string): void {
+  const existing = readRepoConfig(root, name) ?? {};
+  writeJson(repoConfigFile(root, name), { ...existing, name });
+}
 
 /**
  * Path to a work folder under `works/`.
@@ -180,52 +204,59 @@ export const worktreePath = (root: string, name: string, repo: string): string =
   path.join(worktreesDir(root, name), repo);
 
 /**
- * The work-lifecycle events that fire a per-work hook. Each maps to a
- * `<work>/hooks/<event>.sh` script: a `pre-*` hook runs before the operation
- * mutates anything (and can abort it by exiting non-zero), a `post-*` hook runs
- * after it succeeds. The set is intentionally small for now (archive /
- * unarchive) but the machinery is generic, so new events slot in here.
+ * Path to the runtime's central `hooks/` directory — the single hub of
+ * lifecycle hooks (replacing v2's per-repo `hydrate.sh`/`health.sh` and per-work
+ * `hooks/`). One executable per event; the user branches on `MX_*` env inside.
+ *
+ * @param root - Runtime root.
+ * @returns Absolute path to `<root>/hooks`.
  */
-export const WORK_HOOK_EVENTS = [
-  'pre-archive',
-  'post-archive',
-  'pre-unarchive',
-  'post-unarchive',
+export const runtimeHooksDir = (root: string): string => path.join(root, 'hooks');
+
+/**
+ * The lifecycle events mx fires, each mapping to one executable at
+ * `<runtime>/hooks/<event>`. `pre-*` hooks run before the operation mutates
+ * anything and abort it on a non-zero exit; `post-*` hooks run after success and
+ * a non-zero exit is only a warning; `repo-health` / `work-health` augment
+ * `mx repo health` / `mx work health` with their stdout. The set is extensible
+ * — add an event here and a stamped template, and wire the call site.
+ */
+export const HOOK_EVENTS = [
+  'pre-work-archive',
+  'post-work-archive',
+  'pre-work-unarchive',
+  'post-work-unarchive',
+  'pre-worktree-create',
+  'post-worktree-create',
+  'pre-worktree-remove',
+  'post-worktree-remove',
+  'pre-repo-fetch',
+  'post-repo-fetch',
+  'repo-health',
+  'work-health',
 ] as const;
 
 /**
- * A single work-lifecycle hook event name.
+ * A single lifecycle hook event name.
  */
-export type WorkHookEvent = (typeof WORK_HOOK_EVENTS)[number];
+export type HookEvent = (typeof HOOK_EVENTS)[number];
 
 /**
- * Path to a work's `hooks/` directory, holding its lifecycle hook scripts.
+ * Path to a single lifecycle hook executable (`<runtime>/hooks/<event>`).
  *
  * @param root - Runtime root.
- * @param name - Work name.
- * @returns Absolute path to `works/<name>/hooks`.
+ * @param event - Lifecycle event the hook handles.
+ * @returns Absolute path to the hook file.
  */
-export const workHooksDir = (root: string, name: string): string =>
-  path.join(workDir(root, name), 'hooks');
-
-/**
- * Path to a single work lifecycle hook script
- * (`works/<name>/hooks/<event>.sh`).
- *
- * @param root - Runtime root.
- * @param name - Work name.
- * @param event - Lifecycle event the script handles.
- * @returns Absolute path to the hook script.
- */
-export const workHookScript = (root: string, name: string, event: WorkHookEvent): string =>
-  path.join(workHooksDir(root, name), `${event}.sh`);
+export const hookScript = (root: string, event: HookEvent): string =>
+  path.join(runtimeHooksDir(root), event);
 
 /**
  * The runtime layout version this build of mx supports. A runtime's `VERSION`
  * file must match this for commands to run; `mx migrate` upgrades older
  * runtimes up to it. Tracks the CLI major version (CLI 2.x ⇄ runtime v2).
  */
-export const RUNTIME_VERSION = 2;
+export const RUNTIME_VERSION = 3;
 
 /**
  * Shape of the runtime config file (`<runtime>/mx.json`). Intentionally open —
@@ -508,14 +539,40 @@ export function writeWork(root: string, work: Work): void {
 }
 
 /**
- * Find a worktree entry in a work by repo name.
+ * The effective identifier of a worktree within its work — its `name` when set,
+ * otherwise the repo name. This is the `wt/<…>` directory segment and the
+ * selector for `worktree rm` / `port` / hooks.
+ *
+ * @param wt - The worktree entry.
+ * @returns The effective worktree name.
+ */
+export function worktreeName(wt: Worktree): string {
+  return wt.name ?? wt.repo;
+}
+
+/**
+ * Find the **first** worktree entry in a work that uses a given repo. Use this
+ * for repo-level questions ("is this repo used by the work?"); a work may now
+ * hold several worktrees of the same repo, so prefer `findWorktreeByName` when
+ * you mean a specific worktree.
  *
  * @param work - The work to search.
  * @param repo - Repo name to match.
- * @returns The worktree, or null if not present.
+ * @returns The first matching worktree, or null.
  */
 export function findWorktree(work: Work, repo: string): Worktree | null {
   return (work.worktrees ?? []).find((w) => w.repo === repo) ?? null;
+}
+
+/**
+ * Find a worktree entry by its effective name (the `wt/<name>` selector).
+ *
+ * @param work - The work to search.
+ * @param name - Worktree name to match (defaults compared against the repo name).
+ * @returns The matching worktree, or null.
+ */
+export function findWorktreeByName(work: Work, name: string): Worktree | null {
+  return (work.worktrees ?? []).find((w) => worktreeName(w) === name) ?? null;
 }
 
 /**
@@ -551,9 +608,21 @@ export function inferContext(root: string): InferredContext {
     return rel.split(path.sep);
   };
   const w = segmentsUnder(worksDir(root));
-  // Worktrees live under <work>/wt/<repo>, so the repo is the third segment;
+  // Worktrees live under <work>/wt/<name>, so the third segment is the worktree
+  // NAME (which may differ from the repo). Resolve it to a repo via work.json;
   // other work subdirs (scripts/, files/, tmp/, sessions/) imply no repo.
-  if (w) return { work: w[0], repo: w[1] === 'wt' ? (w[2] ?? null) : null };
+  if (w) {
+    const work = w[0];
+    let repo: string | null = null;
+    if (w[1] === 'wt' && w[2]) {
+      try {
+        repo = findWorktreeByName(readWork(root, work), w[2])?.repo ?? null;
+      } catch {
+        repo = null;
+      }
+    }
+    return { work, repo };
+  }
   const r = segmentsUnder(reposDir(root));
   if (r) return { work: null, repo: r[0] };
   return { work: null, repo: null };
@@ -613,6 +682,7 @@ export function initRuntime(target0: string, templatesDir: string): InitResult {
   created.push(stampClaudeMd(target, templatesDir));
   const ctxIndex = stampContextIndex(target, templatesDir);
   if (ctxIndex) created.push(ctxIndex);
+  created.push(...stampRuntimeHooks(target, templatesDir));
   created.push(...stampRuntimeBins(target, templatesDir));
   removeStaleRuntimeReadme(target);
   return { runtime: target, created };
@@ -657,8 +727,9 @@ export function ensureWorkScaffolding(
   //   files/   — artifacts to keep
   //   tmp/     — throwaway scratch (may be deleted anytime)
   //   sessions/— session summaries
-  //   hooks/   — per-work lifecycle hook scripts (archive/unarchive)
-  for (const d of ['wt', 'scripts', 'files', 'tmp', 'sessions', 'hooks']) {
+  // (Lifecycle hooks are NOT per-work in v3 — they live centrally in
+  //  <runtime>/hooks/ and branch on $MX_WORK / $MX_REPO inside.)
+  for (const d of ['wt', 'scripts', 'files', 'tmp', 'sessions']) {
     const p = path.join(wd, d);
     if (!exists(p)) {
       if (!dry) fs.mkdirSync(p, { recursive: true });
@@ -671,32 +742,6 @@ export function ensureWorkScaffolding(
   if (!exists(claudeMd)) {
     if (!dry) fs.writeFileSync(claudeMd, workClaudeMd(workName));
     created.push(claudeMd);
-  }
-  // Per-work Claude Code settings: a SessionStart hook that loads the runtime's
-  // context-registry index into every session launched in this work folder.
-  // Claude Code reads .claude/settings.json only from the session's launch dir
-  // (no upward walk) and mx sessions launch here, so it must be per-work — not
-  // at the runtime root. Stamp-if-missing: it's user-editable afterwards.
-  const settings = path.join(wd, '.claude', 'settings.json');
-  if (!exists(settings)) {
-    if (!dry) {
-      fs.mkdirSync(path.dirname(settings), { recursive: true });
-      fs.writeFileSync(settings, workClaudeSettings(root));
-    }
-    created.push(settings);
-  }
-  // Per-work lifecycle hook scripts (stamp-if-missing; user-editable, executable).
-  // Each is a documented no-op that exits 0 so an un-customized hook never blocks
-  // the operation it wraps. The hooks/ directory is created in the loop above.
-  for (const event of WORK_HOOK_EVENTS) {
-    const hook = workHookScript(root, workName, event);
-    if (!exists(hook)) {
-      if (!dry) {
-        fs.writeFileSync(hook, workHookScriptBody(event));
-        fs.chmodSync(hook, 0o755);
-      }
-      created.push(hook);
-    }
   }
   return created;
 }
@@ -722,79 +767,6 @@ Keep ad-hoc files OUT of the work root (it holds mx-native files). Use:
   tmp/      throwaway scratch — may be deleted at any time, no guarantees
   scripts/  ad-hoc scripts for this work
 -->
-`;
-}
-
-/**
- * Build the per-work `.claude/settings.json` contents: a `SessionStart` hook
- * that prints the runtime's context-registry index so every session has the
- * catalog in context from the start (deterministic, unlike CLAUDE.md prose).
- * The runtime's absolute INDEX path is baked in, so this is generated
- * programmatically rather than copied from a static template.
- *
- * @param root - Runtime root.
- * @returns The settings JSON text (with a trailing newline).
- */
-function workClaudeSettings(root: string): string {
-  const contextDir = path.join(root, 'context');
-  const indexPath = path.join(contextDir, 'INDEX.json');
-  const command =
-    `echo '# mx context registry — open ${contextDir}/<path>.md for relevant entries:'; ` +
-    `cat '${indexPath}' 2>/dev/null`;
-  const settings = {
-    hooks: {
-      SessionStart: [{ matcher: '*', hooks: [{ type: 'command', command }] }],
-    },
-  };
-  return JSON.stringify(settings, null, 2) + '\n';
-}
-
-/**
- * Default contents for a per-work lifecycle hook script — a documented no-op
- * that exits 0, so an un-customized hook never blocks the operation it wraps.
- * Stamped once per event into `<work>/hooks/`; the user fills in the body. The
- * comment header is tailored to the event (which operation, pre vs post, what's
- * on disk at that moment, and what a non-zero exit does).
- *
- * @param event - The lifecycle event this script handles.
- * @returns The default hook script text.
- */
-function workHookScriptBody(event: WorkHookEvent): string {
-  const isPre = event.startsWith('pre-');
-  const op = event.replace(/^(pre|post)-/, ''); // "archive" | "unarchive"
-  const failNote = isPre
-    ? `# A NON-ZERO EXIT ABORTS the ${op}: nothing is mutated and mx errors with\n# HOOK_FAILED. Use this to veto (e.g. block on unpushed commits).`
-    : `# Runs only after the ${op} succeeds. A non-zero exit is reported as a\n# warning; it cannot undo the ${op}.`;
-  let stateNote: string;
-  if (op === 'archive') {
-    stateNote = isPre
-      ? '# State when this runs: worktrees still present under wt/.'
-      : '# State when this runs: worktrees removed, branches kept, work flagged archived.';
-  } else {
-    stateNote = isPre
-      ? '# State when this runs: work is archived, no worktrees on disk yet.'
-      : '# State when this runs: worktrees re-created under wt/, archive flag cleared.';
-  }
-  return `#!/usr/bin/env bash
-#
-# mx ${event} hook for this work.
-#
-# Runs around \`mx work -n <work> ${op}\`.
-${failNote}
-${stateNote}
-#
-# mx runs this with the work folder as the working directory and passes context
-# both as positional args and environment variables:
-#
-#   $1 / $MX_EVENT       the lifecycle event ("${event}")
-#   $2 / $MX_WORK_PATH   absolute path to the work folder
-#   $MX_WORK             work name
-#   $MX_RUNTIME          runtime root
-#
-set -euo pipefail
-
-# No-op by default. Add your ${event} logic below.
-exit 0
 `;
 }
 
@@ -828,11 +800,15 @@ export function syncRuntime(root: string, templatesDir: string): SyncResult {
   for (const workName of listWorkNames(root)) {
     updated.push(...ensureWorkScaffolding(root, workName));
   }
-  // Backfill mx-owned per-repo scripts (hydrate.sh, health.sh) for every repo.
+  // Backfill repo.json for every repo that predates it.
   for (const repo of listRepoNames(root)) {
-    updated.push(...stampRepoScripts(repoPath(root, repo), templatesDir));
+    if (!exists(repoConfigFile(root, repo))) {
+      writeRepoConfig(root, repo);
+      updated.push(repoConfigFile(root, repo));
+    }
   }
-  // Backfill the runtime bin/ directory and any mx-shipped utility bins.
+  // Backfill the central hooks/ (stamp-if-missing) and the runtime bin/.
+  updated.push(...stampRuntimeHooks(root, templatesDir));
   updated.push(...stampRuntimeBins(root, templatesDir));
   removeStaleRuntimeReadme(root);
   return { runtime: root, updated };

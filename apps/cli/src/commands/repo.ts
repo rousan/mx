@@ -3,8 +3,7 @@ import {
   inferContext,
   repoAdd,
   repoNew,
-  repoPath,
-  stampRepoScripts,
+  repoGitDir,
   listReposInfo,
   repoFetch,
   repoInfo,
@@ -18,9 +17,26 @@ import {
 import type { RepoHealth } from '@mx/core';
 import { emit, dim, bold, check, warn, tildify } from '../output';
 import { openWorkLayout } from '../open';
-import { runWorktreeHydrate } from '../hydrate';
-import { templatesDir } from '../paths';
+import { runPreHook, runPostHook } from '../hooks';
 import type { Flags } from '../args';
+
+/**
+ * Run a repo fetch wrapped in its pre/post hooks. The pre-hook can veto the
+ * fetch (throws `HOOK_FAILED`); the post-hook is best-effort.
+ *
+ * @param root - Runtime root.
+ * @param name - Repo name.
+ * @param porcelain - Quiet hook stdio when true.
+ * @returns The fetch result.
+ */
+function fetchWithHooks(root: string, name: string, porcelain: boolean): ReturnType<typeof repoFetch> {
+  const gitDir = repoGitDir(root, name);
+  const env = { MX_REPO: name, MX_REPO_PATH: repoInfo(root, name).path, MX_GIT_DIR: gitDir };
+  runPreHook(root, 'pre-repo-fetch', { cwd: gitDir, env }, porcelain);
+  const res = repoFetch(root, name);
+  runPostHook(root, 'post-repo-fetch', { cwd: gitDir, env }, porcelain);
+  return res;
+}
 
 /**
  * Require a non-empty string argument, throwing a usage `MxError` otherwise.
@@ -50,9 +66,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
   switch (action) {
     case 'add': {
       const url = need(positionals[2], 'usage: mx repo add <git-url> [--name <n>]');
-      const res = repoAdd(root, url, flags.name);
-      // Stamp the repo's mx-owned scripts (hydrate.sh, health.sh) into its container.
-      stampRepoScripts(repoPath(root, res.name), templatesDir());
+      const res = repoAdd(root, url, flags.name); // also writes repo.json
       emit(() => console.log(`${check()} cloned ${bold(res.name)} ${dim(`→ ${res.path}`)}`), res);
       return;
     }
@@ -65,8 +79,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
         positionals[2],
         'usage: mx repo new <name> [--quick] [-o] [--description <t>]',
       );
-      const res = repoNew(root, name);
-      stampRepoScripts(repoPath(root, res.name), templatesDir());
+      const res = repoNew(root, name); // also writes repo.json
 
       if (!flags.quick) {
         emit(() => {
@@ -83,17 +96,24 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
       const workName = `dev-${name}`;
       const workRes = workNew(root, workName, flags.description ?? '');
       const wtRes = worktreeAdd(root, workName, name, { branch: 'develop' });
-      if (!flags.noHydrate) {
-        const outcome = runWorktreeHydrate(
-          { root, work: workName, repo: name, worktreePath: wtRes.path, branch: wtRes.branch },
-          flags.porcelain,
-        );
-        if (outcome.ran && !outcome.ok && !flags.porcelain) {
-          process.stderr.write(
-            `${warn()} ${dim(`hydrate.sh exited non-zero — worktree kept. Re-run: mx work -n ${workName} worktree hydrate ${name}`)}\n`,
-          );
-        }
-      }
+      runPostHook(
+        root,
+        'post-worktree-create',
+        {
+          cwd: wtRes.path,
+          env: {
+            MX_WORK: workName,
+            MX_REPO: name,
+            MX_WORKTREE_NAME: wtRes.name,
+            MX_BRANCH: wtRes.branch,
+            MX_BASE: '',
+            MX_WORKTREE_PATH: wtRes.path,
+            MX_WORK_PATH: workRes.path,
+            MX_GIT_DIR: repoGitDir(root, name),
+          },
+        },
+        flags.porcelain,
+      );
       let opened = false;
       if (flags.open) {
         try {
@@ -157,7 +177,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
         const lines: string[] = [];
         for (const n of names) {
           try {
-            const r = repoFetch(root, n);
+            const r = fetchWithHooks(root, n, flags.porcelain);
             out.push(r);
             lines.push(
               `${check()} ${bold(r.name)} ${dim(`— ${r.remoteBranches.length} branch(es) on origin, now on ${r.branch}`)}`,
@@ -175,7 +195,7 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
         flags.name || ctxRepo,
         'which repo? pass -n <name>, run inside a repo, or use --all (mx repo -n <name> fetch)',
       );
-      const res = repoFetch(root, name);
+      const res = fetchWithHooks(root, name, flags.porcelain);
       emit(
         () =>
           console.log(
@@ -213,14 +233,24 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
       return;
     }
     case 'health': {
-      // No -n → list mode (all repos, ✓/⚠ prefix). With -n (or cwd) → detail mode.
+      // With -n (or cwd) → one repo's detail block. Without → the same detail
+      // block for every repo, one after another (so both views match).
       const name = flags.name || ctxRepo;
       if (name) {
         const h = repoHealth(root, name);
         emit(() => renderHealthDetail(h), h);
       } else {
         const list = listRepoHealth(root);
-        emit(() => renderHealthList(list), list);
+        emit(() => {
+          if (list.length === 0) {
+            console.log(dim('no repos yet — `mx repo add <git-url>`'));
+            return;
+          }
+          list.forEach((h, i) => {
+            if (i > 0) console.log();
+            renderHealthDetail(h);
+          });
+        }, list);
       }
       return;
     }
@@ -255,42 +285,31 @@ function relativeTime(iso: string | null): string {
 }
 
 /**
- * Render the list-mode `mx repo health` output: one line per repo,
- * prefixed with ✓ for healthy and ⚠ for any issues.
- *
- * @param list - One health snapshot per repo.
- */
-function renderHealthList(list: RepoHealth[]): void {
-  if (list.length === 0) {
-    console.log(dim('no repos yet — `mx repo add <git-url>`'));
-    return;
-  }
-  const nameW = Math.max(...list.map((h) => h.name.length));
-  for (const h of list) {
-    const marker = h.healthy ? check() : warn();
-    const name = h.name.padEnd(nameW);
-    const detail = h.healthy ? '' : `  ${dim(h.issues.join('; '))}`;
-    console.log(`${marker} ${name}${detail}`);
-  }
-}
-
-/**
  * Render the detail-mode `mx repo health` output: a structured per-metric
  * block with ✓/⚠ markers on each row, value column aligned so the markers
  * sit in a single vertical column.
  *
  * @param h - The repo health snapshot.
+ * @param indent - Left padding prefixed to every line (used by `mx health` to
+ *   nest each block under its section header). Blank lines stay blank.
  */
-function renderHealthDetail(h: RepoHealth): void {
+export function renderHealthDetail(h: RepoHealth, indent = ''): void {
+  const log = (s = ''): void => console.log(s === '' ? '' : indent + s);
   type Row = { label: string; value: string; marker?: string; hint?: string };
   const rows: Row[] = [];
+  // Tracks whether any checked row (or the hook `extra`) flagged a problem, so
+  // the name line can carry an at-a-glance ✓/⚠ for the whole block.
+  let anyWarn = false;
   const addRow = (label: string, value: string, ok?: boolean, hint?: string): void => {
     const marker = ok === undefined ? undefined : ok ? check() : warn();
+    if (ok === false) anyWarn = true;
     rows.push({ label, value, marker, hint });
   };
 
-  addRow('default branch', h.defaultBranch ?? '(unknown)');
-
+  // Only health metrics (rows that carry a ✓/⚠) are shown — informational
+  // fields like default branch, last fetched, and worktree count live in
+  // `mx repo info`. `current branch` is the metric: ✓ when it matches the
+  // default, ⚠ otherwise.
   const currentBranchText = h.currentBranch ?? '(detached HEAD)';
   const branchOk = h.currentBranch !== null && h.isOnDefault;
   addRow(
@@ -329,31 +348,46 @@ function renderHealthDetail(h: RepoHealth): void {
     h.behindOfOrigin === null ? undefined : h.behindOfOrigin === 0,
     (h.behindOfOrigin ?? 0) > 0 ? `run \`mx repo -n ${h.name} fetch\`` : undefined,
   );
-  addRow('last fetched', relativeTime(h.lastFetchedAt));
-  const usedByCount = h.worktreesInWorks.length;
-  rows.push({
-    label: 'worktrees in works',
-    value: String(usedByCount),
-    hint: usedByCount ? `used by: ${h.worktreesInWorks.join(', ')}` : undefined,
-  });
+  // Freshness metric — only meaningful for a repo with a remote (a local
+  // `repo new` repo, with no origin/HEAD, never fetches). ✓ when fetched within
+  // the last 24h, ⚠ stale otherwise (or never).
+  if (h.defaultBranch !== null) {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const fetchedAt = h.lastFetchedAt ? Date.parse(h.lastFetchedAt) : null;
+    const fresh = fetchedAt !== null && Date.now() - fetchedAt < DAY_MS;
+    addRow(
+      'last fetched',
+      relativeTime(h.lastFetchedAt),
+      fresh,
+      fresh ? undefined : `stale — run \`mx repo -n ${h.name} fetch\``,
+    );
+  }
 
-  // Align the marker column by padding values to the widest plain length.
-  const labelW = Math.max(...rows.map((r) => r.label.length));
-  const valueW = Math.max(...rows.map((r) => r.value.length));
+  // The central repo-health hook output becomes a trailing `extra` row, always
+  // shown: the convention is that a healthy hook says nothing — empty output or
+  // a bare "ok"/"OK" renders ✓ "OK"; anything else renders ⚠ with the message
+  // and flags the block.
+  const extraText = (h.extra ?? '').replace(/\s+$/, '');
+  const extraOk = extraText === '' || extraText.toLowerCase() === 'ok';
+  const extraLines = extraOk ? [] : extraText.split('\n');
+  if (!extraOk) anyWarn = true;
 
-  console.log(bold(h.name));
-  for (const r of rows) {
+  // Show only metric rows (those carrying a ✓/⚠); this also drops ahead/behind
+  // when there's no upstream to compare against. `extra` is always shown below.
+  const metricRows = rows.filter((r) => r.marker !== undefined);
+  const labelW = Math.max(...metricRows.map((r) => r.label.length), 5);
+  const valueW = Math.max(0, ...metricRows.map((r) => r.value.length));
+
+  log(`${bold(h.name)}  ${anyWarn ? warn() : check()}`);
+  for (const r of metricRows) {
     const label = dim(r.label.padEnd(labelW));
     const value = r.value.padEnd(valueW);
     const marker = r.marker ? `  ${r.marker}` : '   ';
     const hint = r.hint ? `  ${dim(r.hint)}` : '';
-    console.log(`  ${label}  ${value}${marker}${hint}`);
+    log(`  ${label}  ${value}${marker}${hint}`);
   }
-
-  // Repo-specific augmentation from the repo's health.sh, if any.
-  if (h.extra) {
-    console.log();
-    console.log(`  ${dim('health.sh')}`);
-    for (const line of h.extra.split('\n')) console.log(`    ${dim(line)}`);
-  }
+  // Extra row: ✓ "OK" when the hook reported healthy, ⚠ + message when it did not.
+  const extraValue = (extraOk ? 'OK' : extraLines[0]).padEnd(valueW);
+  log(`  ${dim('extra'.padEnd(labelW))}  ${dim(extraValue)}  ${extraOk ? check() : warn()}`);
+  for (const line of extraLines.slice(1)) log(`  ${' '.repeat(labelW)}  ${dim(line)}`);
 }

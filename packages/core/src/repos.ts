@@ -7,7 +7,8 @@ import { git, gitQuiet, currentBranch, remoteUrl, remoteBranchList } from './git
 import {
   repoPath,
   repoGitDir,
-  repoHealthScript,
+  hookScript,
+  writeRepoConfig,
   listRepoNames,
   listWorkNames,
   readWork,
@@ -53,9 +54,10 @@ export function repoAdd(root: string, url: string, name0?: string): RepoAddResul
   const container = repoPath(root, name);
   if (exists(container)) throw new MxError(`repo already exists: ${name}`, 'EXISTS');
   const gitdir = repoGitDir(root, name);
-  // Container holds the clone (git/) plus mx-owned per-repo tooling.
+  // Container holds the clone (git/) plus repo.json metadata.
   fs.mkdirSync(container, { recursive: true });
   git(['clone', url, gitdir], { stdio: ['ignore', 'inherit', 'inherit'] });
+  writeRepoConfig(root, name);
   return { name, path: container, remote: remoteUrl(gitdir), branch: currentBranch(gitdir) };
 }
 
@@ -123,6 +125,7 @@ export function repoNew(
   const commitArgs = ['-C', gitdir, ...idArgs, 'commit', '-q', '-m', 'init'];
   if (!withReadme) commitArgs.push('--allow-empty');
   git(commitArgs);
+  writeRepoConfig(root, name);
   return { name, path: container, remote: null, branch: currentBranch(gitdir) };
 }
 
@@ -162,7 +165,7 @@ export interface RepoFetchResult {
  * The base fast-forward keeps `worktree add --base <b>` correct: it resolves
  * the **local** branch first, so if `origin/main` advanced but local `main`
  * lagged, a new worktree forked from `main` would start stale. When the base
- * *is* the checked-out branch, only one ff happens. All updates are
+ * equals the checked-out branch, only one ff happens. All updates are
  * fast-forward-only — divergent or upstream-less branches are left untouched
  * (no working-tree churn).
  *
@@ -258,9 +261,9 @@ export interface RepoHealth {
   /** Human-readable description of each issue; empty when `healthy`. */
   issues: string[];
   /**
-   * Captured stdout of the repo's `health.sh` augmentation hook (trimmed), or
-   * null when there's no script, it produced no output, or it failed. Purely
-   * informational — it doesn't affect `healthy`/`issues`.
+   * Captured stdout of the central `repo-health` hook (trimmed), or null when
+   * there's no hook, it produced no output, or it failed. Purely informational
+   * — it doesn't affect `healthy`/`issues`.
    */
   extra: string | null;
 }
@@ -346,19 +349,19 @@ function lastFetched(rp: string): string | null {
 }
 
 /**
- * Run a repo's `health.sh` augmentation hook and capture its stdout.
+ * Run the central `repo-health` hook for a repo and capture its stdout.
  *
- * Runs with the repo's git clone as the working directory; repo context is
- * passed via `MX_*` env vars. Returns the trimmed output, or null when there's
- * no script, it produced nothing, or it exited non-zero (best-effort — a broken
- * hook never breaks the health report).
+ * Runs `<runtime>/hooks/repo-health` with the repo's git clone as the working
+ * directory; repo context is passed via `MX_*` env vars. Returns the trimmed
+ * output, or null when there's no hook, it produced nothing, or it exited
+ * non-zero (best-effort — a broken hook never breaks the health report).
  *
  * @param root - Runtime root.
  * @param name - Repo name.
  * @returns Trimmed hook stdout, or null.
  */
 function runHealthScript(root: string, name: string): string | null {
-  const script = repoHealthScript(root, name);
+  const script = hookScript(root, 'repo-health');
   if (!exists(script)) return null;
   try {
     const out = execFileSync(script, [], {
@@ -368,6 +371,7 @@ function runHealthScript(root: string, name: string): string | null {
       env: {
         ...process.env,
         MX_RUNTIME: root,
+        MX_EVENT: 'repo-health',
         MX_REPO: name,
         MX_REPO_PATH: repoPath(root, name),
         MX_GIT_DIR: repoGitDir(root, name),

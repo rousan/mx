@@ -51,47 +51,48 @@ a newer runtime. Don't try to work around the gate by editing files by hand.
 ```
 mx/
 ├── .mx-root                # empty marker: "this is the mx root"
-├── mx.json                 # runtime config: { "version": 2 }
+├── mx.json                 # runtime config: { "version": 3 }
 ├── CLAUDE.md               # this file (installed by the mx CLI)
+├── hooks/                  # the central HOOK HUB — one script per lifecycle event (see § Hooks)
+│   ├── pre-worktree-create · post-worktree-create   # post = "hydrate" a new worktree
+│   ├── pre-worktree-remove · post-worktree-remove
+│   ├── pre-work-archive · post-work-archive
+│   ├── pre-work-unarchive · post-work-unarchive
+│   ├── pre-repo-fetch · post-repo-fetch
+│   ├── repo-health         # augments `mx repo health`
+│   └── work-health         # augments `mx work health`
 ├── bin/                    # runtime-wide utility executables (put on PATH); mx ships some, add your own (see § Runtime bin)
 ├── context/                # shared memory across all features (see § Context registry)
 │   ├── INDEX.json          # single source of truth — metadata for every entry
 │   └── <path>.md           # body-only entries; nested folders allowed
 ├── repos/<repo>/           # per-repo container
 │   ├── git/                # the PRISTINE clone (read-only reference)
-│   ├── hydrate.sh            # runs after worktree add (customizable)
-│   └── health.sh           # augments `mx repo health` (customizable)
+│   └── repo.json           # repo metadata: { "name": "<repo>" }
 └── works/                  # one folder per feature/work
     └── feature-a/
         ├── work.json       # manifest — owned by `mx`, do not hand-edit
         ├── feature-a.code-workspace  # owned by `mx` (folder paths point at wt/<repo>)
         ├── CLAUDE.md       # work-specific rules — stamped once, then yours to edit (mx never overwrites)
-        ├── .claude/settings.json   # SessionStart hook → loads context/INDEX.json
         ├── wt/             # ALL worktrees live here
         │   ├── repo-a/     # worktree of repo-a on this feature's branch
         │   └── repo-b/     # worktree of repo-b on this feature's branch
         ├── scripts/        # ad-hoc per-work scripts (also fine for per-work binaries)
         ├── files/          # artifacts worth keeping (agent/user drop zone)
         ├── tmp/            # throwaway scratch — may be deleted at any time
-        ├── hooks/          # per-work lifecycle hooks (see § Work lifecycle hooks)
-        │   ├── pre-archive.sh · post-archive.sh
-        │   └── pre-unarchive.sh · post-unarchive.sh
         └── sessions/       # session summaries (see § Session summaries)
 ```
 
 - `repos/<repo>/git` are **source-of-truth clones** — read-only reference. Worktrees fork from them
-  and share their `.git` object store. Never edit, commit, or run dev servers in `repos/`.
-- `repos/<repo>/hydrate.sh` and `repos/<repo>/health.sh` are mx-owned per-repo hooks you may customize:
-  `hydrate.sh` runs automatically after `mx work … worktree add <repo>` (cwd = the new worktree); `health.sh`
-  augments `mx repo health`. Edit their bodies if a repo needs custom worktree hydrate or health output.
+  and share their `.git` object store. Never edit, commit, or run dev servers in `repos/`. The container
+  also holds `repo.json` (`{ "name": … }`); there are **no** per-repo scripts — hooks are central.
+- `hooks/` (at the runtime root) is the **single hub of lifecycle hooks** — mx runs one script per event
+  (worktree create/remove, work archive/unarchive, repo fetch, repo health, work health) and you branch
+  on `MX_*` inside. See § Hooks.
 - `works/<feature>/wt/<repo>` are **worktrees**, each on its own feature branch. All work happens here.
 - `works/<feature>/CLAUDE.md` is **work-specific guidance** that loads alongside this runtime
   `CLAUDE.md` for any session started in the work folder (Claude Code walks up from the session's cwd).
   mx stamps it once (an explanatory comment, otherwise empty) and then **never touches it** — it's where
   you and the user record rules specific to this work.
-- `works/<feature>/hooks/` holds **per-work lifecycle hooks** — mx-owned scripts mx runs around
-  `mx work archive`/`unarchive`. mx stamps documented no-op scripts you customize (see § Work
-  lifecycle hooks).
 - `works/<feature>/{scripts,files,tmp}/` are the only places to put non-mx files in a work — see
   § The work folder holds mx-native files only.
 - `bin/` (at the runtime root) holds **runtime-wide utility executables** meant for your `PATH` — mx
@@ -114,37 +115,40 @@ bins** — any file mx doesn't ship — are never touched. To customize a shippe
 the next sync, copy it to a new name. This is distinct from a work's own `scripts/` folder, which is for
 scripts scoped to that one work; `bin/` is runtime-wide and command-like.
 
-## Work lifecycle hooks
+## Hooks
 
-Each work has a `hooks/` folder with mx-owned scripts that fire around archive/unarchive. mx stamps
-four documented **no-op** scripts (they just `exit 0`) when the work is created — edit a script's body
-to make it do something; leave it as-is to opt out.
+A **hook** is a script mx runs at a lifecycle moment — when a worktree is created or removed, a work is
+archived or unarchived, a repo is fetched, or `mx repo health` runs. They all live in **one place**,
+`<runtime>/hooks/`, with **one executable per event** (named exactly for the event). mx stamps a
+documented **no-op** for each on `mx init`; you edit them in place. They're stamp-if-missing — `mx sync`
+re-adds any you delete but **never overwrites** your edits.
 
-| hook | when it runs | non-zero exit |
+Because the hooks are runtime-wide (shared by every repo and work), you branch on the context **inside**
+the script — e.g. a different hydrate for `web` vs `api`, or only for branch `release/*`. Write them in
+**any language**: bash, Node, Python, anything — just set the shebang (`#!/usr/bin/env node`,
+`#!/usr/bin/env python3`, …) and keep the file executable. Delete a hook file to disable that event.
+
+| hook | fires | non-zero exit |
 |---|---|---|
-| `pre-archive.sh` | before `mx work archive` removes worktrees (worktrees still on disk) | **aborts** the archive (`HOOK_FAILED`); nothing is mutated |
-| `post-archive.sh` | after the work is archived (worktrees gone, branches kept) | warning only — the archive already happened |
-| `pre-unarchive.sh` | before `mx work unarchive` re-creates worktrees (none on disk yet) | **aborts** the unarchive (`HOOK_FAILED`) |
-| `post-unarchive.sh` | after worktrees are restored | warning only |
+| `pre-worktree-create` | before `mx work worktree add` creates a worktree | **aborts** creation (`HOOK_FAILED`) |
+| `post-worktree-create` | after a worktree is created — the "hydrate" step (cwd = the new worktree) | warning (worktree kept) |
+| `pre-worktree-remove` / `post-worktree-remove` | around `mx work worktree rm` | pre **aborts**; post warns |
+| `pre-work-archive` / `post-work-archive` | around `mx work archive` | pre **aborts**; post warns |
+| `pre-work-unarchive` / `post-work-unarchive` | around `mx work unarchive` | pre **aborts**; post warns |
+| `pre-repo-fetch` / `post-repo-fetch` | around `mx repo fetch` | pre **aborts**; post warns |
+| `repo-health` | during `mx repo health` (cwd = the pristine clone) | stdout captured into the `extra` row (print nothing or `ok` when healthy → ✓, the problem when not → ⚠) |
+| `work-health` | during `mx work health` / `mx health` (cwd = the work folder) | stdout captured into the `extra` row (same silent-when-healthy convention) |
 
-A `pre-*` hook is a veto point (e.g. block archive if a branch has unpushed commits); a `post-*` hook
-is for cleanup/notification after the fact. mx runs each with the **work folder** as the working
-directory and passes context as positional args and environment variables:
-
-```
-$1 / $MX_EVENT       the event name (e.g. "pre-archive")
-$2 / $MX_WORK_PATH   absolute path to the work folder
-$MX_WORK             work name
-$MX_RUNTIME          runtime root
-```
-
-These hooks are mx-owned but **yours to edit** — `mx sync` only re-stamps a script if it's missing,
-never clobbering your changes, and backfills `hooks/` for works created before this feature existed.
+`pre-*` hooks are veto points (a non-zero exit aborts the operation before anything is mutated); `post-*`
+hooks run after success and a non-zero exit is only a warning. Context arrives as `MX_*` environment
+variables — always `$MX_EVENT` and `$MX_RUNTIME`, plus event-specific ones like `$MX_WORK`, `$MX_REPO`,
+`$MX_BRANCH`, `$MX_BASE`, `$MX_WORKTREE_PATH`, `$MX_WORK_PATH`, `$MX_GIT_DIR`. Each shipped hook's header
+comment documents exactly which variables it gets and its working directory.
 
 ## The work folder holds mx-native files only
 
 **Never create ad-hoc files directly in the work-folder root.** The root is reserved for mx-native
-files (`work.json`, the `.code-workspace`, the work `CLAUDE.md`, `.claude/`) and the mx-owned
+files (`work.json`, the `.code-workspace`, the work `CLAUDE.md`) and the mx-owned
 subfolders. When you or the user need to write anything else, use one of these, never the root:
 
 - **`files/`** — artifacts worth keeping: notes, exports, scratch docs, downloads you want to survive.
@@ -164,13 +168,14 @@ user/agent files — notes, downloads, temp outputs — not necessary tooling fi
   "name": "feature-a",
   "description": "Add a chatbox to the answer panel",
   "worktrees": [
-    { "repo": "repo-a", "branch": "feature-a", "ports": { "web": 3000, "api": 3001 } },
-    { "repo": "repo-b", "branch": "feature-a", "ports": { "worker": 3002 } }
+    { "repo": "repo-a", "name": "repo-a", "branch": "feature-a", "ports": { "web": 3000, "api": 3001 } },
+    { "repo": "repo-a", "name": "repo-a-pr2", "branch": "fix", "ports": { "web": 3002 } },
+    { "repo": "repo-b", "name": "repo-b", "branch": "feature-a", "ports": { "worker": 3003 } }
   ]
 }
 ```
 
-- One worktree per repo. `ports` is a `service -> port` map local to that worktree.
+- Each worktree has a **`name`** — its `wt/<name>` directory and the selector for `worktree rm` / `port`. It defaults to the repo name, so a work can hold **several worktrees of the same repo** by giving the extras distinct names (above, `repo-a` and `repo-a-pr2`). `ports` is a `service -> port` map local to that worktree.
 - The work's `name` is immutable. There is no port-block concept — each port is allocated
   individually and is unique across **all** works.
 
@@ -224,7 +229,7 @@ Example entry:
 
 Primary path:
 
-1. **Read `<runtime>/context/INDEX.json` on every task** — trivial or not, small or large. Skimming a metadata index is cheap; the cost of missing a relevant entry is high. This is a hard rule, not a heuristic. (Each work also carries a `.claude/settings.json` `SessionStart` hook that prints this INDEX into the session at launch, so you usually start with it already in context — but re-read it when in doubt.)
+1. **Read `<runtime>/context/INDEX.json` on every task** — trivial or not, small or large. Skimming a metadata index is cheap; the cost of missing a relevant entry is high. This is a hard rule, not a heuristic. Read the **whole** file (it is small); never read a truncated head of it. When the user says something like "load the mx ctx index as whole", read the entire `INDEX.json` uncapped before doing anything else. (There is no `SessionStart` hook doing this for you — mx stopped stamping one because it capped the index; loading it is on you.)
 2. Open files at `<runtime>/context/<path>.md` for entries whose metadata matches the current task.
 
 When INDEX descriptions don't surface what you need — and often they won't — fall back to anything that works:
@@ -299,18 +304,22 @@ clarity; dropping it works while you're inside the work.
 - **Add a repo to the work (needs a worktree):** if a repo you need has no worktree yet, **stop and
   ask the user.** Only when they say so, run:
   ```
-  mx work -n <feature> worktree add <repo> [--branch <b>] [--base <ref>]
+  mx work -n <feature> worktree add <repo> [<name>] [--branch <b>] [--base <ref>]
   ```
-  This creates the worktree from the pristine clone at `works/<feature>/wt/<repo>`, registers it in
+  This creates the worktree from the pristine clone at `works/<feature>/wt/<name>`, registers it in
   `work.json`, and adds it to the workspace — all at once. Never run `git worktree add` yourself.
+  - `<name>` is the worktree's id (its `wt/<name>` dir + selector); it **defaults to the repo name**.
+    Pass a distinct `<name>` to add a **second worktree of the same repo** to one work (e.g.
+    `mx work -n <feature> worktree add app app-pr2 --branch fix`).
   - `--branch <b>` is the **new** branch to create (defaults to the work name; if it already exists, it's reused).
   - `--base <ref>` is where to **fork from** — any ref. A bare branch name (e.g. `main`,
     `migration-to-mt-service-from-cf`) resolves to that local branch or, failing that, `origin/<name>`.
     Run `mx repo -n <repo> fetch` first if you want the base at its latest upstream commit. Omit
     `--base` to fork from the pristine clone's current HEAD.
-  - After the worktree is created, the repo's `repos/<repo>/hydrate.sh` runs automatically with the new
-    worktree as the working directory (copy a `.env`, install deps, etc.). Pass `--no-hydrate` to skip it,
-    or re-run it later with `mx work -n <feature> worktree hydrate <repo>`.
+  - After the worktree is created, the central `<runtime>/hooks/post-worktree-create` hook runs with the
+    new worktree as the working directory (copy a `.env`, install deps, etc.) — branch on `$MX_REPO` /
+    `$MX_BRANCH` / `$MX_WORKTREE_NAME` inside it. To skip hydration, make that hook a no-op (there's no
+    `--no-hydrate` flag).
 - **Spin up a quick local app (no remote):** for a throwaway/experiment repo you don't want on GitHub,
   `mx repo new <name>` creates a fresh local repo (git init on `main` + README + initial commit). Add
   `--quick` (and `-o`) to also create a `dev-<name>` work + a worktree on `develop` and open it in one
@@ -319,6 +328,10 @@ clarity; dropping it works while you're inside the work.
   across all works). This only records the port in `work.json` — **you** must then wire that port
   into the repo's own env/config (`.env`, `PORT=`, etc.) and remap any outbound URL to a sibling
   service to its allocated port too. Release with `port unset`.
+- **Check health:** `mx repo health` audits the pristine clones; `mx work health` audits the work folders
+  (stray files in a work root, worktree presence vs `work.json`, cross-work port collisions, archive
+  invariants); `mx health` shows both for the whole runtime (`--all` includes archived works). All are
+  purely local. Each runs its central hook (`repo-health` / `work-health`) and captures the stdout as `extra`.
 - **Tear down (user-initiated, after merge):** `mx work -n <feature> destroy` removes the worktrees
   and the work folder but **keeps the branches**. It refuses if any worktree has uncommitted changes.
 

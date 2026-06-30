@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#
+# mx hook: pre-worktree-create
+#
+# Runs BEFORE a worktree is created (`mx work worktree add`).
+# A non-zero exit ABORTS creation (HOOK_FAILED); the worktree is not created.
+#
+# This is a shared, runtime-wide hook — it fires for EVERY repo/work, so branch
+# on the context below. Write it in any language: just set the shebang and keep
+# the file executable (e.g. #!/usr/bin/env node or #!/usr/bin/env python3).
+#
+# Working directory: the work folder.
+# Context (environment variables):
+#     $MX_WORK — work name
+#     $MX_REPO — repo name
+#     $MX_WORKTREE_NAME — worktree name (the wt/<name> selector; = repo unless renamed)
+#     $MX_BRANCH — branch the worktree will be on
+#     $MX_BASE — base ref it forks from (may be empty)
+#     $MX_WORKTREE_PATH — where the worktree will be created
+#     $MX_WORK_PATH — absolute work folder
+#     $MX_GIT_DIR — the repo pristine clone
+#     $MX_EVENT (this event name), $MX_RUNTIME (runtime root)
+#
+# No-op by default — delete this file to disable the hook entirely.
+set -euo pipefail
+
+# Branch on the context to do per-repo / per-work / per-branch logic, e.g.:
+#   case "${MX_REPO:-}" in
+#     web)  npm --prefix "$MX_WORKTREE_PATH" install ;;
+#     api)  cp "$MX_RUNTIME/secrets/api.env" "$MX_WORKTREE_PATH/.env" ;;
+#   esac
+
+exit 0
