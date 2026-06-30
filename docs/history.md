@@ -2,6 +2,14 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 3.1.1 — 2026-07-01
+
+Docs only — no change to the published CLI or runtime behavior. Adds a
+`docs/sessions/` folder with a detailed session log (the 3.0.0 → 3.1.0 work:
+health commands, the SessionStart-hook removal, and `mx mission-control`) so a
+fresh agent can pick up the project cold. Cut as its own release because the
+repo contract bumps the version on every merge to `main`.
+
 ## 3.1.0 — 2026-06-30
 
 **`mx mission-control` — a live web dashboard (alias `mx mc`).** Run it to start a local, **read-only** dashboard for the whole runtime and open `http://localhost:7777` (a second monitor works well): a calm, monochrome, auto-refreshing view of every repo's and work's health, plus a consolidated **ports board** (port → url → service → worktree → work, collisions flagged, archived dimmed) for the fast "which work owns which port, give me the URL" lookup.
