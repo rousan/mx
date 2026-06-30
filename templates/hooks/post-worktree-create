@@ -2,8 +2,10 @@
 #
 # mx hook: post-worktree-create
 #
-# Runs AFTER a worktree is created — this is the v2 "hydrate" hook. Re-run on demand with `mx work worktree hydrate <repo>`.
-# A non-zero exit is a warning on auto-run (worktree kept); the explicit `worktree hydrate` reports HOOK_FAILED.
+# Runs AFTER a worktree is created (on `mx work worktree add`, and once per
+# restored worktree on `mx work unarchive`) — this is the "hydrate" step: install
+# deps, copy env files, allocate ports, etc. A non-zero exit is only a warning
+# (the worktree is kept). To re-run it, re-invoke this hook yourself.
 #
 # This is a shared, runtime-wide hook — it fires for EVERY repo/work, so branch
 # on the context below. Write it in any language: just set the shebang and keep

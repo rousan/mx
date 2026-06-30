@@ -9,7 +9,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "pnpm --filter @mx/cli run build",
+    "build": "pnpm --filter @mx/mission-control run build && pnpm --filter @mx/cli run build",
+    "build:cli": "pnpm --filter @mx/cli run build",
     "dev": "pnpm --filter @mx/cli run dev",
     "mx": "node npm/bin/mx.js",
     "typecheck": "pnpm -r run typecheck",

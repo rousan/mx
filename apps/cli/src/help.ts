@@ -45,6 +45,9 @@ Works (features):
 Health (whole-runtime overview):
   mx health [--all] [--porcelain]                       every repo's health + every active work's health (--all includes archived works)
 
+Mission control (live web dashboard):
+  mx mission-control [--port <n>] [-o]   (alias mx mc)  start a local, read-only live dashboard (repos, works, health, ports); -o opens the browser
+
 Bin (runtime-wide utility executables in <runtime>/bin, meant for PATH):
   mx bin ls   (alias mx bins)                           list bins (mx-shipped + your own); shows whether bin/ is on PATH
   mx bin path                                           print the bin/ dir: export PATH="$(mx bin path):$PATH"

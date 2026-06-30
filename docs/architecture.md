@@ -6,9 +6,10 @@ mx is a TypeScript pnpm monorepo with **source code and the publishable npm pack
 
 ```
 github.com/roulabs/mx
-├── packages/core/   →  @mx/core   (source; pure domain logic)
-├── apps/cli/        →  @mx/cli    (source; CLI surface; PRIVATE — never published)
-└── npm/             →  mx-multiplexer / @roulabs/mx   (publishable; `pnpm build` populates it)
+├── packages/core/        →  @mx/core             (source; pure domain logic)
+├── apps/cli/             →  @mx/cli              (source; CLI surface; PRIVATE — never published)
+├── apps/mission-control/ →  @mx/mission-control  (source; React/Vite/Tailwind dashboard; PRIVATE — ships only as a prebuilt single HTML)
+└── npm/                  →  @roulabs/mx          (publishable; `pnpm build` populates it)
 ```
 
 ### `@mx/core` (`packages/core/`)
@@ -51,8 +52,13 @@ Key files in `apps/cli/src/`:
 - `commands/repo.ts` — `add`, `new` (local repo; `--quick` chains a `dev-<name>` work + `develop` worktree + optional `-o` open), `ls`, `fetch` (wrapped in `pre/post-repo-fetch` hooks), `info`, `health` (renders `renderHealthDetail` per repo — one repo with `-n`, all repos otherwise), `rm` (`renderHealthDetail` renders the captured `repo-health` hook output)
 - `commands/work.ts` — `new` (incl. `-o`), `ls`, `info`, `path`, `describe`, `worktree {add [<name>],ls,rm}` (fires the worktree-create/remove hooks; no `hydrate` subcommand), `port {set,unset,ls}` (by worktree name), `health` (renders `renderWorkHealthDetail` per work — one work with `-n`/cwd, all active works otherwise, `--all` adds archived), `archive`, `unarchive` (fire the work-archive/unarchive hooks), `destroy`
 - `commands/health.ts` — `mx health [--all]`: the whole-runtime overview, reusing `renderHealthDetail` (repos) + `renderWorkHealthDetail` (works); dispatched from `main.ts`
+- `commands/missionControl.ts` — `mx mission-control` (alias `mc`): a zero-dependency `node:http` server serving the bundled single-file dashboard at `/`, a JSON snapshot at `/api/state`, and an SSE stream at `/api/stream` (periodic tick + `fs.watch` on `works/`/`repos/`/`mx.json`); state is built in-process from `listRepoHealth` + `listWorkHealth`. `paths.ts#missionControlHtml()` resolves the bundled HTML; `--port` walks upward on `EADDRINUSE`
 - `commands/bin.ts` — `mx bin` / `mx bins`: `ls` (tags shipped vs user bins by checking the bundled `templates/bin/`, flags non-executable ones, reports PATH membership) and `path`; dispatched from `main.ts`
-- `tsup.config.ts` — bundles `src/bin/mx.ts` → `../../npm/bin/mx.js`; on success, copies templates/ and LICENSE into `npm/`
+- `tsup.config.ts` — bundles `src/bin/mx.ts` → `../../npm/bin/mx.js`; on success, copies `templates/`, the prebuilt `apps/mission-control/dist/` → `npm/mission-control/`, and LICENSE into `npm/`
+
+### `@mx/mission-control` (`apps/mission-control/`)
+
+The `mx mission-control` dashboard UI: a React + Vite + Tailwind app built to a **single self-contained `dist/index.html`** (via `vite-plugin-singlefile` — all JS/CSS inlined). Private and never published as a package; only the built HTML ships, copied into `npm/mission-control/` and served by the CLI's zero-dep server. React/Vite/Tailwind are dev-only, so the published `@roulabs/mx` keeps zero runtime dependencies. `pnpm build` builds this **before** `@mx/cli` so the copy step finds `dist/`.
 
 ### `npm/` (the publishable package)
 
@@ -63,6 +69,7 @@ Committed:
 Built by `pnpm build` (gitignored):
 - `npm/bin/mx.js` — bundled, single-file CLI (`@mx/core` is `noExternal`-bundled in)
 - `npm/templates/` — copied verbatim from `/templates/` at the repo root
+- `npm/mission-control/index.html` — the prebuilt single-file dashboard (from `apps/mission-control/dist/`)
 - `npm/LICENSE` — copied from the repo root
 
 `npm publish` runs from this folder.
