@@ -108,5 +108,14 @@ export type {
 export { allocatedPorts, nextFreePort, portSet, portUnset, portList } from './ports';
 export type { PortSlot, PortResult, PortReleaseResult } from './ports';
 
+export { workHealth, listWorkHealth } from './workhealth';
+export type {
+  WorkHealth,
+  WorkHealthPort,
+  WorkHealthPortConflict,
+  WorkHealthWorktree,
+  ListWorkHealthOpts,
+} from './workhealth';
+
 export { statusRuntime } from './status';
 export type { StatusResult, StatusContext, StatusWork } from './status';

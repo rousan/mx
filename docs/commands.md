@@ -63,7 +63,6 @@ Re-sync the runtime with the current mx version (this is the command formerly ca
 - backfills the central `hooks/` hub (stamp-if-missing per event), the runtime `bin/` and its shipped utility bins, and mx-owned structural directories across every work — `<work>/wt/`, `scripts/`, `files/`, `tmp/`, and `sessions/` for any work that pre-dates that scaffolding
 - writes each repo's `repo.json`, **only if missing**
 - stamps the per-work `CLAUDE.md`, **stamp-if-missing** (stamped once, then user-owned — see [The work folder](runtime-model.md#the-work-folder))
-- generates each work's `.claude/settings.json` context-index hook, **stamp-if-missing** (see [Per-work context-index hook](#per-work-context-index-hook))
 - removes a stale `<runtime>/README.md` if one lingers (legacy cleanup)
 
 Output enumerates every path actually written:
@@ -74,7 +73,7 @@ Output enumerates every path actually written:
   + /Users/rousan/mx/hooks/post-worktree-create
   + /Users/rousan/mx/repos/app/repo.json
   + /Users/rousan/mx/works/old-feat/sessions
-  + /Users/rousan/mx/works/old-feat/.claude/settings.json
+  + /Users/rousan/mx/works/old-feat/CLAUDE.md
 ```
 
 ### `mx update`
@@ -192,28 +191,24 @@ Detail block for one repo: name, path (the container `repos/<repo>`), current br
 
 Purely-local health check. **No network, no fetch.** Surfaces drift from the expected "checked-out on default branch, clean working tree, in sync with origin" state.
 
-**Checks**: default branch (from `origin/HEAD` symbolic ref, set at clone time), current branch, uncommitted changes, untracked files, ahead/behind origin/<branch> (compared against last fetch), last-fetched timestamp (`.git/FETCH_HEAD` mtime), worktrees-in-works.
+**Metrics shown** (only rows that carry a ✓/⚠ — purely informational fields like default branch and worktrees-in-works live in `mx repo info`): current branch (✓ when it matches the default), uncommitted changes, untracked files, ahead/behind origin/<branch> (only when an upstream exists), and last fetched — shown for remote-backed repos with a 24h freshness rule (✓ within 24h, ⚠ stale otherwise). Local repos (no remote) omit ahead/behind and last fetched.
 
-These structured checks are mx's built-in **typed source of truth** for repo health. In addition, `mx repo health` runs the central `repo-health` hook (`<runtime>/hooks/repo-health`) with `MX_REPO` set and captures its stdout into a separate `extra` field — see [Hooks](#hooks). A missing, empty, or failing hook yields `extra: null` and never affects `healthy` / `issues`.
+These structured checks are mx's built-in **typed source of truth** for repo health. In addition, `mx repo health` runs the central `repo-health` hook (`<runtime>/hooks/repo-health`) with `MX_REPO` set and captures its stdout into a separate `extra` field — see [Hooks](#hooks). The hook convention is **silent when healthy**: empty output (or a bare `ok`/`OK`) renders the `extra` row as ✓ `OK`, any other output renders it with a ⚠ (and the message). A missing or failing hook yields `extra: null`.
 
-Both forms render the **same per-repo detail block** — a structured per-metric block with ✓/⚠ markers aligned in a column. `-n <name>` shows one repo; without `-n`, every repo's block is printed in turn (alphabetical), separated by a blank line — so you see identical info either way.
+Both forms render the **same per-repo detail block** — a structured per-metric block with ✓/⚠ markers aligned in a column. The **repo name carries an aggregate ✓/⚠** so you can scan green-vs-needs-attention at a glance (✓ only when every checked row, including `extra`, is a tick). `-n <name>` shows one repo; without `-n`, every repo's block is printed in turn (alphabetical), separated by a blank line.
 
 ```
-worker
-  default branch      main        
-  current branch      main          ✓
-  uncommitted         0 changes     ✓
-  untracked           0 files       ✓
-  ahead of origin     0 commits     ✓
-  behind of origin    1 commit      ⚠  run `mx repo -n worker fetch`
-  last fetched        2 hours ago    
-  worktrees in works  1
-
-  repo-health
-    <captured stdout of the repo-health hook, if it produced any>
+api  ⚠
+  current branch    main          ✓
+  uncommitted       0 changes     ✓
+  untracked         0 files       ✓
+  ahead of origin   0 commits     ✓
+  behind of origin  1 commit      ⚠  run `mx repo -n api fetch`
+  last fetched      2 days ago    ⚠  stale — run `mx repo -n api fetch`
+  extra             OK            ✓
 ```
 
-The `repo-health` section appears only when the hook produced output. In porcelain, the captured output is the string field `extra` (or `null`).
+The `extra` row sits inline right after the metrics (no blank line); multi-line hook output continues on aligned rows below. In porcelain, the captured output is the string field `extra` (or `null`).
 
 **Exit code is 0** even when issues are found (read-only convention). To refresh the "behind" numbers against actual origin, run `mx repo -n <name> fetch` first.
 
@@ -225,7 +220,7 @@ Remove the repo container (clone + `repo.json`). Refuses with `IN_USE` if any wo
 
 ### `mx work new <name> [--description <text>] [--open|-o]`
 
-Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `files/`, `tmp/`, and `sessions/`, the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)), and `.claude/settings.json` (the per-work context-index hook — see [Per-work context-index hook](#per-work-context-index-hook)). Prints the absolute path. All of these are **stamp-if-missing**. (Lifecycle hooks are central, not per-work — see [Hooks](#hooks).)
+Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `files/`, `tmp/`, and `sessions/`, and the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)). Prints the absolute path. All of these are **stamp-if-missing**. (Lifecycle hooks are central, not per-work — see [Hooks](#hooks).)
 
 The name is immutable.
 
@@ -358,6 +353,23 @@ mx: refusing to destroy "feat" — destroy is permanent and removes the work fol
 
 With `--force`, prints a loud irreversibility warning to stderr before executing.
 
+### `mx work health [--all] [--porcelain]` / `mx work -n <name> health [--porcelain]`
+
+Purely-local health audit of a work folder against the mx contract. With `-n <name>` (or when your cwd implies a work) it prints one work's detail block; bare `mx work health` prints a block for every **active** work, and `--all` adds archived ones.
+
+Only health metrics (rows carrying a ✓/⚠) are shown — informational fields like the work's status and its port count live in `mx work info`. Built-in checks (the typed source of truth, surfaced as `issues` / `healthy`):
+
+- **Stray root entries** — anything in the work-folder root that isn't mx-native (`work.json`, the `.code-workspace`, `CLAUDE.md`, and the `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/` dirs). Ad-hoc files belong under `files/`, `tmp/`, or `scripts/`. Dot-prefixed entries are tolerated (the tooling-file exception, e.g. an MCP connection file).
+- **Worktree presence** — the `worktrees` row shows the count with a ✓/⚠ for whether they're all as expected (recorded worktrees present on disk for an active work; removed for an archived one). It does not list worktree names — use `mx work -n <name> info` for the per-worktree detail.
+- **Cross-work port collisions** — a port this work allocates that another work also allocates. `mx port set` keeps ports unique, so a collision means `work.json` was hand-edited.
+- **Archive invariants** — an archived work should have its ports freed and its worktrees removed (archive does both). A leftover port or on-disk worktree is flagged.
+
+Each failing check's detail rides inline as a hint on its own row (no separate "issues" section), and the **work name carries an aggregate ✓/⚠** (✓ only when every checked row, including `extra`, is a tick). In addition, the command runs the central `work-health` hook (`<runtime>/hooks/work-health`) with `MX_WORK` set and the work folder as cwd, capturing its stdout into the `extra` row — same **silent-when-healthy** convention as `repo-health` (empty or `ok`/`OK` → ✓ `OK`, any other output → ⚠ with the message). A missing or failing hook yields `extra: null`.
+
+### `mx health [--all] [--porcelain]`
+
+Whole-runtime health overview: every repo's health block (identical to `mx repo health`) followed by every active work's health block (identical to `mx work health`). `--all` includes archived works in the works section. Porcelain returns `{ "repos": [...], "works": [...] }` with the full snapshots.
+
 ### `mx bin ls` · `mx bin path` (alias `mx bins`)
 
 Manage the runtime-wide `bin/` directory — utility executables shared across every work, meant to be on your `PATH`. mx ships some (currently `dcs` and `lcs` — delete / list Claude Code sessions by name) and you can drop your own in; any executable file is picked up.
@@ -371,11 +383,11 @@ Manage the runtime-wide `bin/` directory — utility executables shared across e
 
 The directory is created by `mx init` and refreshed by `mx sync`. mx-shipped bins are **mx-owned: re-stamped (overwritten) on every sync**, like the runtime `CLAUDE.md`, so improvements land automatically; **your own bins are never touched**. To customize a shipped bin without losing it on the next sync, copy it to a new name. This is distinct from a work's `scripts/` folder (scoped to one work) — `bin/` is runtime-wide.
 
-## Per-work context-index hook
+## Loading the context-registry index
 
-`mx work new` and `mx sync` generate `works/<feature>/.claude/settings.json`, a Claude Code `SessionStart` hook that prints the runtime's `context/INDEX.json` into every session launched in that work folder. This loads the context-registry catalog **deterministically** every session (relying on CLAUDE.md prose alone proved unreliable).
+There is **no** `SessionStart` hook. mx through v2 stamped a per-work `.claude/settings.json` whose `SessionStart` hook printed `context/INDEX.json` into every session, but Claude Code caps hook output (~2KB) so a non-trivial index was silently truncated. v3 drops the hook; `mx work new` and `mx sync` no longer stamp it, and `mx migrate` removes a default-stamped one (a customized `settings.json` is kept with a warning).
 
-The hook is **per-work** (not at the runtime root) because Claude Code reads `.claude/settings.json` only from the session's launch directory, and mx sessions launch in the work folder. It is **stamp-if-missing** — user edits are preserved.
+Loading the index is now the session's own job: the runtime `CLAUDE.md` instructs it to read the whole `context/INDEX.json`, uncapped, on every task. To force a fresh full load mid-session, tell the session something like "load the mx ctx index as whole".
 
 ## Hooks
 
@@ -389,7 +401,8 @@ All lifecycle hooks live in **one place** — `<runtime>/hooks/` — with **one 
 | `pre-work-archive` / `post-work-archive` | around `mx work archive` | pre **aborts**; post warns |
 | `pre-work-unarchive` / `post-work-unarchive` | around `mx work unarchive` | pre **aborts**; post warns |
 | `pre-repo-fetch` / `post-repo-fetch` | around `mx repo fetch` | pre **aborts**; post warns |
-| `repo-health` | during `mx repo health` | stdout captured into the report |
+| `repo-health` | during `mx repo health` (cwd = the pristine clone) | stdout captured into the report |
+| `work-health` | during `mx work health` / `mx health` (cwd = the work folder) | stdout captured into the report |
 
 Context arrives as `MX_*` environment variables — always `MX_EVENT` and `MX_RUNTIME`, plus event-specific ones: `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_GIT_DIR`, `MX_REPO_PATH`. Each shipped hook's header documents its own set and working directory. A `pre-*` non-zero exit **aborts** the operation (`HOOK_FAILED`, nothing mutated) — even in `--porcelain` mode (where hook stdio is suppressed, the abort still surfaces as a JSON `HOOK_FAILED` error); a `post-*` non-zero exit is only a warning.
 

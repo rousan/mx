@@ -12,7 +12,7 @@ What an mx runtime looks like on disk, the contracts mx owns, and the data shape
 ├── hooks/                       # central HOOK HUB — one executable per lifecycle event (see § Hooks below)
 │   ├── pre-worktree-create      # … post-worktree-create, pre/post-worktree-remove,
 │   ├── post-worktree-create     #   pre/post-work-archive, pre/post-work-unarchive,
-│   └── repo-health              #   pre/post-repo-fetch, repo-health
+│   └── repo-health              #   pre/post-repo-fetch, repo-health, work-health
 ├── bin/                         # runtime-wide utility executables for PATH (see § Runtime bin below)
 │   ├── dcs                      # mx-shipped: delete a Claude Code session by name
 │   └── lcs                      # mx-shipped: list Claude Code sessions
@@ -31,7 +31,6 @@ What an mx runtime looks like on disk, the contracts mx owns, and the data shape
         ├── work.json                # per-work manifest (owned by mx; never hand-edit)
         ├── feature-a.code-workspace # VS Code workspace (owned by mx; folder paths → wt/<repo>)
         ├── CLAUDE.md                # work-specific rules (stamped once, then user-owned)
-        ├── .claude/settings.json    # SessionStart hook → loads context/INDEX.json
         ├── wt/                      # all worktrees live here
         │   ├── repo-a/              # git worktree on the feature branch
         │   └── repo-b/              # git worktree on the feature branch
@@ -64,7 +63,8 @@ All lifecycle hooks live in **one** runtime-wide directory — `<runtime>/hooks/
 | `pre-work-archive` / `post-work-archive` | around `mx work archive` | pre **aborts**; post warns |
 | `pre-work-unarchive` / `post-work-unarchive` | around `mx work unarchive` | pre **aborts**; post warns |
 | `pre-repo-fetch` / `post-repo-fetch` | around `mx repo fetch` (cwd = git clone) | pre **aborts**; post warns |
-| `repo-health` | during `mx repo health` (cwd = git clone) | stdout captured into `extra`; failure → `extra: null` |
+| `repo-health` | during `mx repo health` (cwd = git clone) | stdout captured into `extra` (silent when healthy: empty/`ok` → ✓, other output → ⚠); failure → `extra: null` |
+| `work-health` | during `mx work health` / `mx health` (cwd = work folder) | stdout captured into `extra` (same convention); failure → `extra: null` |
 
 Context arrives via `MX_*` env vars — always `MX_EVENT` + `MX_RUNTIME`, plus event-specific ones like `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_GIT_DIR`, `MX_REPO_PATH`. Each shipped template documents its own set (worktree events also get `MX_WORKTREE_NAME`). To skip hydration, make `post-worktree-create` a no-op — there is no `--no-hydrate` flag or `worktree hydrate` subcommand.
 
@@ -78,9 +78,11 @@ A single runtime-wide directory of utility executables shared across every work,
 
 This is distinct from a work's `scripts/` (scoped to one work). See [`mx bin`](commands.md#mx-bin-ls--mx-bin-path-alias-mx-bins).
 
-## Per-work context-index hook (`.claude/settings.json`)
+## Loading the context-registry index
 
-`mx work new` and `mx sync` generate `works/<feature>/.claude/settings.json` — a Claude Code `SessionStart` hook that prints the runtime's `context/INDEX.json` into every session launched in the work folder, so the context-registry catalog loads deterministically (CLAUDE.md prose alone was unreliable). It's per-work because Claude Code reads `.claude/settings.json` only from the session's launch directory, and mx sessions launch in the work folder. Stamp-if-missing — user edits are preserved.
+There is **no** `SessionStart` hook. mx through v2 stamped a per-work `.claude/settings.json` whose `SessionStart` hook printed `context/INDEX.json` into every session, but Claude Code caps hook output (~2KB), so a non-trivial index was silently truncated. v3 drops the hook entirely (the v3 migration removes a default-stamped one — see [migrate](commands.md#mx-migrate)).
+
+Instead, the runtime `CLAUDE.md` instructs the session to read the whole `context/INDEX.json` itself, uncapped, on every task. A user can also force a fresh full load mid-session by saying something like "load the mx ctx index as whole", which tells the session to re-read the entire file.
 
 ## The work folder
 
@@ -95,7 +97,7 @@ A work folder (`works/<feature>/`) is more than a flat bag of worktrees. Its sha
 
 ### The work folder root holds mx-native files only
 
-The work-folder **root** is reserved for mx-native files (`work.json`, the `.code-workspace`, the work `CLAUDE.md`, `.claude/`) and the mx-owned subfolders above. Sessions and users must **not** create ad-hoc files directly in the root — keepable artifacts go in `files/`, throwaway scratch in `tmp/`, scripts (and per-work binaries) in `scripts/`. The one exception is a runtime file a session legitimately needs at the root for tooling to work (e.g. an MCP connection file like `.<something>-mcp`); the rule targets ad-hoc user/agent files (notes, downloads, temp outputs), not necessary tooling files. The runtime `CLAUDE.md` states this rule for feature sessions.
+The work-folder **root** is reserved for mx-native files (`work.json`, the `.code-workspace`, the work `CLAUDE.md`) and the mx-owned subfolders above. Sessions and users must **not** create ad-hoc files directly in the root — keepable artifacts go in `files/`, throwaway scratch in `tmp/`, scripts (and per-work binaries) in `scripts/`. The one exception is a runtime file a session legitimately needs at the root for tooling to work (e.g. an MCP connection file like `.<something>-mcp`); the rule targets ad-hoc user/agent files (notes, downloads, temp outputs), not necessary tooling files. The runtime `CLAUDE.md` states this rule for feature sessions.
 
 ### `inferContext` and the `wt/` segment
 
@@ -195,10 +197,10 @@ Distillation, **not** a transcript. Capture the substance so a future agent can 
 | owned by | what |
 |---|---|
 | **mx** (programmatic) | `.mx-root` marker, `mx.json`, `repos/<repo>/` container incl. `git/` (created by `repo add` clone; touched only by `repo fetch`/`repo rm`/`migrate`) and `repo.json`, `works/<feature>/` (created by `work new`), `work.json`, `.code-workspace`, the per-work directories `wt/` / `scripts/` / `files/` / `tmp/` / `sessions/` (directories only — their contents are agent/user-written), the runtime `hooks/` and `bin/` directories, `context/INDEX.json` (only the starter empty array is stamped; subsequent edits are by the agent) |
-| **mx-stamped templates** (rewritten / stamped on `mx sync`) | `<runtime>/CLAUDE.md` (always rewritten), `<runtime>/bin/<shipped>` (mx-owned utility bins, e.g. `dcs`/`lcs` — **always re-stamped**, like `CLAUDE.md`), `<runtime>/hooks/<event>` (stamp-if-missing — your logic, never clobbered), `<runtime>/context/INDEX.json` (only if missing — never overwrites user content), `repos/<repo>/repo.json` (written when missing), `works/<feature>/CLAUDE.md` (stamp-if-missing — stamped once, then user-owned), `works/<feature>/.claude/settings.json` (stamp-if-missing) |
-| **The user / agent** (mx never touches after stamping) | All worktree code, the contents of `wt/` / `scripts/` / `files/` / `tmp/`, your own `<runtime>/bin/` additions (any name mx doesn't ship), the `<runtime>/hooks/<event>` bodies once stamped, `context/<path>.md` body files, `INDEX.json` content after init, `sessions/*.md` files, the work `CLAUDE.md` after it's stamped, the bodies of `.claude/settings.json` once stamped |
+| **mx-stamped templates** (rewritten / stamped on `mx sync`) | `<runtime>/CLAUDE.md` (always rewritten), `<runtime>/bin/<shipped>` (mx-owned utility bins, e.g. `dcs`/`lcs` — **always re-stamped**, like `CLAUDE.md`), `<runtime>/hooks/<event>` (stamp-if-missing — your logic, never clobbered), `<runtime>/context/INDEX.json` (only if missing — never overwrites user content), `repos/<repo>/repo.json` (written when missing), `works/<feature>/CLAUDE.md` (stamp-if-missing — stamped once, then user-owned) |
+| **The user / agent** (mx never touches after stamping) | All worktree code, the contents of `wt/` / `scripts/` / `files/` / `tmp/`, your own `<runtime>/bin/` additions (any name mx doesn't ship), the `<runtime>/hooks/<event>` bodies once stamped, `context/<path>.md` body files, `INDEX.json` content after init, `sessions/*.md` files, the work `CLAUDE.md` after it's stamped |
 
-`mx sync` is non-destructive: it re-stamps the mx-owned generated content (runtime `CLAUDE.md`), backfills mx-owned structural directories and stamp-if-missing files (the central `hooks/` hub, the runtime `bin/` and its shipped utility bins, each repo's `repo.json`, the per-work `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/` directories, the per-work `CLAUDE.md`, per-work `.claude/settings.json`), and removes a stale `<runtime>/README.md` if one lingers. It never overwrites user-edited content in the "user / agent owns" column. (`mx update` is now a separate command that self-updates the CLI — see [commands](commands.md#mx-update).)
+`mx sync` is non-destructive: it re-stamps the mx-owned generated content (runtime `CLAUDE.md`), backfills mx-owned structural directories and stamp-if-missing files (the central `hooks/` hub, the runtime `bin/` and its shipped utility bins, each repo's `repo.json`, the per-work `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/` directories, the per-work `CLAUDE.md`), and removes a stale `<runtime>/README.md` if one lingers. It never overwrites user-edited content in the "user / agent owns" column. (`mx update` is now a separate command that self-updates the CLI — see [commands](commands.md#mx-update).)
 
 ## Discovery: `--runtime` / `$MX_RUNTIME` / `~/mx`
 

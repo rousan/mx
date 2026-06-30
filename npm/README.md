@@ -55,6 +55,8 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 | `mx work -n <name> port set\|unset\|ls <wt-name> <service> [<port>]` | allocate/release ports per worktree (omit `<port>` to auto-pick) |
 | `mx work -n <name> archive [--yes]` / `unarchive` | soft-delete / restore a work (keeps branches); fires the central `pre/post-work-archive` / `pre/post-work-unarchive` hooks (a `pre-*` non-zero exit aborts) |
 | `mx work -n <name> destroy --force` | permanently remove the work folder (keeps branches) |
+| `mx work health` / `mx work -n <name> health` | local-only work-folder audit (stray files, worktree presence, cross-work port collisions, archive invariants); augmented by the central `work-health` hook (`--all` includes archived) |
+| `mx health [--all]` | whole-runtime overview: every repo's health + every active work's health |
 | `mx bin ls` / `mx bin path` (alias `mx bins`) | list the runtime's `bin/` utility executables (mx-shipped + your own); `path` prints the dir for `export PATH="$(mx bin path):$PATH"` |
 
 ## License

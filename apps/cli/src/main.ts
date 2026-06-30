@@ -9,6 +9,7 @@ import { runGlobal } from './commands/global';
 import { dispatchRepo } from './commands/repo';
 import { dispatchWork } from './commands/work';
 import { dispatchBin } from './commands/bin';
+import { dispatchHealth } from './commands/health';
 
 /**
  * CLI version, surfaced by `mx version` / `mx --version`. Read from the
@@ -60,6 +61,8 @@ export function main(): void {
       case 'bin':
       case 'bins':
         return dispatchBin(positionals, flags);
+      case 'health':
+        return dispatchHealth(positionals, flags);
       default:
         throw new MxError(`unknown command: ${positionals[0]}`, 'BAD_ARGS');
     }

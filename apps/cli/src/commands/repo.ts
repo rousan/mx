@@ -290,17 +290,26 @@ function relativeTime(iso: string | null): string {
  * sit in a single vertical column.
  *
  * @param h - The repo health snapshot.
+ * @param indent - Left padding prefixed to every line (used by `mx health` to
+ *   nest each block under its section header). Blank lines stay blank.
  */
-function renderHealthDetail(h: RepoHealth): void {
+export function renderHealthDetail(h: RepoHealth, indent = ''): void {
+  const log = (s = ''): void => console.log(s === '' ? '' : indent + s);
   type Row = { label: string; value: string; marker?: string; hint?: string };
   const rows: Row[] = [];
+  // Tracks whether any checked row (or the hook `extra`) flagged a problem, so
+  // the name line can carry an at-a-glance ✓/⚠ for the whole block.
+  let anyWarn = false;
   const addRow = (label: string, value: string, ok?: boolean, hint?: string): void => {
     const marker = ok === undefined ? undefined : ok ? check() : warn();
+    if (ok === false) anyWarn = true;
     rows.push({ label, value, marker, hint });
   };
 
-  addRow('default branch', h.defaultBranch ?? '(unknown)');
-
+  // Only health metrics (rows that carry a ✓/⚠) are shown — informational
+  // fields like default branch, last fetched, and worktree count live in
+  // `mx repo info`. `current branch` is the metric: ✓ when it matches the
+  // default, ⚠ otherwise.
   const currentBranchText = h.currentBranch ?? '(detached HEAD)';
   const branchOk = h.currentBranch !== null && h.isOnDefault;
   addRow(
@@ -339,29 +348,46 @@ function renderHealthDetail(h: RepoHealth): void {
     h.behindOfOrigin === null ? undefined : h.behindOfOrigin === 0,
     (h.behindOfOrigin ?? 0) > 0 ? `run \`mx repo -n ${h.name} fetch\`` : undefined,
   );
-  addRow('last fetched', relativeTime(h.lastFetchedAt));
-  rows.push({
-    label: 'worktrees in works',
-    value: String(h.worktreesInWorks.length),
-  });
+  // Freshness metric — only meaningful for a repo with a remote (a local
+  // `repo new` repo, with no origin/HEAD, never fetches). ✓ when fetched within
+  // the last 24h, ⚠ stale otherwise (or never).
+  if (h.defaultBranch !== null) {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const fetchedAt = h.lastFetchedAt ? Date.parse(h.lastFetchedAt) : null;
+    const fresh = fetchedAt !== null && Date.now() - fetchedAt < DAY_MS;
+    addRow(
+      'last fetched',
+      relativeTime(h.lastFetchedAt),
+      fresh,
+      fresh ? undefined : `stale — run \`mx repo -n ${h.name} fetch\``,
+    );
+  }
 
-  // Align the marker column by padding values to the widest plain length.
-  const labelW = Math.max(...rows.map((r) => r.label.length));
-  const valueW = Math.max(...rows.map((r) => r.value.length));
+  // The central repo-health hook output becomes a trailing `extra` row, always
+  // shown: the convention is that a healthy hook says nothing — empty output or
+  // a bare "ok"/"OK" renders ✓ "OK"; anything else renders ⚠ with the message
+  // and flags the block.
+  const extraText = (h.extra ?? '').replace(/\s+$/, '');
+  const extraOk = extraText === '' || extraText.toLowerCase() === 'ok';
+  const extraLines = extraOk ? [] : extraText.split('\n');
+  if (!extraOk) anyWarn = true;
 
-  console.log(bold(h.name));
-  for (const r of rows) {
+  // Show only metric rows (those carrying a ✓/⚠); this also drops ahead/behind
+  // when there's no upstream to compare against. `extra` is always shown below.
+  const metricRows = rows.filter((r) => r.marker !== undefined);
+  const labelW = Math.max(...metricRows.map((r) => r.label.length), 5);
+  const valueW = Math.max(0, ...metricRows.map((r) => r.value.length));
+
+  log(`${bold(h.name)}  ${anyWarn ? warn() : check()}`);
+  for (const r of metricRows) {
     const label = dim(r.label.padEnd(labelW));
     const value = r.value.padEnd(valueW);
     const marker = r.marker ? `  ${r.marker}` : '   ';
     const hint = r.hint ? `  ${dim(r.hint)}` : '';
-    console.log(`  ${label}  ${value}${marker}${hint}`);
+    log(`  ${label}  ${value}${marker}${hint}`);
   }
-
-  // Repo-specific augmentation from the central repo-health hook, if any.
-  if (h.extra) {
-    console.log();
-    console.log(`  ${dim('repo-health')}`);
-    for (const line of h.extra.split('\n')) console.log(`    ${dim(line)}`);
-  }
+  // Extra row: ✓ "OK" when the hook reported healthy, ⚠ + message when it did not.
+  const extraValue = (extraOk ? 'OK' : extraLines[0]).padEnd(valueW);
+  log(`  ${dim('extra'.padEnd(labelW))}  ${dim(extraValue)}  ${extraOk ? check() : warn()}`);
+  for (const line of extraLines.slice(1)) log(`  ${' '.repeat(labelW)}  ${dim(line)}`);
 }

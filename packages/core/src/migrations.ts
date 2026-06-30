@@ -61,6 +61,44 @@ function isDefaultScript(content: string): boolean {
 }
 
 /**
+ * Whether a work's `.claude/settings.json` is exactly the mx-stamped v2
+ * context-index hook (and nothing the user added), so the v3 migration can
+ * safely remove it. v2 stamped a single `SessionStart` command hook that
+ * printed the runtime's `INDEX.json`; v3 drops that hook (the capped 2KB load
+ * is replaced by asking mx to load the whole index on demand). Matches on the
+ * structure plus the mx-generated command, so a differing absolute INDEX path
+ * still counts as default while any extra hook, event, or top-level key makes
+ * it customized (preserved with a warning).
+ *
+ * @param content - The settings file's full text.
+ * @returns True when the file is only the default mx SessionStart hook.
+ */
+function isDefaultClaudeSettings(content: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return false;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return false;
+  const top = parsed as Record<string, unknown>;
+  if (Object.keys(top).length !== 1 || !('hooks' in top)) return false;
+  const hooks = top.hooks;
+  if (typeof hooks !== 'object' || hooks === null) return false;
+  const hk = hooks as Record<string, unknown>;
+  if (Object.keys(hk).length !== 1 || !('SessionStart' in hk)) return false;
+  const ss = hk.SessionStart;
+  if (!Array.isArray(ss) || ss.length !== 1) return false;
+  const entry = ss[0] as { matcher?: unknown; hooks?: unknown };
+  if (entry.matcher !== '*' || !Array.isArray(entry.hooks) || entry.hooks.length !== 1) {
+    return false;
+  }
+  const h = entry.hooks[0] as { type?: unknown; command?: unknown };
+  if (h.type !== 'command' || typeof h.command !== 'string') return false;
+  return h.command.includes('mx context registry') && h.command.includes('INDEX.json');
+}
+
+/**
  * The outcome of one migration step: paths it changed (or would change in a dry
  * run) and any non-fatal warnings the user should see (e.g. a customized script
  * preserved rather than removed).
@@ -102,7 +140,9 @@ interface MigrationStep {
  *   per-work `hooks/` are replaced by a single `<runtime>/hooks/` hub; each repo
  *   gains a `repo.json`. Old scripts are removed when they're unchanged from the
  *   mx default, and **preserved with a warning** when customized (so the user can
- *   fold the logic into the central hooks).
+ *   fold the logic into the central hooks). The v2 per-work `.claude/settings.json`
+ *   context-index `SessionStart` hook is removed when it's the mx default (the
+ *   capped load is replaced by loading the whole INDEX on demand).
  */
 const STEPS: Record<number, MigrationStep> = {
   1: {
@@ -161,9 +201,30 @@ const STEPS: Record<number, MigrationStep> = {
       }
 
       // 3. Per work: (a) drop the per-work hooks/ dir when all of its scripts
-      //    are defaults (keep + warn when customized); (b) backfill each
-      //    worktree's `name` (= repo) so old and new work.json have one shape.
+      //    are defaults (keep + warn when customized); (b) remove the v2
+      //    SessionStart context-index hook (`.claude/settings.json`) when it's
+      //    the mx default; (c) backfill each worktree's `name` (= repo) so old
+      //    and new work.json have one shape.
       for (const work of listWorkNames(root)) {
+        // (b) The v2 context-index SessionStart hook is gone in v3 — the capped
+        //     load is replaced by asking mx to load the whole INDEX on demand.
+        const settings = path.join(workDir(root, work), '.claude', 'settings.json');
+        if (exists(settings)) {
+          if (isDefaultClaudeSettings(fs.readFileSync(settings, 'utf8'))) {
+            if (!dryRun) {
+              fs.rmSync(settings);
+              // Remove the now-empty .claude/ wrapper if nothing else lives there.
+              const claudeDir = path.dirname(settings);
+              if (fs.readdirSync(claudeDir).length === 0) fs.rmdirSync(claudeDir);
+            }
+            changed.push(settings);
+          } else {
+            warnings.push(
+              `kept customized ${settings} — v3 no longer stamps a SessionStart hook; ` +
+                `remove the context-index hook yourself and ask mx to "load the mx ctx index as whole" instead`,
+            );
+          }
+        }
         const hd = path.join(workDir(root, work), 'hooks');
         if (exists(hd)) {
           const files = fs

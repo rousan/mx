@@ -39,6 +39,11 @@ Works (features):
   mx work -n <name> archive [--yes|-y]                  removes worktrees; keeps folder + work.json + sessions; prompts for confirmation (use --yes to skip)
   mx work -n <name> unarchive [<worktree>=<branch>...]  re-creates worktrees from work.json; override per-worktree branch if recorded one is missing
   mx work -n <name> destroy --force                     PERMANENT: deletes the work folder including session summaries (branches kept). Prefer archive.
+  mx work health [--all] [--porcelain]                  pure-local health for every active work (--all includes archived)
+  mx work -n <name> health [--porcelain]                detailed health for one work
+
+Health (whole-runtime overview):
+  mx health [--all] [--porcelain]                       every repo's health + every active work's health (--all includes archived works)
 
 Bin (runtime-wide utility executables in <runtime>/bin, meant for PATH):
   mx bin ls   (alias mx bins)                           list bins (mx-shipped + your own); shows whether bin/ is on PATH

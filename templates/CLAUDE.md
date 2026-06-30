@@ -59,7 +59,8 @@ mx/
 │   ├── pre-work-archive · post-work-archive
 │   ├── pre-work-unarchive · post-work-unarchive
 │   ├── pre-repo-fetch · post-repo-fetch
-│   └── repo-health         # augments `mx repo health`
+│   ├── repo-health         # augments `mx repo health`
+│   └── work-health         # augments `mx work health`
 ├── bin/                    # runtime-wide utility executables (put on PATH); mx ships some, add your own (see § Runtime bin)
 ├── context/                # shared memory across all features (see § Context registry)
 │   ├── INDEX.json          # single source of truth — metadata for every entry
@@ -72,7 +73,6 @@ mx/
         ├── work.json       # manifest — owned by `mx`, do not hand-edit
         ├── feature-a.code-workspace  # owned by `mx` (folder paths point at wt/<repo>)
         ├── CLAUDE.md       # work-specific rules — stamped once, then yours to edit (mx never overwrites)
-        ├── .claude/settings.json   # SessionStart hook → loads context/INDEX.json
         ├── wt/             # ALL worktrees live here
         │   ├── repo-a/     # worktree of repo-a on this feature's branch
         │   └── repo-b/     # worktree of repo-b on this feature's branch
@@ -86,8 +86,8 @@ mx/
   and share their `.git` object store. Never edit, commit, or run dev servers in `repos/`. The container
   also holds `repo.json` (`{ "name": … }`); there are **no** per-repo scripts — hooks are central.
 - `hooks/` (at the runtime root) is the **single hub of lifecycle hooks** — mx runs one script per event
-  (worktree create/remove, work archive/unarchive, repo fetch, repo health) and you branch on `MX_*`
-  inside. See § Hooks.
+  (worktree create/remove, work archive/unarchive, repo fetch, repo health, work health) and you branch
+  on `MX_*` inside. See § Hooks.
 - `works/<feature>/wt/<repo>` are **worktrees**, each on its own feature branch. All work happens here.
 - `works/<feature>/CLAUDE.md` is **work-specific guidance** that loads alongside this runtime
   `CLAUDE.md` for any session started in the work folder (Claude Code walks up from the session's cwd).
@@ -136,7 +136,8 @@ the script — e.g. a different hydrate for `web` vs `api`, or only for branch `
 | `pre-work-archive` / `post-work-archive` | around `mx work archive` | pre **aborts**; post warns |
 | `pre-work-unarchive` / `post-work-unarchive` | around `mx work unarchive` | pre **aborts**; post warns |
 | `pre-repo-fetch` / `post-repo-fetch` | around `mx repo fetch` | pre **aborts**; post warns |
-| `repo-health` | during `mx repo health` | its stdout is captured into the report |
+| `repo-health` | during `mx repo health` (cwd = the pristine clone) | stdout captured into the `extra` row (print nothing or `ok` when healthy → ✓, the problem when not → ⚠) |
+| `work-health` | during `mx work health` / `mx health` (cwd = the work folder) | stdout captured into the `extra` row (same silent-when-healthy convention) |
 
 `pre-*` hooks are veto points (a non-zero exit aborts the operation before anything is mutated); `post-*`
 hooks run after success and a non-zero exit is only a warning. Context arrives as `MX_*` environment
@@ -147,7 +148,7 @@ comment documents exactly which variables it gets and its working directory.
 ## The work folder holds mx-native files only
 
 **Never create ad-hoc files directly in the work-folder root.** The root is reserved for mx-native
-files (`work.json`, the `.code-workspace`, the work `CLAUDE.md`, `.claude/`) and the mx-owned
+files (`work.json`, the `.code-workspace`, the work `CLAUDE.md`) and the mx-owned
 subfolders. When you or the user need to write anything else, use one of these, never the root:
 
 - **`files/`** — artifacts worth keeping: notes, exports, scratch docs, downloads you want to survive.
@@ -228,7 +229,7 @@ Example entry:
 
 Primary path:
 
-1. **Read `<runtime>/context/INDEX.json` on every task** — trivial or not, small or large. Skimming a metadata index is cheap; the cost of missing a relevant entry is high. This is a hard rule, not a heuristic. (Each work also carries a `.claude/settings.json` `SessionStart` hook that prints this INDEX into the session at launch, so you usually start with it already in context — but re-read it when in doubt.)
+1. **Read `<runtime>/context/INDEX.json` on every task** — trivial or not, small or large. Skimming a metadata index is cheap; the cost of missing a relevant entry is high. This is a hard rule, not a heuristic. Read the **whole** file (it is small); never read a truncated head of it. When the user says something like "load the mx ctx index as whole", read the entire `INDEX.json` uncapped before doing anything else. (There is no `SessionStart` hook doing this for you — mx stopped stamping one because it capped the index; loading it is on you.)
 2. Open files at `<runtime>/context/<path>.md` for entries whose metadata matches the current task.
 
 When INDEX descriptions don't surface what you need — and often they won't — fall back to anything that works:
@@ -327,6 +328,10 @@ clarity; dropping it works while you're inside the work.
   across all works). This only records the port in `work.json` — **you** must then wire that port
   into the repo's own env/config (`.env`, `PORT=`, etc.) and remap any outbound URL to a sibling
   service to its allocated port too. Release with `port unset`.
+- **Check health:** `mx repo health` audits the pristine clones; `mx work health` audits the work folders
+  (stray files in a work root, worktree presence vs `work.json`, cross-work port collisions, archive
+  invariants); `mx health` shows both for the whole runtime (`--all` includes archived works). All are
+  purely local. Each runs its central hook (`repo-health` / `work-health`) and captures the stdout as `extra`.
 - **Tear down (user-initiated, after merge):** `mx work -n <feature> destroy` removes the worktrees
   and the work folder but **keeps the branches**. It refuses if any worktree has uncommitted changes.
 

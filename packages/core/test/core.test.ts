@@ -45,6 +45,8 @@ import {
   repoInfo,
   repoHealth,
   listRepoHealth,
+  workHealth,
+  listWorkHealth,
   statusRuntime,
 } from '../src/index';
 import { compareVersions, maxVersion } from '../src/semver';
@@ -565,37 +567,25 @@ describe('archive / unarchive / destroy lifecycle', () => {
   });
 });
 
-describe('per-work context-index hook', () => {
+describe('no per-work SessionStart context-index hook (v3)', () => {
   const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
 
-  it('workNew stamps a .claude/settings.json SessionStart hook for the index', () => {
+  it('workNew does not stamp a .claude/settings.json hook', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
     const res = workNew(root, 'feat');
-    const settingsPath = path.join(res.path, '.claude', 'settings.json');
-    expect(fs.existsSync(settingsPath)).toBe(true);
-    const s = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-    const cmd = s.hooks.SessionStart[0].hooks[0].command;
-    expect(cmd).toContain(path.join(root, 'context', 'INDEX.json'));
+    expect(fs.existsSync(path.join(res.path, '.claude', 'settings.json'))).toBe(false);
+    expect(fs.existsSync(path.join(res.path, '.claude'))).toBe(false);
   });
 
-  it('syncRuntime backfills the hook for an existing work, without clobbering edits', () => {
+  it('syncRuntime does not create a .claude/settings.json hook', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
     workNew(root, 'feat');
-    const settingsPath = path.join(root, 'works', 'feat', '.claude', 'settings.json');
-    // Simulate a pre-hook work: remove .claude, then verify sync recreates it.
-    fs.rmSync(path.join(root, 'works', 'feat', '.claude'), { recursive: true, force: true });
-    expect(fs.existsSync(settingsPath)).toBe(false);
     const res = syncRuntime(root, TEMPLATES_DIR);
-    expect(res.updated).toContain(settingsPath);
-    expect(fs.existsSync(settingsPath)).toBe(true);
-
-    // Non-clobbering: a user edit survives a second sync.
-    fs.writeFileSync(settingsPath, '{"hooks":{}}\n');
-    const res2 = syncRuntime(root, TEMPLATES_DIR);
-    expect(res2.updated).not.toContain(settingsPath);
-    expect(fs.readFileSync(settingsPath, 'utf8')).toBe('{"hooks":{}}\n');
+    const settingsPath = path.join(root, 'works', 'feat', '.claude', 'settings.json');
+    expect(res.updated).not.toContain(settingsPath);
+    expect(fs.existsSync(settingsPath)).toBe(false);
   });
 });
 
@@ -1066,6 +1056,47 @@ describe('runtime versioning + migrate', () => {
     expect(readRepoConfig(root, 'app')?.name).toBe('app');
   });
 
+  it('v2→v3 removes a default .claude/settings.json hook but keeps a customized one', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    // Two works: one with the mx-default SessionStart hook, one customized.
+    seedWork(root, { name: 'def', description: '', worktrees: [] });
+    seedWork(root, { name: 'cust', description: '', worktrees: [] });
+    const defSettings = path.join(root, 'works', 'def', '.claude', 'settings.json');
+    const custSettings = path.join(root, 'works', 'cust', '.claude', 'settings.json');
+    const indexPath = path.join(root, 'context', 'INDEX.json');
+    const defaultHook = {
+      hooks: {
+        SessionStart: [
+          {
+            matcher: '*',
+            hooks: [
+              {
+                type: 'command',
+                command: `echo '# mx context registry'; cat '${indexPath}' 2>/dev/null`,
+              },
+            ],
+          },
+        ],
+      },
+    };
+    fs.mkdirSync(path.dirname(defSettings), { recursive: true });
+    fs.writeFileSync(defSettings, JSON.stringify(defaultHook, null, 2) + '\n');
+    fs.mkdirSync(path.dirname(custSettings), { recursive: true });
+    fs.writeFileSync(custSettings, '{"hooks":{},"env":{"FOO":"bar"}}\n');
+    writeRuntimeVersion(root, 2);
+
+    const res = migrateRuntime(root, TEMPLATES_DIR);
+    expect(res.to).toBe(3);
+    // Default hook removed, and the now-empty .claude/ wrapper too.
+    expect(fs.existsSync(defSettings)).toBe(false);
+    expect(fs.existsSync(path.dirname(defSettings))).toBe(false);
+    expect(res.changed).toContain(defSettings);
+    // Customized settings preserved, with a warning.
+    expect(fs.existsSync(custSettings)).toBe(true);
+    expect(res.warnings.some((w) => w.includes('settings.json'))).toBe(true);
+  });
+
   it('migrateRuntime --dry-run plans the changes but mutates nothing', () => {
     const root = path.join(tmp(), 'rt');
     initRuntime(root, TEMPLATES_DIR);
@@ -1354,5 +1385,120 @@ describe('repoHealth / listRepoHealth', () => {
     const list = listRepoHealth(root);
     expect(list.map((h) => h.name).sort()).toEqual(['app', 'worker']);
     expect(list.every((h) => h.healthy)).toBe(true);
+  });
+});
+
+describe('workHealth / listWorkHealth', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+  const runGit = (cwd: string, args: string[]) =>
+    execFileSync('git', args, { cwd, stdio: 'ignore' });
+
+  /**
+   * Build a runtime with one pristine clone and one active work that has a
+   * single worktree on its own branch. Returns the runtime root + repo name.
+   */
+  function fixture(): { root: string; src: string } {
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    runGit(src, ['commit', '-qm', 'init', '--allow-empty']);
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, src, 'app');
+    workNew(root, 'feat', 'a feature');
+    worktreeAdd(root, 'feat', 'app', { branch: 'feat' });
+    return { root, src };
+  }
+
+  it('a clean active work is healthy', () => {
+    const { root } = fixture();
+    const h = workHealth(root, 'feat');
+    expect(h.healthy).toBe(true);
+    expect(h.archived).toBe(false);
+    expect(h.worktrees).toEqual([
+      { name: 'app', repo: 'app', branch: 'feat', present: true },
+    ]);
+    expect(h.strayEntries).toEqual([]);
+    expect(h.portConflicts).toEqual([]);
+  });
+
+  it('flags a stray (non-mx-native) entry in the work root but tolerates dotfiles', () => {
+    const { root } = fixture();
+    fs.writeFileSync(path.join(root, 'works', 'feat', 'NOTES.md'), 'x');
+    fs.writeFileSync(path.join(root, 'works', 'feat', '.app-mcp'), 'x'); // tooling dotfile, exempt
+    const h = workHealth(root, 'feat');
+    expect(h.strayEntries).toEqual(['NOTES.md']);
+    expect(h.healthy).toBe(false);
+    expect(h.issues.some((i) => i.includes('NOTES.md'))).toBe(true);
+  });
+
+  it('detects a cross-work port collision (e.g. from a hand-edited work.json)', () => {
+    const { root } = fixture();
+    portSet(root, 'feat', 'app', 'web'); // allocates 3000
+    workNew(root, 'feat2');
+    worktreeAdd(root, 'feat2', 'app', { branch: 'feat2' });
+    // Hand-edit feat2 to collide on the same port.
+    const w2 = readWork(root, 'feat2');
+    w2.worktrees[0].ports = { web: 3000 };
+    writeWork(root, w2);
+
+    const h = workHealth(root, 'feat2');
+    expect(h.portConflicts).toHaveLength(1);
+    expect(h.portConflicts[0]).toMatchObject({ port: 3000, otherWork: 'feat' });
+    expect(h.healthy).toBe(false);
+  });
+
+  it('flags an active work whose recorded worktree is missing on disk', () => {
+    const { root } = fixture();
+    // Remove the worktree dir behind mx's back.
+    fs.rmSync(path.join(root, 'works', 'feat', 'wt', 'app'), { recursive: true, force: true });
+    const h = workHealth(root, 'feat');
+    expect(h.worktrees[0].present).toBe(false);
+    expect(h.healthy).toBe(false);
+    expect(h.issues.some((i) => i.includes('missing on disk'))).toBe(true);
+  });
+
+  it('archive frees ports and removes worktrees, so an archived work is healthy', () => {
+    const { root } = fixture();
+    portSet(root, 'feat', 'app', 'web');
+    archiveWork(root, 'feat');
+    const h = workHealth(root, 'feat');
+    expect(h.archived).toBe(true);
+    expect(h.ports).toEqual([]);
+    expect(h.worktrees[0].present).toBe(false);
+    expect(h.healthy).toBe(true);
+  });
+
+  it('flags an archived work that still pins ports (hand-edited)', () => {
+    const { root } = fixture();
+    archiveWork(root, 'feat');
+    const w = readWork(root, 'feat');
+    w.worktrees[0].ports = { web: 9999 };
+    writeWork(root, w);
+    const h = workHealth(root, 'feat');
+    expect(h.healthy).toBe(false);
+    expect(h.issues.some((i) => i.includes('should be freed'))).toBe(true);
+  });
+
+  it('the work-health hook stdout is captured into extra', () => {
+    const { root } = fixture();
+    const hook = hookScript(root, 'work-health');
+    fs.writeFileSync(hook, '#!/usr/bin/env bash\necho "work=$MX_WORK"\n');
+    fs.chmodSync(hook, 0o755);
+    const h = workHealth(root, 'feat');
+    expect(h.extra).toBe('work=feat');
+  });
+
+  it('listWorkHealth excludes archived by default, includes them with includeArchived', () => {
+    const { root } = fixture();
+    workNew(root, 'feat2');
+    archiveWork(root, 'feat2');
+    expect(listWorkHealth(root).map((h) => h.name)).toEqual(['feat']);
+    expect(listWorkHealth(root, { includeArchived: true }).map((h) => h.name).sort()).toEqual([
+      'feat',
+      'feat2',
+    ]);
   });
 });

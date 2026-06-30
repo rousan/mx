@@ -17,8 +17,11 @@ import {
   portSet,
   portUnset,
   portList,
+  workHealth,
+  listWorkHealth,
   MxError,
 } from '@mx/core';
+import type { WorkHealth } from '@mx/core';
 import { existsSync } from 'node:fs';
 import { emit, dim, bold, check, warn, confirmYesNo, tildify } from '../output';
 import { openWorkLayout } from '../open';
@@ -168,6 +171,30 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         }
       }
     }, works);
+    return;
+  }
+
+  if (action === 'health') {
+    // With -n (or cwd) → one work's detail block. Without → the same block for
+    // every active work (and archived too with --all), one after another.
+    const root = requireRuntime({ runtime: flags.runtime });
+    const name = flags.name || inferContext(root).work;
+    if (name) {
+      const h = workHealth(root, name);
+      emit(() => renderWorkHealthDetail(h), h);
+    } else {
+      const list = listWorkHealth(root, { includeArchived: flags.all });
+      emit(() => {
+        if (list.length === 0) {
+          console.log(dim('no works yet — `mx work new <name>`'));
+          return;
+        }
+        list.forEach((h, i) => {
+          if (i > 0) console.log();
+          renderWorkHealthDetail(h);
+        });
+      }, list);
+    }
     return;
   }
 
@@ -342,6 +369,97 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
     default:
       throw new MxError(`unknown work command: ${action ?? '(none)'}`, 'BAD_ARGS');
   }
+}
+
+/**
+ * Render the detail-mode `mx work health` output: a structured per-metric block
+ * with ✓/⚠ markers, then a per-worktree presence/ports listing, the issue list
+ * when unhealthy, and the captured `work-health` hook output. Mirrors the
+ * `mx repo health` detail layout so both views read the same.
+ *
+ * @param h - The work health snapshot.
+ * @param indent - Left padding prefixed to every line (used by `mx health` to
+ *   nest each block under its section header). Blank lines stay blank.
+ */
+export function renderWorkHealthDetail(h: WorkHealth, indent = ''): void {
+  const log = (s = ''): void => console.log(s === '' ? '' : indent + s);
+  type Row = { label: string; value: string; marker?: string; hint?: string };
+  const rows: Row[] = [];
+  // Tracks whether any checked row (or the hook `extra`) flagged a problem, so
+  // the name line can carry an at-a-glance ✓/⚠ for the whole block.
+  let anyWarn = false;
+  const addRow = (label: string, value: string, ok?: boolean, hint?: string): void => {
+    const marker = ok === undefined ? undefined : ok ? check() : warn();
+    if (ok === false) anyWarn = true;
+    rows.push({ label, value, marker, hint });
+  };
+
+  // Only health metrics (rows that carry a ✓/⚠) are shown — informational
+  // fields like status and the port count live in `mx work info`. Each check's
+  // detail rides inline as a hint on its row (no separate "issues" block), same
+  // style as `mx repo health`. The worktrees row's ✓/⚠ is whether they're all
+  // as expected (present for an active work, gone for an archived one).
+  const wtAllExpected = h.worktrees.every((w) => (h.archived ? !w.present : w.present));
+  const offCount = h.archived
+    ? h.worktrees.filter((w) => w.present).length
+    : h.worktrees.filter((w) => !w.present).length;
+  addRow(
+    'worktrees',
+    String(h.worktrees.length),
+    wtAllExpected,
+    wtAllExpected ? undefined : `${offCount} ${h.archived ? 'still on disk' : 'missing on disk'}`,
+  );
+  // For an archived work, pinned ports are a problem (should be freed); for an
+  // active work the port count isn't a health metric, so it isn't shown.
+  if (h.archived) {
+    addRow(
+      'ports',
+      String(h.ports.length),
+      h.ports.length === 0,
+      h.ports.length === 0 ? undefined : 'should be freed on archive',
+    );
+  }
+  addRow(
+    'stray entries',
+    String(h.strayEntries.length),
+    h.strayEntries.length === 0,
+    h.strayEntries.length === 0 ? undefined : h.strayEntries.join(', '),
+  );
+  addRow(
+    'port conflicts',
+    String(h.portConflicts.length),
+    h.portConflicts.length === 0,
+    h.portConflicts.length === 0
+      ? undefined
+      : h.portConflicts.map((c) => `${c.port} with ${c.otherWork} (${c.otherOwner})`).join('; '),
+  );
+
+  // The central work-health hook output becomes a trailing `extra` row, always
+  // shown: a healthy hook says nothing — empty output or a bare "ok"/"OK"
+  // renders ✓ "OK"; anything else renders ⚠ with the message and flags the block.
+  const extraText = (h.extra ?? '').replace(/\s+$/, '');
+  const extraOk = extraText === '' || extraText.toLowerCase() === 'ok';
+  const extraLines = extraOk ? [] : extraText.split('\n');
+  if (!extraOk) anyWarn = true;
+
+  // Show only metric rows (those carrying a ✓/⚠); `extra` is always shown below.
+  const metricRows = rows.filter((r) => r.marker !== undefined);
+  const labelW = Math.max(...metricRows.map((r) => r.label.length), 5);
+  const valueW = Math.max(0, ...metricRows.map((r) => r.value.length));
+
+  const chip = h.archived ? `  ${dim('[archived]')}` : '';
+  log(`${h.archived ? dim(h.name) : bold(h.name)}${chip}  ${anyWarn ? warn() : check()}`);
+  for (const r of metricRows) {
+    const label = dim(r.label.padEnd(labelW));
+    const value = r.value.padEnd(valueW);
+    const marker = r.marker ? `  ${r.marker}` : '   ';
+    const hint = r.hint ? `  ${dim(r.hint)}` : '';
+    log(`  ${label}  ${value}${marker}${hint}`);
+  }
+  // Extra row: ✓ "OK" when the hook reported healthy, ⚠ + message when it did not.
+  const extraValue = (extraOk ? 'OK' : extraLines[0]).padEnd(valueW);
+  log(`  ${dim('extra'.padEnd(labelW))}  ${dim(extraValue)}  ${extraOk ? check() : warn()}`);
+  for (const line of extraLines.slice(1)) log(`  ${' '.repeat(labelW)}  ${dim(line)}`);
 }
 
 /**

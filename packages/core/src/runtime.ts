@@ -217,9 +217,9 @@ export const runtimeHooksDir = (root: string): string => path.join(root, 'hooks'
  * The lifecycle events mx fires, each mapping to one executable at
  * `<runtime>/hooks/<event>`. `pre-*` hooks run before the operation mutates
  * anything and abort it on a non-zero exit; `post-*` hooks run after success and
- * a non-zero exit is only a warning; `repo-health` augments `mx repo health`
- * with its stdout. The set is extensible — add an event here and a stamped
- * template, and wire the call site.
+ * a non-zero exit is only a warning; `repo-health` / `work-health` augment
+ * `mx repo health` / `mx work health` with their stdout. The set is extensible
+ * — add an event here and a stamped template, and wire the call site.
  */
 export const HOOK_EVENTS = [
   'pre-work-archive',
@@ -233,6 +233,7 @@ export const HOOK_EVENTS = [
   'pre-repo-fetch',
   'post-repo-fetch',
   'repo-health',
+  'work-health',
 ] as const;
 
 /**
@@ -742,19 +743,6 @@ export function ensureWorkScaffolding(
     if (!dry) fs.writeFileSync(claudeMd, workClaudeMd(workName));
     created.push(claudeMd);
   }
-  // Per-work Claude Code settings: a SessionStart hook that loads the runtime's
-  // context-registry index into every session launched in this work folder.
-  // Claude Code reads .claude/settings.json only from the session's launch dir
-  // (no upward walk) and mx sessions launch here, so it must be per-work — not
-  // at the runtime root. Stamp-if-missing: it's user-editable afterwards.
-  const settings = path.join(wd, '.claude', 'settings.json');
-  if (!exists(settings)) {
-    if (!dry) {
-      fs.mkdirSync(path.dirname(settings), { recursive: true });
-      fs.writeFileSync(settings, workClaudeSettings(root));
-    }
-    created.push(settings);
-  }
   return created;
 }
 
@@ -780,30 +768,6 @@ Keep ad-hoc files OUT of the work root (it holds mx-native files). Use:
   scripts/  ad-hoc scripts for this work
 -->
 `;
-}
-
-/**
- * Build the per-work `.claude/settings.json` contents: a `SessionStart` hook
- * that prints the runtime's context-registry index so every session has the
- * catalog in context from the start (deterministic, unlike CLAUDE.md prose).
- * The runtime's absolute INDEX path is baked in, so this is generated
- * programmatically rather than copied from a static template.
- *
- * @param root - Runtime root.
- * @returns The settings JSON text (with a trailing newline).
- */
-function workClaudeSettings(root: string): string {
-  const contextDir = path.join(root, 'context');
-  const indexPath = path.join(contextDir, 'INDEX.json');
-  const command =
-    `echo '# mx context registry — open ${contextDir}/<path>.md for relevant entries:'; ` +
-    `cat '${indexPath}' 2>/dev/null`;
-  const settings = {
-    hooks: {
-      SessionStart: [{ matcher: '*', hooks: [{ type: 'command', command }] }],
-    },
-  };
-  return JSON.stringify(settings, null, 2) + '\n';
 }
 
 /**

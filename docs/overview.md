@@ -31,7 +31,6 @@ mx manages a **runtime**: a single folder somewhere on disk (default `~/mx`, ove
     ├── work.json                # manifest (owned by mx)
     ├── <feature>.code-workspace # VS Code workspace (owned by mx; folder paths → wt/<repo>)
     ├── CLAUDE.md                # work-specific rules (stamped once, then user-owned)
-    ├── .claude/settings.json    # SessionStart hook → loads context/INDEX.json
     ├── wt/<repo>/               # all worktrees live here, on the feature branch
     ├── scripts/                 # ad-hoc per-work scripts
     ├── files/                   # keepable artifacts (agent/user drop zone)
