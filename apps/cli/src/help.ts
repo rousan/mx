@@ -33,6 +33,7 @@ Works (features):
   mx work -n <name> worktree add <repo> [<name>] [--branch <b>] [--base <ref>]   fires pre/post-worktree-create hooks; <name> (default repo) lets one work hold multiple worktrees of a repo
   mx work -n <name> worktree ls [--porcelain]
   mx work -n <name> worktree rm <worktree>              refuses on uncommitted changes; keeps branch
+  mx work -n <name> worktree set-branch <worktree> [<branch>]   after you git-checkout in the worktree, re-record its branch in work.json (reads the live branch; mx never checks out)
   mx work -n <name> port set <worktree> <service> [<port>]  auto-picks a free port if omitted
   mx work -n <name> port unset <worktree> <service>
   mx work -n <name> port ls [--porcelain]

@@ -319,6 +319,17 @@ clarity; dropping it works while you're inside the work.
   - After the worktree is created, the central `<runtime>/hooks/post-worktree-create` hook runs with the
     new worktree as the working directory (copy a `.env`, install deps, etc.) — branch on `$MX_REPO` /
     `$MX_BRANCH` / `$MX_WORKTREE_NAME` inside it. To skip hydration, make that hook a no-op.
+- **Switch a worktree to a different branch:** mx never runs `git checkout` for you — switch branches
+  the normal way inside the worktree (`git checkout <other-branch>`), then tell mx so the manifest stays
+  truthful:
+  ```
+  mx work -n <feature> worktree set-branch <worktree> [<branch>]
+  ```
+  This mutates **only** `work.json` — it re-reads the worktree's **live** branch and records it (so the
+  manifest can't drift from git). The optional `<branch>` is a guard: if given, it must match the branch
+  the worktree is actually on, else it errors (`BRANCH_MISMATCH`) — a safety net for "I forgot to check
+  out first". Errors `DETACHED` on a detached HEAD (check out a branch first). Never hand-edit `work.json`
+  to change a branch — use this.
 - **Spin up a quick local app (no remote):** for a throwaway/experiment repo you don't want on GitHub,
   `mx repo new <name>` creates a fresh local repo (git init on `main` + README + initial commit). Add
   `--quick` (and `-o`) to also create a `dev-<name>` work + a worktree on `develop` and open it in one

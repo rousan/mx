@@ -32,6 +32,7 @@ import {
   workNew,
   worktreeAdd,
   worktreeRemove,
+  worktreeSetBranch,
   worktreeList,
   portList,
   portUnset,
@@ -564,6 +565,84 @@ describe('archive / unarchive / destroy lifecycle', () => {
     expect(onlyArchived.map((w) => w.name)).toEqual(['feat2']);
     expect(onlyArchived[0].isArchived).toBe(true);
     expect(onlyArchived[0].archived_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+});
+
+describe('worktreeSetBranch', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+  const runGit = (cwd: string, args: string[]) =>
+    execFileSync('git', args, { cwd, stdio: 'ignore' });
+
+  /**
+   * Build a runtime with a pristine clone and a work holding one worktree of
+   * `app` on branch `feat`. Returns the runtime root and the worktree path so
+   * tests can `git checkout` inside it to simulate a manual branch switch.
+   */
+  function fixture(): { root: string; wtDir: string; workName: string } {
+    const src = path.join(tmp(), 'src');
+    fs.mkdirSync(src, { recursive: true });
+    runGit(src, ['init', '-q', '-b', 'main']);
+    runGit(src, ['config', 'user.email', 't@t.t']);
+    runGit(src, ['config', 'user.name', 't']);
+    fs.writeFileSync(path.join(src, 'f.txt'), 'x');
+    runGit(src, ['add', '-A']);
+    runGit(src, ['commit', '-qm', 'init']);
+
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    repoAdd(root, src, 'app');
+    workNew(root, 'feat', 'a feature');
+    worktreeAdd(root, 'feat', 'app', { branch: 'feat' });
+    return { root, wtDir: path.join(root, 'works', 'feat', 'wt', 'app'), workName: 'feat' };
+  }
+
+  it('records the worktree live branch after a manual checkout', () => {
+    const { root, wtDir } = fixture();
+    // Simulate the user switching branches by hand inside the worktree.
+    runGit(wtDir, ['checkout', '-q', '-b', 'other']);
+    const res = worktreeSetBranch(root, 'feat', 'app');
+    expect(res).toMatchObject({ branch: 'other', previous: 'feat', changed: true });
+    expect(readWork(root, 'feat').worktrees[0].branch).toBe('other');
+  });
+
+  it('is idempotent when the branch already matches (changed=false)', () => {
+    const { root } = fixture();
+    const res = worktreeSetBranch(root, 'feat', 'app');
+    expect(res).toMatchObject({ branch: 'feat', previous: 'feat', changed: false });
+    expect(readWork(root, 'feat').worktrees[0].branch).toBe('feat');
+  });
+
+  it('accepts a matching guard argument', () => {
+    const { root, wtDir } = fixture();
+    runGit(wtDir, ['checkout', '-q', '-b', 'other']);
+    const res = worktreeSetBranch(root, 'feat', 'app', 'other');
+    expect(res.branch).toBe('other');
+  });
+
+  it('rejects a guard argument that does not match the live branch', () => {
+    const { root } = fixture();
+    // Worktree is on `feat`, but the caller claims `wrong`.
+    expect(() => worktreeSetBranch(root, 'feat', 'app', 'wrong')).toThrow(/is on "feat", not "wrong"/);
+    // Nothing was written.
+    expect(readWork(root, 'feat').worktrees[0].branch).toBe('feat');
+  });
+
+  it('errors on an unknown worktree', () => {
+    const { root } = fixture();
+    expect(() => worktreeSetBranch(root, 'feat', 'nope')).toThrow(/no worktree named "nope"/);
+  });
+
+  it('errors when the worktree is in detached HEAD', () => {
+    const { root, wtDir } = fixture();
+    const sha = execFileSync('git', ['-C', wtDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    runGit(wtDir, ['checkout', '-q', sha]); // detach
+    expect(() => worktreeSetBranch(root, 'feat', 'app')).toThrow(/detached HEAD/);
+  });
+
+  it('errors when the worktree is not on disk (archived work)', () => {
+    const { root } = fixture();
+    archiveWork(root, 'feat');
+    expect(() => worktreeSetBranch(root, 'feat', 'app')).toThrow(/not on disk/);
   });
 });
 
