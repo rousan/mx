@@ -2,6 +2,14 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 3.2.0 — 2026-07-03
+
+**`mx work worktree set-branch <worktree> [<branch>]` — re-record a worktree's branch in `work.json`.** mx never runs `git checkout` for you: you switch branches inside the worktree the normal way, then this command updates the manifest to match. It reads the worktree's **live** git branch (so `work.json` can't drift from reality) and writes only that metadata — no git worktree/checkout operation is performed.
+
+- **Guard argument.** The optional `<branch>` must equal the worktree's actual branch or the command fails with `BRANCH_MISMATCH` — a safety net for "I meant to check out X but forgot". Omit it to record whatever the worktree is on.
+- **Errors:** `NO_WORKTREE` (unknown worktree, or not on disk — e.g. an archived work), `DETACHED` (detached HEAD — check out a branch first), `BRANCH_MISMATCH` (guard mismatch).
+- **Code:** `worktreeSetBranch` + `WorktreeSetBranchResult` in `@mx/core` (`works.ts`); `set-branch` case in `apps/cli/src/commands/work.ts`. Minor — runtime stays v3, no migration.
+
 ## 3.1.1 — 2026-07-01
 
 Docs only — no change to the published CLI or runtime behavior. Adds a

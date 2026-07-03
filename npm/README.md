@@ -52,6 +52,7 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 | `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works |
 | `mx work -n <name> worktree add <repo> [<wt-name>] [--branch <b>] [--base <ref>]` | add a worktree (fires `pre/post-worktree-create`); `<wt-name>` defaults to the repo — pass a distinct one for multiple worktrees of the same repo |
 | `mx work -n <name> worktree ls\|rm <wt-name>` | list / remove a worktree (by name; defaults to the repo) |
+| `mx work -n <name> worktree set-branch <wt-name> [<branch>]` | re-record a worktree's branch in `work.json` after you switch branches inside it yourself (reads the live branch; mx never checks out); optional `<branch>` guards against a mismatch |
 | `mx work -n <name> port set\|unset\|ls <wt-name> <service> [<port>]` | allocate/release ports per worktree (omit `<port>` to auto-pick) |
 | `mx work -n <name> archive [--yes]` / `unarchive` | soft-delete / restore a work (keeps branches); fires the central `pre/post-work-archive` / `pre/post-work-unarchive` hooks (a `pre-*` non-zero exit aborts) |
 | `mx work -n <name> destroy --force` | permanently remove the work folder (keeps branches) |

@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import { MxError } from './errors';
 import { exists, isGitRepo } from './fsutil';
 import { readJson, writeJson } from './json';
-import { git, branchExists, isDirty, resolveBase } from './git';
+import { git, branchExists, isDirty, resolveBase, currentBranch } from './git';
 import {
   workDir,
   workspaceFile,
@@ -353,6 +353,86 @@ export function worktreeRemove(root: string, name: string, wtName: string): Work
   writeWork(root, work);
   removeFolderFromWorkspace(root, name, wtName);
   return { work: name, repo: wt.repo, name: wtName, branch: wt.branch, removed: true };
+}
+
+/**
+ * Result of re-recording a worktree's branch in `work.json`.
+ */
+export interface WorktreeSetBranchResult {
+  /** Work name. */
+  work: string;
+  /** Repo name. */
+  repo: string;
+  /** Worktree name (the `wt/<name>` selector). */
+  name: string;
+  /** Branch now recorded in `work.json` — the worktree's live checked-out branch. */
+  branch: string;
+  /** Branch that was recorded before this call. */
+  previous: string;
+  /** Whether the recorded branch actually changed. */
+  changed: boolean;
+}
+
+/**
+ * Re-point a worktree's recorded branch in `work.json` to the branch the
+ * worktree is *actually* checked out on. mx never runs the checkout itself: the
+ * user switches branches with plain `git` inside the worktree, then calls this
+ * to keep the manifest truthful. Only `work.json` metadata is mutated — no git
+ * worktree/checkout operation is performed.
+ *
+ * The recorded branch is always taken from the worktree's live git state (never
+ * from the argument), so the manifest can't drift from reality. When `expected`
+ * is provided it acts purely as a guard: it must equal the worktree's current
+ * branch or `BRANCH_MISMATCH` is thrown — catching the "I meant to check out X
+ * but forgot" case before a stale value is written.
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ * @param wtName - Worktree name (selector) whose branch to re-record.
+ * @param expected - Optional branch the caller believes the worktree is on; when given, must match the live branch.
+ * @returns The updated worktree's branch, the previous one, and whether it changed.
+ */
+export function worktreeSetBranch(
+  root: string,
+  name: string,
+  wtName: string,
+  expected?: string,
+): WorktreeSetBranchResult {
+  const work = readWork(root, name);
+  const wt = findWorktreeByName(work, wtName);
+  if (!wt) throw new MxError(`work "${name}" has no worktree named "${wtName}"`, 'NO_WORKTREE');
+  const dest = worktreePath(root, name, wtName);
+  if (!exists(dest)) {
+    // No worktree on disk (e.g. the work is archived) means there's no live
+    // branch to read — refuse rather than trust an unverifiable argument.
+    throw new MxError(
+      `worktree "${wtName}" is not on disk${work.isArchived ? ` ("${name}" is archived)` : ''} — nothing to read a branch from`,
+      'NO_WORKTREE',
+    );
+  }
+  // The manifest must mirror reality: read the branch the worktree is truly on
+  // rather than trusting the argument, so work.json can never drift from git.
+  const actual = currentBranch(dest);
+  // `git rev-parse --abbrev-ref HEAD` prints the literal "HEAD" on a detached
+  // checkout (git forbids a real branch named HEAD, so this is unambiguous);
+  // `currentBranch` falls back to "(detached)" only when git itself errors.
+  if (actual === 'HEAD' || actual === '(detached)') {
+    throw new MxError(
+      `worktree "${wtName}" is in detached HEAD — check out a branch first, then re-run`,
+      'DETACHED',
+    );
+  }
+  if (expected != null && expected !== actual) {
+    throw new MxError(
+      `worktree "${wtName}" is on "${actual}", not "${expected}". ` +
+        `mx records the branch the worktree is actually on — run \`git -C ${dest} checkout ${expected}\` first, or omit the branch argument to record "${actual}".`,
+      'BRANCH_MISMATCH',
+    );
+  }
+  const previous = wt.branch;
+  wt.branch = actual;
+  writeWork(root, work);
+  return { work: name, repo: wt.repo, name: wtName, branch: actual, previous, changed: actual !== previous };
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   worktreeAdd,
   worktreeList,
   worktreeRemove,
+  worktreeSetBranch,
   worktreePath,
   repoGitDir,
   workDestroy,
@@ -530,6 +531,27 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
           console.log(`${dim(label(wt).padEnd(w))}  ${branch}${portsCol}`);
         }
       }, list);
+      return;
+    }
+    case 'set-branch': {
+      // Metadata-only: the user has already `git checkout`-ed a new branch in
+      // the worktree; this re-records it in work.json. The optional branch arg
+      // is a guard validated against the worktree's live branch (see core).
+      const usage = 'usage: mx work -n <name> worktree set-branch <worktree> [<branch>]';
+      const wtName = need(positionals[3], usage);
+      const expected = positionals[4]; // optional; must match the live branch when given
+      const res = worktreeSetBranch(root, name, wtName, expected);
+      emit(
+        () => {
+          const label = res.name === res.repo ? bold(res.repo) : `${bold(res.name)} ${dim(`(${res.repo})`)}`;
+          if (res.changed) {
+            console.log(`${check()} ${label} ${dim(`[${res.previous}]`)} ${dim('→')} ${dim(`[${res.branch}]`)}`);
+          } else {
+            console.log(`${check()} ${label} ${dim(`already recorded on [${res.branch}]`)}`);
+          }
+        },
+        res,
+      );
       return;
     }
     case 'rm': {

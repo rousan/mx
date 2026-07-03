@@ -285,6 +285,14 @@ List the work's worktrees, with name (repo annotated when it differs), branch, a
 
 Remove the worktree named `<worktree-name>` (defaults to the repo name for single-worktree repos) — deletes the directory, deregisters in `work.json`. Refuses with `DIRTY` if uncommitted changes. **Branch is kept.**
 
+### `mx work -n <name> worktree set-branch <worktree-name> [<branch>]`
+
+Re-record a worktree's branch in `work.json` after you've switched branches inside the worktree yourself. mx **never runs the checkout** — you do it with plain `git` (`git checkout other-branch` inside `wt/<name>`), then call this so the manifest reflects reality. Only `work.json` metadata changes; no git worktree operation is performed.
+
+The recorded branch is always read from the worktree's **live** git state, so `work.json` can't drift from git. The optional `<branch>` argument is a guard: when given, it must equal the worktree's current branch, otherwise the command fails with `BRANCH_MISMATCH` (this catches "I meant to check out X but forgot"). Omit it to simply record whatever the worktree is on.
+
+Errors: `NO_WORKTREE` if no such worktree (or it isn't on disk, e.g. an archived work); `DETACHED` if the worktree is in detached HEAD (check out a branch first); `BRANCH_MISMATCH` if the guard argument doesn't match the live branch.
+
 ### `mx work -n <name> port set <worktree-name> <service> [<port>]`
 
 Allocate a port for a service inside a worktree (selected by name). With `<port>`, sets that specific port; without, auto-picks the next free port (unique across **all** works in the runtime). Records in `work.json`. Two worktrees of the same repo get independent ports, even for the same service name.
