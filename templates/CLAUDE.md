@@ -60,7 +60,8 @@ mx/
 │   ├── pre-work-unarchive · post-work-unarchive
 │   ├── pre-repo-fetch · post-repo-fetch
 │   ├── repo-health         # augments `mx repo health`
-│   └── work-health         # augments `mx work health`
+│   ├── work-health         # augments `mx work health`
+│   └── session-prompt      # generates the initial prompt for a new session (mx work open)
 ├── bin/                    # runtime-wide utility executables (put on PATH); mx ships some, add your own (see § Runtime bin)
 ├── context/                # shared memory across all features (see § Context registry)
 │   ├── INDEX.json          # single source of truth — metadata for every entry
@@ -138,11 +139,12 @@ the script — e.g. a different hydrate for `web` vs `api`, or only for branch `
 | `pre-repo-fetch` / `post-repo-fetch` | around `mx repo fetch` | pre **aborts**; post warns |
 | `repo-health` | during `mx repo health` (cwd = the pristine clone) | stdout captured into the `extra` row (print nothing or `ok` when healthy → ✓, the problem when not → ⚠) |
 | `work-health` | during `mx work health` / `mx health` (cwd = the work folder) | stdout captured into the `extra` row (same silent-when-healthy convention) |
+| `session-prompt` | when `mx work open` (or `mx work new -o`) creates a new Claude session (cwd = the work folder) | stdout becomes the session's initial prompt (empty → clean session) |
 
 `pre-*` hooks are veto points (a non-zero exit aborts the operation before anything is mutated); `post-*`
 hooks run after success and a non-zero exit is only a warning. Context arrives as `MX_*` environment
 variables — always `$MX_EVENT` and `$MX_RUNTIME`, plus event-specific ones like `$MX_WORK`, `$MX_REPO`,
-`$MX_BRANCH`, `$MX_BASE`, `$MX_WORKTREE_PATH`, `$MX_WORK_PATH`, `$MX_GIT_DIR`. Each shipped hook's header
+`$MX_BRANCH`, `$MX_BASE`, `$MX_WORKTREE_PATH`, `$MX_WORK_PATH`, `$MX_GIT_DIR`, `$MX_SESSION_NAME`. Each shipped hook's header
 comment documents exactly which variables it gets and its working directory.
 
 ## The work folder holds mx-native files only
@@ -319,6 +321,10 @@ clarity; dropping it works while you're inside the work.
   - After the worktree is created, the central `<runtime>/hooks/post-worktree-create` hook runs with the
     new worktree as the working directory (copy a `.env`, install deps, etc.) — branch on `$MX_REPO` /
     `$MX_BRANCH` / `$MX_WORKTREE_NAME` inside it. To skip hydration, make that hook a no-op.
+  - A brand-new work can be created **with** its initial worktrees in one shot (still ask the user first):
+    `mx work new <feature> <repo>[:<branch>[:<base>]]...` — e.g.
+    `mx work new <feature> app muze-ai:<feature>:app_ib_dev`. Per repo, branch defaults to `--branch`
+    then the work name, and base to `--base` then the pristine HEAD.
 - **Switch a worktree to a different branch:** mx never runs `git checkout` for you — switch branches
   the normal way inside the worktree (`git checkout <other-branch>`), then tell mx so the manifest stays
   truthful:

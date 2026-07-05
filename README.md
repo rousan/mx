@@ -95,8 +95,9 @@ Domain logic lives in `packages/core` (`@mx/core`) as pure functions that return
 | `mx repo new <name> [--quick] [-o]` | create a fresh **local** repo (no remote): `git init` on main + README + initial commit. `--quick` also makes a `dev-<name>` work + a `develop` worktree (a one-shot for quick experiments) |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
 | `mx repo health` / `mx repo -n <name> health` | local-only health check (on default branch? clean? in sync?), augmented by the central `repo-health` hook |
-| `mx work new <name> [--description <t>] [-o]` | create a work (prints its path); `-o` opens a fullscreen Terminal in the work folder (macOS) |
+| `mx work new <name> [<repo>[:<branch>[:<base>]]]... [--branch <b>] [--base <ref>] [-o]` | create a work (prints its path); extra args are repos to make **initial worktrees** for (per repo: branch = `:<branch>` → `--branch` → work name; base = `:<base>` → `--base` → pristine HEAD); `-o` opens a fullscreen Terminal + starts the work's Claude session (macOS) |
 | `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works (ls shows active only by default; `--all` includes archived; `--archived` shows archived only) |
+| `mx work -n <name> open` (or `-o`) `[--prompt <text>]` | fullscreen Terminal (macOS) that **resumes or creates** the per-work Claude session named `<name>`: 0 → create (seeded by the `session-prompt` hook / `--prompt`), 1 → resume, ≥2 → error (resume manually) |
 | `mx work -n <name> worktree add <repo> [<wt-name>]` / `ls` / `rm <wt-name>` | manage worktrees; `add` fires `pre/post-worktree-create`, `rm` fires `pre/post-worktree-remove`. `<wt-name>` defaults to the repo — pass a distinct one for **multiple worktrees of the same repo** |
 | `mx work -n <name> worktree set-branch <wt-name> [<branch>]` | after you `git checkout` a different branch in the worktree yourself, re-record its **live** branch in `work.json` (metadata-only — mx never checks out). Optional `<branch>` guards against a mismatch |
 | `mx work -n <name> port set\|unset\|ls <wt-name> <service> [<port>]` | allocate/release ports per worktree (omit `<port>` to auto-pick a free one) |
@@ -120,11 +121,11 @@ See **[docs/release.md](docs/release.md)** for the full runbook, the `NPM_TOKEN`
 
 - [x] `mx` CLI — `init`, `status`, `sync`, `update`, `migrate`, `repo`, `work` (worktree + port + path)
 - [x] Runtime versioning (`mx.json` + version gate) and `mx migrate`; container repo layout (`repos/<repo>/git` + `repo.json`)
-- [x] Central hook hub (`<runtime>/hooks/`): worktree create/remove, work archive/unarchive, repo fetch, repo-health, work-health — any language, branch on `MX_*`
+- [x] Central hook hub (`<runtime>/hooks/`): worktree create/remove, work archive/unarchive, repo fetch, repo-health, work-health, session-prompt — any language, branch on `MX_*`
 - [x] Health: `mx repo health`, `mx work health`, and `mx health` (whole-runtime overview)
 - [x] `mx mission-control` — live web dashboard (zero-dep server + single-file React/Vite/Tailwind UI)
 - [x] Multiple worktrees of one repo per work (named worktrees; `wt/<name>`)
-- [x] `mx work new -o` — fullscreen Terminal in the work folder (macOS)
+- [x] `mx work open` / `new -o` — fullscreen Terminal (macOS) that resumes-or-creates the per-work Claude session, with a `session-prompt` hook for the initial prompt
 - [x] Env-based runtime discovery (`--runtime` / `$MX_RUNTIME` / default `~/mx`)
 - [x] Per-service free-port allocation across all works (no fixed blocks)
 - [x] TypeScript pnpm monorepo (`@mx/core` + `apps/cli`), lint/test/build tooling

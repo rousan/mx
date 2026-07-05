@@ -49,6 +49,10 @@ import {
   workHealth,
   listWorkHealth,
   statusRuntime,
+  claudeProjectDirName,
+  readSessionTitle,
+  findSessionsByName,
+  parseInitWorktreeSpec,
 } from '../src/index';
 import { compareVersions, maxVersion } from '../src/semver';
 import { resolveBase } from '../src/git';
@@ -643,6 +647,128 @@ describe('worktreeSetBranch', () => {
     const { root } = fixture();
     archiveWork(root, 'feat');
     expect(() => worktreeSetBranch(root, 'feat', 'app')).toThrow(/not on disk/);
+  });
+});
+
+describe('parseInitWorktreeSpec (mx work new initial worktrees)', () => {
+  it('parses a bare repo with no branch or base', () => {
+    expect(parseInitWorktreeSpec('app')).toEqual({ repo: 'app' });
+  });
+
+  it('parses <repo>:<branch>', () => {
+    expect(parseInitWorktreeSpec('app:hotfix')).toEqual({ repo: 'app', branch: 'hotfix' });
+    expect(parseInitWorktreeSpec('app:feature-x')).toEqual({ repo: 'app', branch: 'feature-x' });
+  });
+
+  it('parses <repo>:<branch>:<base>', () => {
+    expect(parseInitWorktreeSpec('muze-ai:feat:app_ib_dev')).toEqual({
+      repo: 'muze-ai',
+      branch: 'feat',
+      base: 'app_ib_dev',
+    });
+  });
+
+  it('treats an empty branch segment as "default branch" (app::base)', () => {
+    expect(parseInitWorktreeSpec('app::develop')).toEqual({ repo: 'app', base: 'develop' });
+  });
+
+  it('treats trailing empty segments as "fall back to default"', () => {
+    expect(parseInitWorktreeSpec('app:')).toEqual({ repo: 'app' });
+    expect(parseInitWorktreeSpec('app::')).toEqual({ repo: 'app' });
+  });
+
+  it('rejects an empty repo or too many segments', () => {
+    expect(() => parseInitWorktreeSpec(':branch')).toThrow(/bad repo spec/);
+    expect(() => parseInitWorktreeSpec('')).toThrow(/bad repo spec/);
+    expect(() => parseInitWorktreeSpec('a:b:c:d')).toThrow(/bad repo spec/);
+  });
+});
+
+describe('claudeSessions (mx work open session discovery)', () => {
+  /**
+   * Write a minimal Claude transcript file for a test fixture at
+   * <projectsRoot>/<projectDir>/<sid>.jsonl.
+   *
+   * @param projectsRoot - Fake Claude projects root (temp dir).
+   * @param projectDir - Encoded project dir name the transcript lives under.
+   * @param sid - Session id (becomes the filename and is echoed in records).
+   * @param titles - custom-title values applied in order (last = current name); empty for an unnamed session.
+   * @param cwd - The cwd recorded on the transcript's message line.
+   * @returns Absolute path to the written transcript.
+   */
+  function writeTranscript(
+    projectsRoot: string,
+    projectDir: string,
+    sid: string,
+    titles: string[],
+    cwd: string,
+  ): string {
+    const dir = path.join(projectsRoot, projectDir);
+    fs.mkdirSync(dir, { recursive: true });
+    const lines = [
+      JSON.stringify({ type: 'user', cwd, sessionId: sid, message: 'hi' }),
+      ...titles.map((t) => JSON.stringify({ type: 'custom-title', customTitle: t, sessionId: sid })),
+    ];
+    const file = path.join(dir, `${sid}.jsonl`);
+    fs.writeFileSync(file, lines.join('\n') + '\n');
+    return file;
+  }
+
+  it('claudeProjectDirName replaces / and . (and other non [A-Za-z0-9-]) with -', () => {
+    expect(claudeProjectDirName('/Users/rousan.ali/mx/works/dev-mx')).toBe(
+      '-Users-rousan-ali-mx-works-dev-mx',
+    );
+    expect(claudeProjectDirName('/private/tmp/a_b.c')).toBe('-private-tmp-a-b-c');
+  });
+
+  it('readSessionTitle returns the LAST custom-title (a rename wins)', () => {
+    const root = tmp();
+    const work = '/w/feat';
+    const proj = claudeProjectDirName(work);
+    const file = writeTranscript(root, proj, 'sid1', ['auto-name', 'feat'], work);
+    expect(readSessionTitle(file)).toBe('feat');
+  });
+
+  it('readSessionTitle returns null for an unnamed or missing transcript', () => {
+    const root = tmp();
+    const work = '/w/feat';
+    const proj = claudeProjectDirName(work);
+    const file = writeTranscript(root, proj, 'sid1', [], work);
+    expect(readSessionTitle(file)).toBeNull();
+    expect(readSessionTitle(path.join(root, 'nope.jsonl'))).toBeNull();
+  });
+
+  it('findSessionsByName matches EXACTLY (excludes numbered variants) and is scoped to the work', () => {
+    const root = tmp();
+    const work = '/Users/x/mx/works/feat';
+    const proj = claudeProjectDirName(work);
+    writeTranscript(root, proj, 'sid-base', ['feat'], work);
+    writeTranscript(root, proj, 'sid-two', ['feat-2'], work); // numbered variant, must NOT match
+    // A same-named session under a DIFFERENT work's project dir must be ignored.
+    const other = '/Users/x/mx/works/other';
+    writeTranscript(root, claudeProjectDirName(other), 'sid-other', ['feat'], other);
+
+    const matches = findSessionsByName(root, work, 'feat');
+    expect(matches.map((m) => m.id)).toEqual(['sid-base']);
+  });
+
+  it('findSessionsByName returns [] when the project dir does not exist', () => {
+    const root = tmp();
+    expect(findSessionsByName(root, '/w/never-opened', 'x')).toEqual([]);
+  });
+
+  it('findSessionsByName returns all duplicates newest-first (the ambiguous case)', () => {
+    const root = tmp();
+    const work = '/w/dup';
+    const proj = claudeProjectDirName(work);
+    const older = writeTranscript(root, proj, 'sid-old', ['dup'], work);
+    const newer = writeTranscript(root, proj, 'sid-new', ['dup'], work);
+    // Force a deterministic mtime ordering (older < newer).
+    fs.utimesSync(older, new Date(1000), new Date(1000));
+    fs.utimesSync(newer, new Date(2000), new Date(2000));
+
+    const matches = findSessionsByName(root, work, 'dup');
+    expect(matches.map((m) => m.id)).toEqual(['sid-new', 'sid-old']);
   });
 });
 

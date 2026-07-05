@@ -65,8 +65,9 @@ All lifecycle hooks live in **one** runtime-wide directory — `<runtime>/hooks/
 | `pre-repo-fetch` / `post-repo-fetch` | around `mx repo fetch` (cwd = git clone) | pre **aborts**; post warns |
 | `repo-health` | during `mx repo health` (cwd = git clone) | stdout captured into `extra` (silent when healthy: empty/`ok` → ✓, other output → ⚠); failure → `extra: null` |
 | `work-health` | during `mx work health` / `mx health` (cwd = work folder) | stdout captured into `extra` (same convention); failure → `extra: null` |
+| `session-prompt` | when `mx work open` / `mx work new -o` creates a new Claude session (cwd = work folder) | stdout becomes the new session's initial prompt (empty → clean session; failure → ignored) |
 
-Context arrives via `MX_*` env vars — always `MX_EVENT` + `MX_RUNTIME`, plus event-specific ones like `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_GIT_DIR`, `MX_REPO_PATH`. Each shipped template documents its own set (worktree events also get `MX_WORKTREE_NAME`). To skip hydration, make `post-worktree-create` a no-op — there is no `--no-hydrate` flag or `worktree hydrate` subcommand.
+Context arrives via `MX_*` env vars — always `MX_EVENT` + `MX_RUNTIME`, plus event-specific ones like `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_GIT_DIR`, `MX_REPO_PATH`, `MX_SESSION_NAME`. Each shipped template documents its own set (worktree events also get `MX_WORKTREE_NAME`). To skip hydration, make `post-worktree-create` a no-op — there is no `--no-hydrate` flag or `worktree hydrate` subcommand.
 
 ## Runtime bin (`<runtime>/bin/`)
 

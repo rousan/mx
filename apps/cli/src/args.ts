@@ -35,6 +35,8 @@ export interface Flags {
   branch?: string;
   /** Base ref from `--base`. */
   base?: string;
+  /** Initial prompt for a new session from `--prompt` (currently: `mx work open --prompt <text>`). */
+  prompt?: string;
   /** Port for `mx mission-control --port <n>`. */
   port?: number;
 }
@@ -52,13 +54,14 @@ export interface ParsedArgs {
 /**
  * Maps each value-taking flag token to the `Flags` key it populates.
  */
-const VALUE_FLAGS: Record<string, 'runtime' | 'name' | 'description' | 'branch' | 'base'> = {
+const VALUE_FLAGS: Record<string, 'runtime' | 'name' | 'description' | 'branch' | 'base' | 'prompt'> = {
   '-n': 'name',
   '--name': 'name',
   '--runtime': 'runtime',
   '--description': 'description',
   '--branch': 'branch',
   '--base': 'base',
+  '--prompt': 'prompt',
 };
 
 /**

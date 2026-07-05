@@ -218,8 +218,10 @@ export const runtimeHooksDir = (root: string): string => path.join(root, 'hooks'
  * `<runtime>/hooks/<event>`. `pre-*` hooks run before the operation mutates
  * anything and abort it on a non-zero exit; `post-*` hooks run after success and
  * a non-zero exit is only a warning; `repo-health` / `work-health` augment
- * `mx repo health` / `mx work health` with their stdout. The set is extensible
- * — add an event here and a stamped template, and wire the call site.
+ * `mx repo health` / `mx work health` with their stdout; `session-prompt` emits
+ * (on stdout) the initial prompt for a new Claude session opened by
+ * `mx work open`. The set is extensible — add an event here and a stamped
+ * template, and wire the call site.
  */
 export const HOOK_EVENTS = [
   'pre-work-archive',
@@ -234,6 +236,7 @@ export const HOOK_EVENTS = [
   'post-repo-fetch',
   'repo-health',
   'work-health',
+  'session-prompt',
 ] as const;
 
 /**

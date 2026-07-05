@@ -51,6 +51,58 @@ export function runHook(root: string, event: HookEvent, ctx: HookContext, quiet:
 }
 
 /**
+ * Outcome of running a stdout-capturing hook (e.g. `session-prompt`).
+ */
+export interface HookCapture {
+  /** True if the hook file existed and was executed. */
+  ran: boolean;
+  /** True if it ran and exited 0 (also true when there was nothing to run). */
+  ok: boolean;
+  /** True if there is no hook file for this event. */
+  missing: boolean;
+  /** The hook's captured stdout, trailing whitespace trimmed; `''` when absent or it failed. */
+  stdout: string;
+}
+
+/**
+ * Run a hook and **capture** its stdout instead of inheriting it. Used by
+ * stdout-driven hooks whose output mx consumes — currently `session-prompt`,
+ * whose stdout becomes the initial prompt for a new Claude session opened by
+ * `mx work open`. Never throws; a missing hook yields empty stdout, and a
+ * non-zero exit is surfaced as a warning (non-porcelain) with its output ignored
+ * so a broken hook can't inject a garbage prompt.
+ *
+ * @param root - Runtime root.
+ * @param event - The stdout-capturing event to fire.
+ * @param ctx - Working directory + event-specific env.
+ * @param quiet - When true, suppress the warning on a non-zero exit (keeps `--porcelain` clean).
+ * @returns The capture outcome including the hook's stdout.
+ */
+export function runHookCapture(
+  root: string,
+  event: HookEvent,
+  ctx: HookContext,
+  quiet: boolean,
+): HookCapture {
+  const script = hookScript(root, event);
+  if (!existsSync(script)) return { ran: false, ok: true, missing: true, stdout: '' };
+  const env = { ...process.env, MX_RUNTIME: root, MX_EVENT: event, ...ctx.env };
+  const r = spawnSync(script, [], {
+    cwd: ctx.cwd,
+    env,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const ok = r.status === 0;
+  if (r.status !== 0 && !quiet) {
+    process.stderr.write(`${warn()} ${dim(`${event} hook exited non-zero — ignoring its output`)}\n`);
+  }
+  // Only trust stdout on a clean exit; trim the trailing newline the hook likely emits.
+  const stdout = ok ? (r.stdout ?? '').replace(/\s+$/, '') : '';
+  return { ran: true, ok, missing: false, stdout };
+}
+
+/**
  * Run a `pre-*` hook and **abort the operation** (throw `HOOK_FAILED`) if it
  * exits non-zero — the veto point before anything is mutated.
  *

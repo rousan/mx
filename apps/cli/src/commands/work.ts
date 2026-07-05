@@ -2,6 +2,8 @@ import {
   requireRuntime,
   inferContext,
   workNew,
+  listRepoNames,
+  parseInitWorktreeSpec,
   listWorksInfo,
   workInfo,
   workDescribe,
@@ -20,13 +22,16 @@ import {
   portList,
   workHealth,
   listWorkHealth,
+  findSessionsByName,
   MxError,
 } from '@mx/core';
-import type { WorkHealth } from '@mx/core';
-import { existsSync } from 'node:fs';
+import type { WorkHealth, WorktreeAddResult } from '@mx/core';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { emit, dim, bold, check, warn, confirmYesNo, tildify } from '../output';
-import { openWorkLayout } from '../open';
-import { runPreHook, runPostHook } from '../hooks';
+import { openWorkLayout, shq } from '../open';
+import { runPreHook, runPostHook, runHookCapture } from '../hooks';
 import type { Flags } from '../args';
 
 /**
@@ -77,6 +82,108 @@ function need(v: string | undefined | null, msg: string): string {
 }
 
 /**
+ * Absolute path to Claude Code's project store (`~/.claude/projects`), where
+ * per-work session transcripts live.
+ */
+const claudeProjectsRoot = (): string => path.join(os.homedir(), '.claude', 'projects');
+
+/**
+ * Resolve the initial prompt for a *new* Claude session. An explicit
+ * `--prompt <text>` wins outright (even `--prompt ''` → no prompt); otherwise
+ * the `session-prompt` hook is fired (cwd = work folder) and its stdout is used,
+ * letting the prompt be generated dynamically (global default, per-repo, etc.).
+ * Returns `''` when neither yields a prompt.
+ *
+ * @param root - Runtime root.
+ * @param name - Work name (also the session name being created).
+ * @param workFolder - Absolute work folder path (hook cwd).
+ * @param flags - Parsed flags (provides the `--prompt` override + `--porcelain`).
+ * @returns The initial prompt text, or `''` for none.
+ */
+function resolveInitialPrompt(root: string, name: string, workFolder: string, flags: Flags): string {
+  if (flags.prompt != null) return flags.prompt; // explicit override, '' means "no prompt"
+  const cap = runHookCapture(
+    root,
+    'session-prompt',
+    { cwd: workFolder, env: { MX_WORK: name, MX_WORK_PATH: workFolder, MX_SESSION_NAME: name } },
+    flags.porcelain,
+  );
+  return cap.stdout;
+}
+
+/**
+ * What `mx work open` should launch in the work's Terminal.
+ */
+interface SessionLaunch {
+  /** Shell command to run after cd-ing into the work folder (a `claude` invocation). */
+  command: string;
+  /** Whether an existing session is resumed or a fresh one is created. */
+  action: 'resume' | 'create';
+  /** The resumed session's id (only when `action === 'resume'`). */
+  sessionId?: string;
+}
+
+/**
+ * Decide how to open a work's Claude session, following the per-work naming
+ * convention (one session named exactly after the work):
+ *
+ * - 0 sessions named `<work>` → **create** a new session named `<work>`, seeded
+ *   with the resolved initial prompt (from `--prompt` or the `session-prompt`
+ *   hook) when there is one.
+ * - exactly 1 → **resume** it (`claude --resume <id>`).
+ * - 2+ → throw `MULTIPLE_SESSIONS`; the user resumes manually (numbered
+ *   variants like `<work>-2` are excluded by the exact-name match, so this only
+ *   happens with genuine duplicates).
+ *
+ * When creating with a prompt, the prompt is written to a throwaway file under
+ * the work's `tmp/` and the launched shell reads-then-removes it — this keeps
+ * arbitrary multi-line prompt text out of the command line (and out of the
+ * nested AppleScript quoting) entirely.
+ *
+ * @param root - Runtime root.
+ * @param name - Work name (= the session name).
+ * @param workFolder - Absolute work folder path.
+ * @param flags - Parsed flags.
+ * @returns The command to run plus whether it resumes or creates.
+ */
+function resolveSessionLaunch(
+  root: string,
+  name: string,
+  workFolder: string,
+  flags: Flags,
+): SessionLaunch {
+  // Claude keys its project dir off the realpath'd cwd (macOS /tmp -> /private/tmp).
+  let realWork = workFolder;
+  try {
+    realWork = fs.realpathSync(workFolder);
+  } catch {
+    // Fall back to the given path; findSessionsByName just won't match if it's wrong.
+  }
+  const sessions = findSessionsByName(claudeProjectsRoot(), realWork, name);
+  if (sessions.length > 1) {
+    throw new MxError(
+      `work "${name}" has ${sessions.length} Claude sessions named "${name}" — resume one manually ` +
+        `(list them with \`lcs ${name}\`, then \`claude --resume <id>\`)`,
+      'MULTIPLE_SESSIONS',
+    );
+  }
+  if (sessions.length === 1) {
+    return { command: `claude --resume ${shq(sessions[0].id)}`, action: 'resume', sessionId: sessions[0].id };
+  }
+  // No existing session — create one named after the work, optionally seeded.
+  const prompt = resolveInitialPrompt(root, name, workFolder, flags);
+  if (!prompt) return { command: `claude -n ${shq(name)}`, action: 'create' };
+  const promptFile = path.join(workFolder, 'tmp', `.mx-session-prompt-${process.pid}`);
+  fs.mkdirSync(path.dirname(promptFile), { recursive: true });
+  fs.writeFileSync(promptFile, prompt);
+  // The Terminal shell reads the prompt from the file, deletes it, then hands it
+  // to claude as the first message — preserving newlines/quotes with no inline
+  // escaping. `"$(...)"` keeps the whole file content as one argument.
+  const command = `claude -n ${shq(name)} "$(cat ${shq(promptFile)}; rm -f ${shq(promptFile)})"`;
+  return { command, action: 'create' };
+}
+
+/**
  * Dispatch the `mx work` subcommands. `new`/`ls` are component-level; all other
  * actions target a work via `-n` or infer it from the cwd.
  *
@@ -90,17 +197,53 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
 
   if (action === 'new') {
     const root = requireRuntime({ runtime: flags.runtime });
-    const name = need(positionals[2], 'usage: mx work new <name> [--description <text>] [-o|--open]');
+    const name = need(
+      positionals[2],
+      'usage: mx work new <name> [<repo>[:<branch>]]... [--description <text>] [--branch <b>] [--base <ref>] [-o|--open]',
+    );
+    // Positionals after the name are optional initial worktrees. Each is a
+    // pristine repo, optionally `<repo>:<branch>`; the branch defaults to
+    // --branch (a default for all) or, failing that, the work name.
+    const specs = positionals.slice(3).map(parseInitWorktreeSpec);
+    // Fail fast BEFORE creating anything: every repo must exist and appear once
+    // (one initial worktree per repo). This avoids leaving a half-built work.
+    if (specs.length) {
+      const known = new Set(listRepoNames(root));
+      const seen = new Set<string>();
+      for (const s of specs) {
+        if (!known.has(s.repo)) throw new MxError(`no such repo: ${s.repo}`, 'NO_REPO');
+        if (seen.has(s.repo)) {
+          throw new MxError(
+            `repo "${s.repo}" listed more than once — pass it once (one initial worktree per repo)`,
+            'BAD_ARGS',
+          );
+        }
+        seen.add(s.repo);
+      }
+    }
     const res = workNew(root, name, flags.description ?? '');
+    // Create each requested worktree, firing the create hooks per worktree.
+    const created: WorktreeAddResult[] = [];
+    for (const s of specs) {
+      const branch = s.branch ?? flags.branch ?? name;
+      const base = s.base ?? flags.base; // per-repo base wins; else the --base default; else pristine HEAD
+      created.push(createWorktreeFiringHooks(root, name, s.repo, s.repo, branch, base, flags.porcelain));
+    }
     emit(() => {
       console.log(`${check()} created work ${bold(res.name)}`);
       console.log(`  ${dim(res.path)}`);
-    }, res);
+      for (const wt of created) {
+        const label = wt.name === wt.repo ? wt.repo : `${wt.name} (${wt.repo})`;
+        console.log(`  ${dim(`+ ${label}`)}  ${dim(`[${wt.branch}]`)}`);
+      }
+    }, { ...workInfo(root, name), path: res.path });
     if (flags.open) {
       // Best-effort: the work is already created, so a window-management
-      // failure (or a non-macOS host) is a warning, never a hard error.
+      // failure (or a non-macOS host) is a warning, never a hard error. A brand
+      // new work has no sessions yet, so this always creates one named after it.
       try {
-        openWorkLayout(res.path);
+        const launch = resolveSessionLaunch(root, res.name, res.path, flags);
+        openWorkLayout(res.path, { command: launch.command });
       } catch (e) {
         const msg = e instanceof MxError ? e.message : String(e);
         process.stderr.write(`${warn()} ${dim(`could not open layout: ${msg}`)}\n`);
@@ -238,20 +381,26 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       return;
     }
     case 'open': {
-      // Open an existing work's dev layout (same as `mx work new -o`): a
-      // fullscreen Terminal in the work folder + the editor on the workspace.
+      // Open an existing work in a fullscreen Terminal, resuming its Claude
+      // session (named after the work) or creating one if none exists.
       const res = workPath(root, name); // throws NO_WORK if it doesn't exist
+      // Session resolution runs OUTSIDE the best-effort try: an ambiguous
+      // `MULTIPLE_SESSIONS` is a real error the user must act on, not a warning.
+      const launch = resolveSessionLaunch(root, name, res.path, flags);
       try {
-        openWorkLayout(res.path);
+        openWorkLayout(res.path, { command: launch.command });
       } catch (e) {
         const msg = e instanceof MxError ? e.message : String(e);
         process.stderr.write(`${warn()} ${dim(`could not open layout: ${msg}`)}\n`);
         return;
       }
-      emit(
-        () => console.log(`${check()} opened ${bold(name)} ${dim('(Terminal)')}`),
-        { work: name, opened: true },
-      );
+      emit(() => {
+        const how =
+          launch.action === 'resume'
+            ? `resumed session ${dim(launch.sessionId!.slice(0, 8))}`
+            : 'new session';
+        console.log(`${check()} opened ${bold(name)} ${dim(`(${how})`)}`);
+      }, { work: name, opened: true, action: launch.action, sessionId: launch.sessionId });
       return;
     }
     case 'describe': {
@@ -464,6 +613,52 @@ export function renderWorkHealthDetail(h: WorkHealth, indent = ''): void {
 }
 
 /**
+ * Create one worktree, firing the surrounding `pre/post-worktree-create` hooks.
+ * Shared by `mx work worktree add` and `mx work new`'s initial worktrees; does
+ * **not** emit output — the caller formats it (so `work new` can print a single
+ * combined result and keep `--porcelain` to one JSON object).
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ * @param repo - Pristine repo to fork from.
+ * @param wtName - Worktree name (the `wt/<name>` selector; usually the repo name).
+ * @param branch - Fully-resolved branch the worktree should be on.
+ * @param base - Base ref to fork from, or undefined for the pristine HEAD.
+ * @param porcelain - When true, run hooks quietly (keeps stdout a single JSON object).
+ * @returns The created worktree's details.
+ */
+function createWorktreeFiringHooks(
+  root: string,
+  name: string,
+  repo: string,
+  wtName: string,
+  branch: string,
+  base: string | undefined,
+  porcelain: boolean,
+): WorktreeAddResult {
+  const workFolder = workPath(root, name).path;
+  const dest = worktreePath(root, name, wtName);
+  const gitDir = repoGitDir(root, repo);
+  // pre-worktree-create: a non-zero exit vetoes creation (nothing made yet).
+  runPreHook(
+    root,
+    'pre-worktree-create',
+    { cwd: workFolder, env: worktreeHookEnv(name, repo, wtName, branch, dest, workFolder, gitDir, base) },
+    porcelain,
+  );
+  const res = worktreeAdd(root, name, repo, { name: wtName === repo ? undefined : wtName, branch, base });
+  // post-worktree-create (the "hydrate" step): runs in the new worktree; a
+  // non-zero exit is only a warning, worktree kept.
+  runPostHook(
+    root,
+    'post-worktree-create',
+    { cwd: res.path, env: worktreeHookEnv(name, res.repo, res.name, res.branch, res.path, workFolder, gitDir, base) },
+    porcelain,
+  );
+  return res;
+}
+
+/**
  * Handle `mx work -n <name> worktree add|ls|rm`.
  *
  * @param root - Runtime root.
@@ -480,32 +675,14 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
         'usage: mx work -n <name> worktree add <repo> [<worktree-name>] [--branch <b>] [--base <ref>]',
       );
       const wtName = positionals[4] || repo; // optional name; defaults to repo
-      const workFolder = workPath(root, name).path;
-      const dest = worktreePath(root, name, wtName);
       const branch = flags.branch || name; // mirrors worktreeAdd's default
-      const gitDir = repoGitDir(root, repo);
-      // pre-worktree-create: a non-zero exit vetoes creation (nothing made yet).
-      runPreHook(
-        root,
-        'pre-worktree-create',
-        { cwd: workFolder, env: worktreeHookEnv(name, repo, wtName, branch, dest, workFolder, gitDir, flags.base) },
-        flags.porcelain,
-      );
-      const res = worktreeAdd(root, name, repo, { name: positionals[4], branch: flags.branch, base: flags.base });
+      const res = createWorktreeFiringHooks(root, name, repo, wtName, branch, flags.base, flags.porcelain);
       emit(
         () => {
           const label = res.name === res.repo ? bold(res.repo) : `${bold(res.name)} ${dim(`(${res.repo})`)}`;
           console.log(`${check()} added worktree ${label} ${dim(`[${res.branch}]`)} ${dim(`→ ${res.path}`)}`);
         },
         res,
-      );
-      // post-worktree-create (the "hydrate" step): runs in the new worktree;
-      // a non-zero exit is a warning, worktree kept.
-      runPostHook(
-        root,
-        'post-worktree-create',
-        { cwd: res.path, env: worktreeHookEnv(name, res.repo, res.name, res.branch, res.path, workFolder, gitDir, flags.base) },
-        flags.porcelain,
       );
       return;
     }
@@ -566,7 +743,7 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
       runPreHook(
         root,
         'pre-worktree-remove',
-        { cwd: existsSync(dest) ? dest : workFolder, env: worktreeHookEnv(name, repo, wtName, branch, dest, workFolder, gitDir) },
+        { cwd: fs.existsSync(dest) ? dest : workFolder, env: worktreeHookEnv(name, repo, wtName, branch, dest, workFolder, gitDir) },
         flags.porcelain,
       );
       const res = worktreeRemove(root, name, wtName);

@@ -24,11 +24,12 @@ Repos (pristine clones):
   mx repo -n <name> rm                   refuses if any work uses it
 
 Works (features):
-  mx work new <name> [--description <t>] [-o|--open]    creates folder + empty work.json + sessions/; -o opens a fullscreen Terminal cd'd into the work folder (macOS)
+  mx work new <name> [<repo>[:<branch>[:<base>]]]... [--description <t>] [--branch <b>] [--base <ref>] [-o|--open]
+                                                       creates the work; extra args are repos to make initial worktrees for (per repo: branch = :<branch> else --branch else work name; base = :<base> else --base else pristine HEAD); -o opens a fullscreen Terminal + starts the work's Claude session (macOS)
   mx work ls [--all|--archived] [--porcelain]           default: active only; --all includes archived; --archived shows archived only
   mx work -n <name> info [--porcelain]
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
-  mx work -n <name> open  (or -o)                       open the work in a fullscreen Terminal (macOS)
+  mx work -n <name> open  (or -o) [--prompt <text>]     fullscreen Terminal (macOS); resumes the work's Claude session named <name>, or creates it (seeded by the session-prompt hook or --prompt); errors if 2+ share the name
   mx work -n <name> describe <text>
   mx work -n <name> worktree add <repo> [<name>] [--branch <b>] [--base <ref>]   fires pre/post-worktree-create hooks; <name> (default repo) lets one work hold multiple worktrees of a repo
   mx work -n <name> worktree ls [--porcelain]

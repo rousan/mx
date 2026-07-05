@@ -2,6 +2,30 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 3.4.0 — 2026-07-03
+
+**`mx work new` can create initial worktrees.** Positional args after the work name are pristine repos to make worktrees for right away, instead of a separate `mx work worktree add` per repo. Each token is `<repo>[:<branch>[:<base>]]`:
+
+```
+mx work new feat app api                                  # app + api, both on branch "feat"
+mx work new feat app:hotfix api                           # app on "hotfix", api on "feat"
+mx work new feat app api --branch shared                  # both on "shared"
+mx work new feat muze-ai:feat:app_ib_dev scaligent:feat:migration-to-mt-service-from-cf   # per-repo base
+mx work new feat app::develop                             # default branch, forked from develop
+```
+
+- **Per repo:** branch = `:<branch>` → `--branch <b>` (a default for every repo without its own) → the work name; base (fork point) = `:<base>` → `--base <ref>` → the pristine clone's `HEAD`. An empty branch segment (`app::develop`) means "default branch".
+- **Validated up front:** an unknown repo or a repo listed twice fails before anything is created, so you never get a half-built work. Each worktree fires `pre/post-worktree-create` (same as `worktree add`); combines with `-o`.
+- **Code:** `parseInitWorktreeSpec` + `InitWorktreeSpec` (with `branch`/`base`) in `@mx/core`; a shared `createWorktreeFiringHooks` helper in the CLI (used by both `worktree add` and `work new`). Minor — runtime stays v3, no migration.
+
+## 3.3.0 — 2026-07-03
+
+**`mx work open` is now session-aware — it resumes or creates the work's Claude Code session.** Opening a work (via `mx work open` / `mx work -n <name> open` / `-o`, and `mx work new -o`) no longer just drops you in a Terminal: it follows a per-work naming convention (one session named exactly `<name>`) and does the right thing.
+
+- **Resume-or-create.** mx scans the work's own Claude project dir (`~/.claude/projects/<work-path>/`, keyed off the work folder's realpath) for sessions named `<name>`: **0** → create `claude -n <name>`; **1** → `claude --resume <id>`; **2+** → `MULTIPLE_SESSIONS` error (resume manually — `lcs <name>` then `claude --resume <id>`). The name match is **exact**, so numbered parallel sessions (`<name>-2`, `<name>-3`) are ignored and stay manual.
+- **Dynamic initial prompt via a new `session-prompt` hook.** On create, the session is seeded with an initial prompt: `mx work open --prompt <text>` wins, else the central `session-prompt` hook's stdout is used (cwd = work folder; `MX_WORK` / `MX_WORK_PATH` / `MX_SESSION_NAME`), so the prompt can be generated dynamically — a global default, or varied per repo/work. Empty output → clean session. Fires only on create, never on resume.
+- **Code:** new `@mx/core` `claudeSessions.ts` (`claudeProjectDirName`, `readSessionTitle`, `findSessionsByName`, `ClaudeSession`); `session-prompt` added to `HOOK_EVENTS` + a stamped no-op template; `runHookCapture` in the CLI; `openWorkLayout` takes a launch command; `--prompt` flag. Minor — runtime stays v3, no migration.
+
 ## 3.2.0 — 2026-07-03
 
 **`mx work worktree set-branch <worktree> [<branch>]` — re-record a worktree's branch in `work.json`.** mx never runs `git checkout` for you: you switch branches inside the worktree the normal way, then this command updates the manifest to match. It reads the worktree's **live** git branch (so `work.json` can't drift from reality) and writes only that metadata — no git worktree/checkout operation is performed.
