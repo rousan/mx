@@ -321,6 +321,10 @@ clarity; dropping it works while you're inside the work.
   - After the worktree is created, the central `<runtime>/hooks/post-worktree-create` hook runs with the
     new worktree as the working directory (copy a `.env`, install deps, etc.) — branch on `$MX_REPO` /
     `$MX_BRANCH` / `$MX_WORKTREE_NAME` inside it. To skip hydration, make that hook a no-op.
+  - A brand-new work can be created **with** its initial worktrees in one shot (still ask the user first):
+    `mx work new <feature> <repo>[:<branch>[:<base>]]...` — e.g.
+    `mx work new <feature> app muze-ai:<feature>:app_ib_dev`. Per repo, branch defaults to `--branch`
+    then the work name, and base to `--base` then the pristine HEAD.
 - **Switch a worktree to a different branch:** mx never runs `git checkout` for you — switch branches
   the normal way inside the worktree (`git checkout <other-branch>`), then tell mx so the manifest stays
   truthful:

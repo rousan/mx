@@ -2,6 +2,8 @@ import {
   requireRuntime,
   inferContext,
   workNew,
+  listRepoNames,
+  parseInitWorktreeSpec,
   listWorksInfo,
   workInfo,
   workDescribe,
@@ -23,7 +25,7 @@ import {
   findSessionsByName,
   MxError,
 } from '@mx/core';
-import type { WorkHealth } from '@mx/core';
+import type { WorkHealth, WorktreeAddResult } from '@mx/core';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -195,12 +197,46 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
 
   if (action === 'new') {
     const root = requireRuntime({ runtime: flags.runtime });
-    const name = need(positionals[2], 'usage: mx work new <name> [--description <text>] [-o|--open]');
+    const name = need(
+      positionals[2],
+      'usage: mx work new <name> [<repo>[:<branch>]]... [--description <text>] [--branch <b>] [--base <ref>] [-o|--open]',
+    );
+    // Positionals after the name are optional initial worktrees. Each is a
+    // pristine repo, optionally `<repo>:<branch>`; the branch defaults to
+    // --branch (a default for all) or, failing that, the work name.
+    const specs = positionals.slice(3).map(parseInitWorktreeSpec);
+    // Fail fast BEFORE creating anything: every repo must exist and appear once
+    // (one initial worktree per repo). This avoids leaving a half-built work.
+    if (specs.length) {
+      const known = new Set(listRepoNames(root));
+      const seen = new Set<string>();
+      for (const s of specs) {
+        if (!known.has(s.repo)) throw new MxError(`no such repo: ${s.repo}`, 'NO_REPO');
+        if (seen.has(s.repo)) {
+          throw new MxError(
+            `repo "${s.repo}" listed more than once — pass it once (one initial worktree per repo)`,
+            'BAD_ARGS',
+          );
+        }
+        seen.add(s.repo);
+      }
+    }
     const res = workNew(root, name, flags.description ?? '');
+    // Create each requested worktree, firing the create hooks per worktree.
+    const created: WorktreeAddResult[] = [];
+    for (const s of specs) {
+      const branch = s.branch ?? flags.branch ?? name;
+      const base = s.base ?? flags.base; // per-repo base wins; else the --base default; else pristine HEAD
+      created.push(createWorktreeFiringHooks(root, name, s.repo, s.repo, branch, base, flags.porcelain));
+    }
     emit(() => {
       console.log(`${check()} created work ${bold(res.name)}`);
       console.log(`  ${dim(res.path)}`);
-    }, res);
+      for (const wt of created) {
+        const label = wt.name === wt.repo ? wt.repo : `${wt.name} (${wt.repo})`;
+        console.log(`  ${dim(`+ ${label}`)}  ${dim(`[${wt.branch}]`)}`);
+      }
+    }, { ...workInfo(root, name), path: res.path });
     if (flags.open) {
       // Best-effort: the work is already created, so a window-management
       // failure (or a non-macOS host) is a warning, never a hard error. A brand
@@ -577,6 +613,52 @@ export function renderWorkHealthDetail(h: WorkHealth, indent = ''): void {
 }
 
 /**
+ * Create one worktree, firing the surrounding `pre/post-worktree-create` hooks.
+ * Shared by `mx work worktree add` and `mx work new`'s initial worktrees; does
+ * **not** emit output — the caller formats it (so `work new` can print a single
+ * combined result and keep `--porcelain` to one JSON object).
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ * @param repo - Pristine repo to fork from.
+ * @param wtName - Worktree name (the `wt/<name>` selector; usually the repo name).
+ * @param branch - Fully-resolved branch the worktree should be on.
+ * @param base - Base ref to fork from, or undefined for the pristine HEAD.
+ * @param porcelain - When true, run hooks quietly (keeps stdout a single JSON object).
+ * @returns The created worktree's details.
+ */
+function createWorktreeFiringHooks(
+  root: string,
+  name: string,
+  repo: string,
+  wtName: string,
+  branch: string,
+  base: string | undefined,
+  porcelain: boolean,
+): WorktreeAddResult {
+  const workFolder = workPath(root, name).path;
+  const dest = worktreePath(root, name, wtName);
+  const gitDir = repoGitDir(root, repo);
+  // pre-worktree-create: a non-zero exit vetoes creation (nothing made yet).
+  runPreHook(
+    root,
+    'pre-worktree-create',
+    { cwd: workFolder, env: worktreeHookEnv(name, repo, wtName, branch, dest, workFolder, gitDir, base) },
+    porcelain,
+  );
+  const res = worktreeAdd(root, name, repo, { name: wtName === repo ? undefined : wtName, branch, base });
+  // post-worktree-create (the "hydrate" step): runs in the new worktree; a
+  // non-zero exit is only a warning, worktree kept.
+  runPostHook(
+    root,
+    'post-worktree-create',
+    { cwd: res.path, env: worktreeHookEnv(name, res.repo, res.name, res.branch, res.path, workFolder, gitDir, base) },
+    porcelain,
+  );
+  return res;
+}
+
+/**
  * Handle `mx work -n <name> worktree add|ls|rm`.
  *
  * @param root - Runtime root.
@@ -593,32 +675,14 @@ function workWorktree(root: string, name: string, positionals: string[], flags: 
         'usage: mx work -n <name> worktree add <repo> [<worktree-name>] [--branch <b>] [--base <ref>]',
       );
       const wtName = positionals[4] || repo; // optional name; defaults to repo
-      const workFolder = workPath(root, name).path;
-      const dest = worktreePath(root, name, wtName);
       const branch = flags.branch || name; // mirrors worktreeAdd's default
-      const gitDir = repoGitDir(root, repo);
-      // pre-worktree-create: a non-zero exit vetoes creation (nothing made yet).
-      runPreHook(
-        root,
-        'pre-worktree-create',
-        { cwd: workFolder, env: worktreeHookEnv(name, repo, wtName, branch, dest, workFolder, gitDir, flags.base) },
-        flags.porcelain,
-      );
-      const res = worktreeAdd(root, name, repo, { name: positionals[4], branch: flags.branch, base: flags.base });
+      const res = createWorktreeFiringHooks(root, name, repo, wtName, branch, flags.base, flags.porcelain);
       emit(
         () => {
           const label = res.name === res.repo ? bold(res.repo) : `${bold(res.name)} ${dim(`(${res.repo})`)}`;
           console.log(`${check()} added worktree ${label} ${dim(`[${res.branch}]`)} ${dim(`→ ${res.path}`)}`);
         },
         res,
-      );
-      // post-worktree-create (the "hydrate" step): runs in the new worktree;
-      // a non-zero exit is a warning, worktree kept.
-      runPostHook(
-        root,
-        'post-worktree-create',
-        { cwd: res.path, env: worktreeHookEnv(name, res.repo, res.name, res.branch, res.path, workFolder, gitDir, flags.base) },
-        flags.porcelain,
       );
       return;
     }

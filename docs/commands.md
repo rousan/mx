@@ -218,11 +218,28 @@ Remove the repo container (clone + `repo.json`). Refuses with `IN_USE` if any wo
 
 ## Works (features)
 
-### `mx work new <name> [--description <text>] [--open|-o]`
+### `mx work new <name> [<repo>[:<branch>[:<base>]]]... [--description <text>] [--branch <b>] [--base <ref>] [--open|-o]`
 
 Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `files/`, `tmp/`, and `sessions/`, and the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)). Prints the absolute path. All of these are **stamp-if-missing**. (Lifecycle hooks are central, not per-work — see [Hooks](#hooks).)
 
 The name is immutable.
+
+**Initial worktrees.** Any positional args after `<name>` are pristine repos to create worktrees for right away — the same operation as [`worktree add`](#mx-work--n-name-worktree-add-repo-worktree-name---branch-b---base-ref) (it fires `pre/post-worktree-create` per worktree), done as part of `new`. Each token is `<repo>[:<branch>[:<base>]]` (git refs can't contain `:`, so the split is unambiguous):
+
+```bash
+mx work new feat app api                                  # app + api, both on branch "feat"
+mx work new feat app:hotfix api                           # app on "hotfix", api on "feat"
+mx work new feat app api --branch shared                  # both on "shared"
+mx work new feat muze-ai:feat:app_ib_dev scaligent:feat:migration-to-mt-service-from-cf   # per-repo base
+mx work new feat app::develop                             # default branch, forked from develop
+```
+
+Resolved **per repo**:
+
+- **branch** = explicit `<repo>:<branch>` → `--branch <b>` (a default for every repo given without its own branch) → the work name;
+- **base** (fork point, same semantics as `worktree add --base`) = explicit `:<base>` → `--base <ref>` → the pristine clone's current `HEAD`.
+
+An empty branch segment (`app::develop`) means "use the default branch". Repos are validated up front — an unknown repo or a repo listed twice fails before anything is created, so you never get a half-built work.
 
 **`--open` / `-o` (macOS only)**: after creating the work, opens a fullscreen Terminal `cd`'d into the work folder and launches a Claude Code session named after the work (a new work has none yet, so this always creates one — see [`mx work open`](#mx-work--n-name-open-or-mx-work--n-name--o) for the full resume-or-create behavior and `--prompt`). (Open your editor yourself — it no longer launches one.) On non-macOS platforms this is downgraded to a warning (internally `UNSUPPORTED`) — the work is still created.
 

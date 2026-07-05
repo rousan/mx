@@ -208,6 +208,50 @@ export function workPath(root: string, name: string): WorkPathResult {
 }
 
 /**
+ * A repo to create an initial worktree for at `mx work new` time, with optional
+ * per-repo branch and base overrides.
+ */
+export interface InitWorktreeSpec {
+  /** Pristine repo name to fork the worktree from. */
+  repo: string;
+  /** Explicit branch for this worktree, or undefined to fall back to the caller's default. */
+  branch?: string;
+  /** Explicit base ref (fork point) for this worktree, or undefined to fall back to the caller's default. */
+  base?: string;
+}
+
+/**
+ * Parse an initial-worktree token from
+ * `mx work new <name> <repo>[:<branch>[:<base>]]...`. Colon-separated, up to
+ * three segments — git refs can't contain `:`, so the split is unambiguous:
+ *
+ * - `app` → `{repo}` (caller supplies the default branch + base)
+ * - `app:hotfix` → `{repo, branch}`
+ * - `app:hotfix:main` → `{repo, branch, base}`
+ * - `app::develop` → `{repo, base}` (empty middle = default branch, custom base)
+ *
+ * Empty `branch`/`base` segments fall back to the caller's defaults; only the
+ * `repo` segment is required.
+ *
+ * @param token - One positional token, `<repo>[:<branch>[:<base>]]`.
+ * @returns The parsed repo with optional branch and base.
+ */
+export function parseInitWorktreeSpec(token: string): InitWorktreeSpec {
+  const parts = token.split(':');
+  const [repo, branch, base] = parts;
+  if (!repo || parts.length > 3) {
+    throw new MxError(
+      `bad repo spec: ${JSON.stringify(token)} — expected <repo>[:<branch>[:<base>]]`,
+      'BAD_ARGS',
+    );
+  }
+  const spec: InitWorktreeSpec = { repo };
+  if (branch) spec.branch = branch; // empty (e.g. "app::main") means "use the default branch"
+  if (base) spec.base = base;
+  return spec;
+}
+
+/**
  * Options for creating a worktree.
  */
 export interface WorktreeAddOpts {

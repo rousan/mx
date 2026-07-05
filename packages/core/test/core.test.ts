@@ -52,6 +52,7 @@ import {
   claudeProjectDirName,
   readSessionTitle,
   findSessionsByName,
+  parseInitWorktreeSpec,
 } from '../src/index';
 import { compareVersions, maxVersion } from '../src/semver';
 import { resolveBase } from '../src/git';
@@ -646,6 +647,40 @@ describe('worktreeSetBranch', () => {
     const { root } = fixture();
     archiveWork(root, 'feat');
     expect(() => worktreeSetBranch(root, 'feat', 'app')).toThrow(/not on disk/);
+  });
+});
+
+describe('parseInitWorktreeSpec (mx work new initial worktrees)', () => {
+  it('parses a bare repo with no branch or base', () => {
+    expect(parseInitWorktreeSpec('app')).toEqual({ repo: 'app' });
+  });
+
+  it('parses <repo>:<branch>', () => {
+    expect(parseInitWorktreeSpec('app:hotfix')).toEqual({ repo: 'app', branch: 'hotfix' });
+    expect(parseInitWorktreeSpec('app:feature-x')).toEqual({ repo: 'app', branch: 'feature-x' });
+  });
+
+  it('parses <repo>:<branch>:<base>', () => {
+    expect(parseInitWorktreeSpec('muze-ai:feat:app_ib_dev')).toEqual({
+      repo: 'muze-ai',
+      branch: 'feat',
+      base: 'app_ib_dev',
+    });
+  });
+
+  it('treats an empty branch segment as "default branch" (app::base)', () => {
+    expect(parseInitWorktreeSpec('app::develop')).toEqual({ repo: 'app', base: 'develop' });
+  });
+
+  it('treats trailing empty segments as "fall back to default"', () => {
+    expect(parseInitWorktreeSpec('app:')).toEqual({ repo: 'app' });
+    expect(parseInitWorktreeSpec('app::')).toEqual({ repo: 'app' });
+  });
+
+  it('rejects an empty repo or too many segments', () => {
+    expect(() => parseInitWorktreeSpec(':branch')).toThrow(/bad repo spec/);
+    expect(() => parseInitWorktreeSpec('')).toThrow(/bad repo spec/);
+    expect(() => parseInitWorktreeSpec('a:b:c:d')).toThrow(/bad repo spec/);
   });
 });
 

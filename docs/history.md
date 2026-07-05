@@ -2,6 +2,22 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 3.4.0 — 2026-07-03
+
+**`mx work new` can create initial worktrees.** Positional args after the work name are pristine repos to make worktrees for right away, instead of a separate `mx work worktree add` per repo. Each token is `<repo>[:<branch>[:<base>]]`:
+
+```
+mx work new feat app api                                  # app + api, both on branch "feat"
+mx work new feat app:hotfix api                           # app on "hotfix", api on "feat"
+mx work new feat app api --branch shared                  # both on "shared"
+mx work new feat muze-ai:feat:app_ib_dev scaligent:feat:migration-to-mt-service-from-cf   # per-repo base
+mx work new feat app::develop                             # default branch, forked from develop
+```
+
+- **Per repo:** branch = `:<branch>` → `--branch <b>` (a default for every repo without its own) → the work name; base (fork point) = `:<base>` → `--base <ref>` → the pristine clone's `HEAD`. An empty branch segment (`app::develop`) means "default branch".
+- **Validated up front:** an unknown repo or a repo listed twice fails before anything is created, so you never get a half-built work. Each worktree fires `pre/post-worktree-create` (same as `worktree add`); combines with `-o`.
+- **Code:** `parseInitWorktreeSpec` + `InitWorktreeSpec` (with `branch`/`base`) in `@mx/core`; a shared `createWorktreeFiringHooks` helper in the CLI (used by both `worktree add` and `work new`). Minor — runtime stays v3, no migration.
+
 ## 3.3.0 — 2026-07-03
 
 **`mx work open` is now session-aware — it resumes or creates the work's Claude Code session.** Opening a work (via `mx work open` / `mx work -n <name> open` / `-o`, and `mx work new -o`) no longer just drops you in a Terminal: it follows a per-work naming convention (one session named exactly `<name>`) and does the right thing.

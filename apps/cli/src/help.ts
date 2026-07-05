@@ -24,7 +24,8 @@ Repos (pristine clones):
   mx repo -n <name> rm                   refuses if any work uses it
 
 Works (features):
-  mx work new <name> [--description <t>] [-o|--open]    creates folder + empty work.json + sessions/; -o opens a fullscreen Terminal + starts the work's Claude session (macOS)
+  mx work new <name> [<repo>[:<branch>[:<base>]]]... [--description <t>] [--branch <b>] [--base <ref>] [-o|--open]
+                                                       creates the work; extra args are repos to make initial worktrees for (per repo: branch = :<branch> else --branch else work name; base = :<base> else --base else pristine HEAD); -o opens a fullscreen Terminal + starts the work's Claude session (macOS)
   mx work ls [--all|--archived] [--porcelain]           default: active only; --all includes archived; --archived shows archived only
   mx work -n <name> info [--porcelain]
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
