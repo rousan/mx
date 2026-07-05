@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+#
+# mx hook: session-prompt
+#
+# Runs when `mx work open` (or `mx work new -o`) is about to CREATE a new Claude
+# Code session for a work — i.e. when no session named after the work exists yet.
+# It does NOT run when an existing session is resumed.
+#
+# Whatever this hook prints to stdout becomes the new session's initial prompt
+# (submitted as the first message). Print NOTHING to open a clean session. An
+# explicit `mx work open --prompt <text>` overrides this hook entirely.
+#
+# This is a shared, runtime-wide hook — it fires for EVERY work, so branch on the
+# context below to vary the prompt (a global default, per-repo, per-work, etc.).
+# Write it in any language: just set the shebang and keep the file executable
+# (e.g. #!/usr/bin/env node or #!/usr/bin/env python3).
+#
+# Working directory: the work folder.
+# Context (environment variables):
+#     $MX_WORK — work name
+#     $MX_WORK_PATH — the work folder
+#     $MX_SESSION_NAME — the session name being created (= the work name)
+#     $MX_EVENT (this event name), $MX_RUNTIME (runtime root)
+#
+# No-op by default (prints nothing → clean session). Delete this file to disable
+# the hook entirely.
+set -euo pipefail
+
+# Example — a global default prompt for every new session:
+#   echo "read the mx ctx index.json first"
+#
+# Example — vary by which repos the work touches (reads work.json via mx):
+#   repos="$(mx work -n "$MX_WORK" info --porcelain | python3 -c 'import sys,json; print(" ".join(sorted({w["repo"] for w in json.load(sys.stdin).get("worktrees",[])})))' 2>/dev/null || true)"
+#   case " $repos " in
+#     *" muze-ai "*) echo "read the mx ctx index.json, then muze-ai/local-dev" ;;
+#     *)             echo "read the mx ctx index.json first" ;;
+#   esac
+#
+# Example — a special prompt for sidekick-orchestrated works:
+#   case "$MX_WORK" in
+#     sk-*) echo "you are a sidekick sub-agent; read works/sidekick/STATE.md, then start" ;;
+#   esac
+
+exit 0

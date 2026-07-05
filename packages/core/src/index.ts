@@ -50,6 +50,9 @@ export {
 } from './runtime';
 export type { InitResult, SyncResult, MxConfig, HookEvent, RuntimeBin, RepoConfig } from './runtime';
 
+export { claudeProjectDirName, readSessionTitle, findSessionsByName } from './claudeSessions';
+export type { ClaudeSession } from './claudeSessions';
+
 export { compareVersions, maxVersion } from './semver';
 
 export { migrateRuntime } from './migrations';

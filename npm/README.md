@@ -48,8 +48,9 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 | `mx repo new <name> [--quick] [-o]` | create a fresh local repo with no remote (git init on main + README + initial commit); `--quick` also makes a `dev-<name>` work + a `develop` worktree (quick-experiment one-shot) |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
 | `mx repo health` / `mx repo -n <name> health` | local-only health check (augmented by the central `repo-health` hook) |
-| `mx work new <name> [--description <t>] [-o]` | create a work; `-o` opens a fullscreen Terminal in the work folder (macOS) |
+| `mx work new <name> [--description <t>] [-o]` | create a work; `-o` opens a fullscreen Terminal + starts the work's Claude session (macOS) |
 | `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works |
+| `mx work -n <name> open` (or `-o`) `[--prompt <text>]` | fullscreen Terminal (macOS) that resumes-or-creates the per-work Claude session named `<name>` (0 → create, seeded by the `session-prompt` hook / `--prompt`; 1 → resume; ≥2 → error, resume manually) |
 | `mx work -n <name> worktree add <repo> [<wt-name>] [--branch <b>] [--base <ref>]` | add a worktree (fires `pre/post-worktree-create`); `<wt-name>` defaults to the repo — pass a distinct one for multiple worktrees of the same repo |
 | `mx work -n <name> worktree ls\|rm <wt-name>` | list / remove a worktree (by name; defaults to the repo) |
 | `mx work -n <name> worktree set-branch <wt-name> [<branch>]` | re-record a worktree's branch in `work.json` after you switch branches inside it yourself (reads the live branch; mx never checks out); optional `<branch>` guards against a mismatch |

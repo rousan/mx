@@ -224,7 +224,7 @@ Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code
 
 The name is immutable.
 
-**`--open` / `-o` (macOS only)**: after creating the work, opens a fullscreen Terminal `cd`'d into the work folder. (Open your editor yourself — it no longer launches one.) On non-macOS platforms this is downgraded to a warning (internally `UNSUPPORTED`) — the work is still created.
+**`--open` / `-o` (macOS only)**: after creating the work, opens a fullscreen Terminal `cd`'d into the work folder and launches a Claude Code session named after the work (a new work has none yet, so this always creates one — see [`mx work open`](#mx-work--n-name-open-or-mx-work--n-name--o) for the full resume-or-create behavior and `--prompt`). (Open your editor yourself — it no longer launches one.) On non-macOS platforms this is downgraded to a warning (internally `UNSUPPORTED`) — the work is still created.
 
 ### `mx work ls [--all|--archived] [--porcelain]`
 
@@ -261,7 +261,17 @@ Plain output, no decoration.
 
 ### `mx work -n <name> open` (or `mx work -n <name> -o`)
 
-Open an **existing** work's dev layout — the same thing `mx work new -o` does at creation: a fullscreen Terminal `cd`'d into the work folder. macOS only; on other platforms (or a window-management failure) it warns and is a no-op. `mx work -n <name> -o` is shorthand for `… open`.
+Open an **existing** work in a fullscreen Terminal `cd`'d into the work folder, and **resume-or-create its Claude Code session**. macOS only; on other platforms (or a window-management failure) it warns and is a no-op. `mx work -n <name> -o` is shorthand for `… open`.
+
+The session follows a per-work naming convention: one session named exactly `<name>`. mx scans the work's own Claude project directory (`~/.claude/projects/<work-path>/`, keyed off the work folder's realpath) for sessions whose name equals `<name>`:
+
+- **none** → create a new session named `<name>` (`claude -n <name>`), seeded with an initial prompt when one is resolved (see below);
+- **exactly one** → resume it (`claude --resume <id>`);
+- **two or more** → error `MULTIPLE_SESSIONS` and open nothing — resume one manually (`lcs <name>` to list, then `claude --resume <id>`).
+
+The match is **exact**, so your own numbered parallel sessions (`<name>-2`, `<name>-3`) are deliberately ignored — open those by hand. A session's name is the one it shows in the `/resume` picker (set by `claude -n` at creation or by `/rename` later), which mx reads from the transcript.
+
+**Initial prompt (new sessions only).** The prompt is resolved as: an explicit `--prompt <text>` wins (pass `--prompt ''` for none); otherwise the [`session-prompt` hook](#hooks) is fired (cwd = the work folder) and its stdout is used, letting the prompt be generated dynamically — a global default, or varied per repo/work. If neither yields text, the session opens clean. The resolved prompt is passed to Claude as the first message (mx routes it through a throwaway file under the work's `tmp/` so multi-line prompts need no shell escaping).
 
 ### `mx work -n <name> describe <text>`
 
@@ -422,8 +432,9 @@ All lifecycle hooks live in **one place** — `<runtime>/hooks/` — with **one 
 | `pre-repo-fetch` / `post-repo-fetch` | around `mx repo fetch` | pre **aborts**; post warns |
 | `repo-health` | during `mx repo health` (cwd = the pristine clone) | stdout captured into the report |
 | `work-health` | during `mx work health` / `mx health` (cwd = the work folder) | stdout captured into the report |
+| `session-prompt` | when `mx work open` creates a new Claude session (cwd = the work folder) | stdout becomes the session's initial prompt |
 
-Context arrives as `MX_*` environment variables — always `MX_EVENT` and `MX_RUNTIME`, plus event-specific ones: `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_GIT_DIR`, `MX_REPO_PATH`. Each shipped hook's header documents its own set and working directory. A `pre-*` non-zero exit **aborts** the operation (`HOOK_FAILED`, nothing mutated) — even in `--porcelain` mode (where hook stdio is suppressed, the abort still surfaces as a JSON `HOOK_FAILED` error); a `post-*` non-zero exit is only a warning.
+Context arrives as `MX_*` environment variables — always `MX_EVENT` and `MX_RUNTIME`, plus event-specific ones: `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_GIT_DIR`, `MX_REPO_PATH`, `MX_SESSION_NAME`. Each shipped hook's header documents its own set and working directory. A `pre-*` non-zero exit **aborts** the operation (`HOOK_FAILED`, nothing mutated) — even in `--porcelain` mode (where hook stdio is suppressed, the abort still surfaces as a JSON `HOOK_FAILED` error); a `post-*` non-zero exit is only a warning.
 
 ## Output conventions
 
@@ -455,6 +466,7 @@ Context arrives as `MX_*` environment variables — always `MX_EVENT` and `MX_RU
 | `OSASCRIPT` | an AppleScript step failed during `mx work new -o` (macOS) |
 | `ALREADY_ARCHIVED` | archive called on an archived work |
 | `NOT_ARCHIVED` | unarchive called on a non-archived work |
+| `MULTIPLE_SESSIONS` | `mx work open` found more than one Claude session named after the work — resume one manually |
 | `NEED_FORCE` | mutating action gated behind `--force` |
 | `NEED_CONFIRMATION` | mutating action requires `--yes` (e.g. archive in `--porcelain` / non-TTY) |
 | `RUNTIME_VERSION_MISMATCH` | runtime `mx.json` differs from the version this CLI supports — run `mx migrate` (older) or `mx update` (newer) |

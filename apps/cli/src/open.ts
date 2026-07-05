@@ -31,6 +31,32 @@ function aplStr(s: string): string {
 }
 
 /**
+ * Single-quote a string for safe use as one argument in a POSIX shell command
+ * (the closing quote, an escaped literal quote, then a reopening quote). Lets
+ * `mx work open` pass work names, session ids, and file paths into the Terminal
+ * command line without word-splitting or metacharacter surprises.
+ *
+ * @param s - Raw string (path, name, id).
+ * @returns The shell-single-quoted token.
+ */
+export function shq(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Options for {@link openWorkLayout}.
+ */
+export interface OpenWorkOpts {
+  /**
+   * Shell command to run in the new Terminal after `cd`-ing into the work
+   * folder — e.g. a `claude --resume <id>` / `claude -n <name>` invocation. When
+   * omitted, the Terminal simply opens at the work folder with an interactive
+   * shell (the original behavior).
+   */
+  command?: string;
+}
+
+/**
  * macOS-only: open a work as a **fullscreen Terminal** cd'd into the work
  * folder. (It used to also launch a fullscreen editor on the work's
  * `.code-workspace`; that was dropped — open your editor yourself.)
@@ -40,11 +66,16 @@ function aplStr(s: string): string {
  * Throws `UNSUPPORTED` up front on non-macOS platforms.
  *
  * @param workdir - Absolute path to the work folder.
+ * @param opts - Optional launch command to run in the new Terminal (e.g. a `claude` invocation).
  */
-export function openWorkLayout(workdir: string): void {
+export function openWorkLayout(workdir: string, opts: OpenWorkOpts = {}): void {
   if (process.platform !== 'darwin') {
     throw new MxError('-o/--open is only supported on macOS', 'UNSUPPORTED');
   }
+
+  // The shell command Terminal runs: cd into the work folder, then optionally
+  // chain the caller's launch command (e.g. `claude --resume <id>`).
+  const shellCmd = `cd ${shq(workdir)}${opts.command ? ` && ${opts.command}` : ''}`;
 
   // Open a new Terminal window cd'd into the work folder, then fullscreen it.
   // When the frontmost Terminal window is already fullscreen, macOS's "prefer
@@ -56,7 +87,7 @@ export function openWorkLayout(workdir: string): void {
       'tell application "Terminal"',
       '  activate',
       '  set winCountBefore to count of windows',
-      `  do script "cd \\"${aplStr(workdir)}\\""`,
+      `  do script "${aplStr(shellCmd)}"`,
       '  delay 0.5',
       '  set winCountAfter to count of windows',
       'end tell',
