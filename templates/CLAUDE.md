@@ -66,6 +66,8 @@ mx/
 ├── context/                # shared memory across all features (see § Context registry)
 │   ├── INDEX.json          # single source of truth — metadata for every entry
 │   └── <path>.md           # body-only entries; nested folders allowed
+├── files/                  # runtime-wide FREE-FORM store for operational values every work can read
+│                           #   (creds, cluster names, tokens, key-value meta); empty by default (see § Files store)
 ├── repos/<repo>/           # per-repo container
 │   ├── git/                # the PRISTINE clone (read-only reference)
 │   └── repo.json           # repo metadata: { "name": "<repo>" }
@@ -98,6 +100,11 @@ mx/
   § The work folder holds mx-native files only.
 - `bin/` (at the runtime root) holds **runtime-wide utility executables** meant for your `PATH` — mx
   ships a few and you can add your own. List them with `mx bin ls`. See § Runtime bin.
+- `files/` (at the runtime root) is a **runtime-wide free-form store for operational values** shared by
+  every work — credentials, cluster names, usernames, API keys/tokens, endpoints, any key-value meta a
+  session needs to *do* things (Playwright login, calling an API, ssh, etc.). Empty by default; the
+  layout is yours. See § Files store. Not to be confused with `context/` (knowledge) or a work's own
+  `works/<feature>/files/` (per-work artifacts).
 
 ## Runtime bin
 
@@ -115,6 +122,35 @@ version's content, like the runtime `CLAUDE.md`), so improvements ship to you au
 bins** — any file mx doesn't ship — are never touched. To customize a shipped bin without losing it on
 the next sync, copy it to a new name. This is distinct from a work's own `scripts/` folder, which is for
 scripts scoped to that one work; `bin/` is runtime-wide and command-like.
+
+## Files store
+
+`<runtime>/files/` is a **runtime-wide, free-form store for operational values** — the concrete data a
+work session needs to actually *do* things across any work: credentials, cluster names / URLs,
+usernames, API keys and tokens, service endpoints, and any other key-value meta. It is created **empty**
+and **the layout is entirely yours** — one `creds.env`, a nested `clusters/<name>.json`, a flat
+`notes.md`, whatever fits. mx never reads, writes, or validates its contents; it only guarantees the
+directory exists.
+
+Use it when a task needs a value to operate: a Playwright browser login, calling an authenticated API,
+an ssh target, a tenant/cluster name to plug into a command. Read from `$MX_RUNTIME/files/` (or the
+absolute runtime path) from any work.
+
+**How it differs from the neighbours — keep them separate:**
+
+- **`context/` is knowledge; `files/` is values.** `context/` holds institutional memory (findings,
+  decisions, runbooks, RCAs) — prose that explains *how the system works* and is indexed by
+  `INDEX.json`. `files/` holds the raw operational *values* you plug in — no index, no schema, no prose
+  requirement. A runbook that says "the dev cluster is reached at X with creds Y" is context; the actual
+  X and Y live in `files/`.
+- **Runtime `files/` is shared; a work's `works/<feature>/files/` is per-work.** The per-work one is a
+  drop zone for artifacts scoped to that single work; this one is available to **every** work in the
+  runtime. Put a value here when more than one work (now or later) may need it.
+
+**Security note:** this is your **local** runtime — mx never commits or transmits `files/` (the runtime
+root is not a git repo, and `repos/` clones are separate). Storing secrets here is a deliberate local
+convenience; treat the machine accordingly and never copy `files/` into a repo/worktree that gets
+committed.
 
 ## Hooks
 

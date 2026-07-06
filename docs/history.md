@@ -2,6 +2,14 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 3.5.0 — 2026-07-06
+
+**Runtime-wide `files/` store.** A new `<runtime>/files/` directory: a free-form place for operational **values** any work session can read — credentials, cluster names/URLs, usernames, API keys/tokens, endpoints, and other key-value meta a task needs to actually operate (a Playwright login, an authenticated API call, an ssh target). Created **empty** by `mx init` and backfilled by `mx sync`; mx only guarantees the directory exists and never reads, writes, or validates its contents — the layout is the agent's/user's to choose.
+
+- **Kept distinct from its neighbours** (documented in the runtime `CLAUDE.md` template + docs): `context/` is indexed *knowledge* (findings, decisions, runbooks); `files/` is the raw *values* you plug in. Runtime `files/` is shared across every work; `works/<work>/files/` stays per-work.
+- **Local-only:** mx never commits or transmits it (the runtime root isn't a git repo; `repos/` clones are separate). Storing secrets there is a deliberate local convenience.
+- **Code:** `runtimeFilesDir` in `@mx/core`; created in `initRuntime`, backfilled in `syncRuntime`. Minor — runtime stays v3, no migration; existing runtimes get it on the next `mx sync`.
+
 ## 3.4.0 — 2026-07-03
 
 **`mx work new` can create initial worktrees.** Positional args after the work name are pristine repos to make worktrees for right away, instead of a separate `mx work worktree add` per repo. Each token is `<repo>[:<branch>[:<base>]]`:

@@ -75,7 +75,7 @@ These three are distinct — don't confuse them:
 
 - re-stamps the runtime `CLAUDE.md` from `templates/CLAUDE.md` (mx-owned generated content; always regenerated);
 - stamps `context/INDEX.json` **only if missing** (existing index content is preserved);
-- **backfills mx-owned structural directories across every work** — `<work>/wt/`, `scripts/`, `files/`, `tmp/`, and `sessions/` for any work that pre-dates that scaffolding, plus the runtime-wide `hooks/` (the central hook hub) and `bin/` and their shipped contents. Future per-work or per-repo additions slot into `ensureWorkScaffolding` in `@mx/core` and propagate the same way.
+- **backfills mx-owned structural directories across every work** — `<work>/wt/`, `scripts/`, `files/`, `tmp/`, and `sessions/` for any work that pre-dates that scaffolding, plus the runtime-wide `hooks/` (the central hook hub), `bin/`, and the runtime-wide `files/` store, and their shipped contents. Future per-work or per-repo additions slot into `ensureWorkScaffolding` in `@mx/core` and propagate the same way.
 - backfills the central hook scripts (`hooks/<event>`, stamp-if-missing), each repo's `repo.json` (when missing), and the per-work `CLAUDE.md`;
 - removes a stale runtime `README.md` if one lingers (legacy cleanup).
 
@@ -190,6 +190,7 @@ mx/ (a runtime, e.g. ~/mx or ./.mx)
 ├── context/            # shared memory across all features (see runtime CLAUDE.md § Context registry)
 │   ├── INDEX.json      # source of truth for entry metadata; stamped by mx init (only if missing)
 │   └── <path>.md       # body-only entries; agent owns content and nesting
+├── files/              # runtime-wide free-form store for operational VALUES (creds, cluster names, tokens, key-value meta); empty by default, agent-owned; distinct from context/ (knowledge) and per-work files/
 ├── repos/<repo>/       # per-repo container
 │   ├── git/            # the pristine clone — read-only reference
 │   └── repo.json       # repo metadata { "name": … } (extensible); NO per-repo scripts in v3
@@ -214,9 +215,9 @@ gates every runtime command on a match — see § `mx sync` / `mx update` / `mx 
 Implemented in `apps/cli` over `@mx/core`. Each command resolves the runtime via the discovery order above. Reads accept `--porcelain` (stable JSON); mutations echo the resulting object; errors are `{"error","code"}` with a non-zero exit. `-n <name>` may be omitted when the cwd implies it (inside `works/<work>/…` infers the work and, inside a worktree at `works/<work>/wt/<name>/…`, the repo is resolved from `work.json`; inside `repos/<repo>/…` infers the repo).
 
 **Global**
-- **`mx init [path]`** — scaffold/adopt a runtime (target = path arg, else `$MX_RUNTIME`, else `~/mx`): create `repos/`, `works/`, `.mx-root`; stamp `mx.json`, `CLAUDE.md`; stamp `context/INDEX.json` (only if missing — context is user data). Refuses to adopt a runtime whose `mx.json` differs (→ `mx migrate`, or upgrade the CLI). Idempotent; no clone; no pointer written.
+- **`mx init [path]`** — scaffold/adopt a runtime (target = path arg, else `$MX_RUNTIME`, else `~/mx`): create `repos/`, `works/`, `files/` (empty operational-values store), `.mx-root`; stamp `mx.json`, `CLAUDE.md`; stamp `context/INDEX.json` (only if missing — context is user data). Refuses to adopt a runtime whose `mx.json` differs (→ `mx migrate`, or upgrade the CLI). Idempotent; no clone; no pointer written.
 - **`mx info [--all] [--porcelain]`** — runtime path, repos + branches, works + worktrees + ports. Active works only by default; `--all` includes archived. Alias: `mx i`.
-- **`mx sync`** — (formerly `mx update`) re-stamp the runtime `CLAUDE.md`; stamp `context/INDEX.json` only if missing; backfill the central `hooks/` hub (stamp-if-missing), the runtime `bin/` + shipped utility bins, each repo's `repo.json`, the per-work dirs (`wt/`, `scripts/`, `files/`, `tmp/`, `sessions/`), and the per-work `CLAUDE.md`. Never modifies user data. Version-gated.
+- **`mx sync`** — (formerly `mx update`) re-stamp the runtime `CLAUDE.md`; stamp `context/INDEX.json` only if missing; backfill the central `hooks/` hub (stamp-if-missing), the runtime `bin/` + shipped utility bins, the runtime `files/` store, each repo's `repo.json`, the per-work dirs (`wt/`, `scripts/`, `files/`, `tmp/`, `sessions/`), and the per-work `CLAUDE.md`. Never modifies user data. Version-gated.
 - **`mx update`** — self-update the CLI within its major (`npm i -g @roulabs/mx@^<major>`); suggests a deliberate major upgrade if one exists. Not version-gated. After a successful update it auto-runs `mx sync` (via the freshly-installed global) to refresh the runtime.
 - **`mx migrate [--dry-run]`** — upgrade an older runtime to the supported version (the only runtime command allowed on a version mismatch); validates the chain first (`NO_MIGRATION` / `CLI_TOO_OLD`). v1→v2 moves clones into `git/` + worktrees into `wt/`; v2→v3 stamps the central `hooks/` hub, writes `repo.json`, and retires old per-repo/per-work scripts (default → removed, customized → kept + warned). `--dry-run` validates and prints the full plan + warnings without mutating; porcelain adds `dryRun: true`, `warnings`.
 - **`mx health [--all]`** — whole-runtime health overview: every repo's health block (as `mx repo health`) followed by every active work's health block (as `mx work health`); `--all` includes archived works. Porcelain returns `{repos, works}`.

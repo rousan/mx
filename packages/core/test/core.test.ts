@@ -20,6 +20,7 @@ import {
   RUNTIME_VERSION,
   repoGitDir,
   runtimeBinDir,
+  runtimeFilesDir,
   listRuntimeBins,
   hookScript,
   HOOK_EVENTS,
@@ -791,6 +792,44 @@ describe('no per-work SessionStart context-index hook (v3)', () => {
     const settingsPath = path.join(root, 'works', 'feat', '.claude', 'settings.json');
     expect(res.updated).not.toContain(settingsPath);
     expect(fs.existsSync(settingsPath)).toBe(false);
+  });
+});
+
+describe('runtime files directory', () => {
+  const TEMPLATES_DIR = path.resolve(import.meta.dirname, '..', '..', '..', 'templates');
+
+  it('initRuntime creates an empty files/ store', () => {
+    const root = path.join(tmp(), 'rt');
+    const res = initRuntime(root, TEMPLATES_DIR);
+    const filesDir = runtimeFilesDir(root);
+    expect(res.created).toContain(filesDir);
+    expect(fs.existsSync(filesDir)).toBe(true);
+    expect(fs.statSync(filesDir).isDirectory()).toBe(true);
+    // Empty by default — agents own the contents.
+    expect(fs.readdirSync(filesDir)).toEqual([]);
+  });
+
+  it('syncRuntime backfills files/ when missing (predates the feature)', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const filesDir = runtimeFilesDir(root);
+    fs.rmSync(filesDir, { recursive: true, force: true });
+    expect(fs.existsSync(filesDir)).toBe(false);
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    expect(res.updated).toContain(filesDir);
+    expect(fs.existsSync(filesDir)).toBe(true);
+  });
+
+  it('syncRuntime leaves an existing files/ and its contents untouched', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    const filesDir = runtimeFilesDir(root);
+    const secret = path.join(filesDir, 'creds.env');
+    fs.writeFileSync(secret, 'API_TOKEN=abc123\n');
+    const res = syncRuntime(root, TEMPLATES_DIR);
+    // Already present -> not reported as created, and the content is preserved.
+    expect(res.updated).not.toContain(filesDir);
+    expect(fs.readFileSync(secret, 'utf8')).toBe('API_TOKEN=abc123\n');
   });
 });
 

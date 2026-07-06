@@ -46,6 +46,18 @@ export const reposDir = (root: string): string => path.join(root, 'repos');
 export const worksDir = (root: string): string => path.join(root, 'works');
 
 /**
+ * Path to a runtime's `files/` directory — a runtime-wide, free-form store for
+ * operational values every work session can read (credentials, cluster names,
+ * usernames, API keys/tokens, and other key-value meta). It's created empty and
+ * agents choose the layout. Distinct from `context/` (institutional knowledge)
+ * and from a work's own `works/<work>/files/` (per-work artifacts).
+ *
+ * @param root - Runtime root.
+ * @returns Absolute path to `<root>/files`.
+ */
+export const runtimeFilesDir = (root: string): string => path.join(root, 'files');
+
+/**
  * Path to a runtime's `bin/` directory — runtime-wide utility executables mx
  * ships (and the user can add to) that are meant to be put on `PATH`. Distinct
  * from a work's own `works/<work>/bin/` (per-work executables).
@@ -667,7 +679,7 @@ export function initRuntime(target0: string, templatesDir: string): InitResult {
       );
     }
   }
-  for (const d of [target, reposDir(target), worksDir(target)]) {
+  for (const d of [target, reposDir(target), worksDir(target), runtimeFilesDir(target)]) {
     if (!exists(d)) {
       fs.mkdirSync(d, { recursive: true });
       created.push(d);
@@ -809,6 +821,13 @@ export function syncRuntime(root: string, templatesDir: string): SyncResult {
       writeRepoConfig(root, repo);
       updated.push(repoConfigFile(root, repo));
     }
+  }
+  // Backfill the runtime-wide files/ store (empty dir; agents own the contents)
+  // for runtimes that predate it.
+  const filesDir = runtimeFilesDir(root);
+  if (!exists(filesDir)) {
+    fs.mkdirSync(filesDir, { recursive: true });
+    updated.push(filesDir);
   }
   // Backfill the central hooks/ (stamp-if-missing) and the runtime bin/.
   updated.push(...stampRuntimeHooks(root, templatesDir));

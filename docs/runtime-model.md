@@ -19,6 +19,8 @@ What an mx runtime looks like on disk, the contracts mx owns, and the data shape
 ├── context/                     # shared memory across all features (see § Context registry below)
 │   ├── INDEX.json               # single source of truth for entry metadata
 │   └── <path>.md                # body-only entries (nested folders allowed)
+├── files/                       # runtime-wide free-form store for operational VALUES (see § Files store below)
+│   └── ...                      # creds / cluster names / tokens / key-value meta; empty by default, agent-owned
 ├── repos/                       # one container per repo
 │   ├── repo-a/
 │   │   ├── git/                 # the pristine clone — READ-ONLY reference for worktrees
@@ -78,6 +80,17 @@ A single runtime-wide directory of utility executables shared across every work,
 - **PATH** — mx can't edit your shell config, so add the directory yourself once: `export PATH="$(mx bin path):$PATH"`. `mx bin ls` reports whether it's currently on `PATH`.
 
 This is distinct from a work's `scripts/` (scoped to one work). See [`mx bin`](commands.md#mx-bin-ls--mx-bin-path-alias-mx-bins).
+
+## Files store (`<runtime>/files/`)
+
+A runtime-wide, **free-form store for operational values** every work session can read — credentials, cluster names/URLs, usernames, API keys and tokens, service endpoints, and any other key-value meta a task needs to *operate* (a Playwright login, an authenticated API call, an ssh target, a tenant name to plug into a command). Created **empty** by `mx init` and backfilled by `mx sync`; mx guarantees only that the directory exists and never reads, writes, or validates its contents. The **layout is entirely the agent's/user's** — a single `creds.env`, nested `clusters/<name>.json`, a flat `notes.md`, whatever fits.
+
+Keep it distinct from its neighbours:
+
+- **`context/` is knowledge; `files/` is values.** `context/` holds indexed institutional memory (findings, decisions, runbooks) — prose explaining *how the system works*. `files/` holds the raw *values* you plug in, with no index or schema. "The dev cluster is reached at X with creds Y" is a context note; the actual X and Y live in `files/`.
+- **Runtime `files/` is shared; `works/<work>/files/` is per-work.** The per-work one is a drop zone for one work's artifacts; the runtime one is available to every work — put a value here when more than one work may need it.
+
+**Security:** this is your local runtime — mx never commits or transmits `files/` (the runtime root is not a git repo; `repos/` clones are separate). Storing secrets here is a deliberate local convenience; never copy `files/` into a committed repo/worktree.
 
 ## Loading the context-registry index
 
@@ -197,11 +210,11 @@ Distillation, **not** a transcript. Capture the substance so a future agent can 
 
 | owned by | what |
 |---|---|
-| **mx** (programmatic) | `.mx-root` marker, `mx.json`, `repos/<repo>/` container incl. `git/` (created by `repo add` clone; touched only by `repo fetch`/`repo rm`/`migrate`) and `repo.json`, `works/<feature>/` (created by `work new`), `work.json`, `.code-workspace`, the per-work directories `wt/` / `scripts/` / `files/` / `tmp/` / `sessions/` (directories only — their contents are agent/user-written), the runtime `hooks/` and `bin/` directories, `context/INDEX.json` (only the starter empty array is stamped; subsequent edits are by the agent) |
+| **mx** (programmatic) | `.mx-root` marker, `mx.json`, `repos/<repo>/` container incl. `git/` (created by `repo add` clone; touched only by `repo fetch`/`repo rm`/`migrate`) and `repo.json`, `works/<feature>/` (created by `work new`), `work.json`, `.code-workspace`, the per-work directories `wt/` / `scripts/` / `files/` / `tmp/` / `sessions/` (directories only — their contents are agent/user-written), the runtime `hooks/` and `bin/` directories, the runtime `files/` directory (created empty; contents are agent-written), `context/INDEX.json` (only the starter empty array is stamped; subsequent edits are by the agent) |
 | **mx-stamped templates** (rewritten / stamped on `mx sync`) | `<runtime>/CLAUDE.md` (always rewritten), `<runtime>/bin/<shipped>` (mx-owned utility bins, e.g. `dcs`/`lcs` — **always re-stamped**, like `CLAUDE.md`), `<runtime>/hooks/<event>` (stamp-if-missing — your logic, never clobbered), `<runtime>/context/INDEX.json` (only if missing — never overwrites user content), `repos/<repo>/repo.json` (written when missing), `works/<feature>/CLAUDE.md` (stamp-if-missing — stamped once, then user-owned) |
-| **The user / agent** (mx never touches after stamping) | All worktree code, the contents of `wt/` / `scripts/` / `files/` / `tmp/`, your own `<runtime>/bin/` additions (any name mx doesn't ship), the `<runtime>/hooks/<event>` bodies once stamped, `context/<path>.md` body files, `INDEX.json` content after init, `sessions/*.md` files, the work `CLAUDE.md` after it's stamped |
+| **The user / agent** (mx never touches after stamping) | All worktree code, the contents of `wt/` / `scripts/` / `files/` / `tmp/`, everything under the runtime-wide `<runtime>/files/` store, your own `<runtime>/bin/` additions (any name mx doesn't ship), the `<runtime>/hooks/<event>` bodies once stamped, `context/<path>.md` body files, `INDEX.json` content after init, `sessions/*.md` files, the work `CLAUDE.md` after it's stamped |
 
-`mx sync` is non-destructive: it re-stamps the mx-owned generated content (runtime `CLAUDE.md`), backfills mx-owned structural directories and stamp-if-missing files (the central `hooks/` hub, the runtime `bin/` and its shipped utility bins, each repo's `repo.json`, the per-work `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/` directories, the per-work `CLAUDE.md`), and removes a stale `<runtime>/README.md` if one lingers. It never overwrites user-edited content in the "user / agent owns" column. (`mx update` is now a separate command that self-updates the CLI — see [commands](commands.md#mx-update).)
+`mx sync` is non-destructive: it re-stamps the mx-owned generated content (runtime `CLAUDE.md`), backfills mx-owned structural directories and stamp-if-missing files (the central `hooks/` hub, the runtime `bin/` and its shipped utility bins, the runtime `files/` store, each repo's `repo.json`, the per-work `wt/`/`scripts/`/`files/`/`tmp/`/`sessions/` directories, the per-work `CLAUDE.md`), and removes a stale `<runtime>/README.md` if one lingers. It never overwrites user-edited content in the "user / agent owns" column. (`mx update` is now a separate command that self-updates the CLI — see [commands](commands.md#mx-update).)
 
 ## Discovery: `--runtime` / `$MX_RUNTIME` / `~/mx`
 
