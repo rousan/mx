@@ -11,6 +11,7 @@ export type { Work, Worktree, RepoSummary, RuntimeOpts, InferredContext } from '
 export {
   reposDir,
   worksDir,
+  runtimeFilesDir,
   runtimeBinDir,
   listRuntimeBins,
   runtimeHooksDir,

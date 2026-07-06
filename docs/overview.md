@@ -24,6 +24,7 @@ mx manages a **runtime**: a single folder somewhere on disk (default `~/mx`, ove
 ├── context/                     # shared memory across features
 │   ├── INDEX.json               # single source of truth for entry metadata
 │   └── <path>.md                # body-only entries (nested folders allowed)
+├── files/                       # runtime-wide free-form store for operational values (creds, cluster names, tokens); empty by default
 ├── repos/<repo>/                # per-repo container
 │   ├── git/                     # the pristine clone, kept on default branch; READ-ONLY base
 │   └── repo.json                # repo metadata { "name": … }

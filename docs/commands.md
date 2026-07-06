@@ -8,7 +8,7 @@ Every command supported by `mx`, with flags, semantics, and examples.
 
 Scaffold or adopt a runtime. Target resolution: positional `path` arg → `$MX_RUNTIME` → `~/mx`.
 
-Creates: `repos/`, `works/`, `.mx-root`, `mx.json` (stamped with the runtime version this CLI supports), `CLAUDE.md` (stamped), the central `hooks/` hub (one stamped no-op per event), the runtime `bin/` (+ shipped utilities), `context/INDEX.json` (only if missing). Idempotent.
+Creates: `repos/`, `works/`, `files/` (empty runtime-wide operational-values store — see [runtime-model](runtime-model.md#files-store-runtimefiles)), `.mx-root`, `mx.json` (stamped with the runtime version this CLI supports), `CLAUDE.md` (stamped), the central `hooks/` hub (one stamped no-op per event), the runtime `bin/` (+ shipped utilities), `context/INDEX.json` (only if missing). Idempotent.
 
 On a fresh runtime, `mx init` stamps `mx.json` with the runtime version this CLI supports (currently `3`). When adopting an existing runtime, it refuses if that runtime's `mx.json` differs from what this CLI supports — pointing you at `mx migrate` (if the runtime is older) or at upgrading the CLI (if the runtime is newer). See [Runtime versioning](#runtime-versioning).
 
@@ -60,7 +60,7 @@ Re-sync the runtime with the current mx version (this is the command formerly ca
 
 - re-stamps `<runtime>/CLAUDE.md` from `templates/CLAUDE.md` (always rewritten, mx-owned)
 - stamps `<runtime>/context/INDEX.json` **only if missing** (existing index content is preserved)
-- backfills the central `hooks/` hub (stamp-if-missing per event), the runtime `bin/` and its shipped utility bins, and mx-owned structural directories across every work — `<work>/wt/`, `scripts/`, `files/`, `tmp/`, and `sessions/` for any work that pre-dates that scaffolding
+- backfills the central `hooks/` hub (stamp-if-missing per event), the runtime `bin/` and its shipped utility bins, the runtime-wide `files/` store (created empty if missing), and mx-owned structural directories across every work — `<work>/wt/`, `scripts/`, `files/`, `tmp/`, and `sessions/` for any work that pre-dates that scaffolding
 - writes each repo's `repo.json`, **only if missing**
 - stamps the per-work `CLAUDE.md`, **stamp-if-missing** (stamped once, then user-owned — see [The work folder](runtime-model.md#the-work-folder))
 - removes a stale `<runtime>/README.md` if one lingers (legacy cleanup)

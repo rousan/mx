@@ -2,7 +2,7 @@
 
 **mx** ("multiplexer") runs several features in parallel across shared repos using git worktrees. Each feature gets an isolated environment — its own worktrees, branches, and ports — so you switch between features instantly without stashing or branch-juggling.
 
-mx manages a **runtime**: a single `mx/` folder holding pristine repo clones (each in a per-repo container at `repos/<repo>/git`) and one folder per feature (`works/`), each with its git worktrees under `wt/<repo>` on their own branches. mx owns the per-work manifest (`work.json`) and a VS Code workspace file; you drive everything through `mx` commands.
+mx manages a **runtime**: a single `mx/` folder holding pristine repo clones (each in a per-repo container at `repos/<repo>/git`) and one folder per feature (`works/`), each with its git worktrees under `wt/<repo>` on their own branches. It also carries a shared `context/` (institutional knowledge) and a free-form `files/` store (operational values like creds, cluster names, and tokens that any work can read). mx owns the per-work manifest (`work.json`) and a VS Code workspace file; you drive everything through `mx` commands.
 
 The runtime is **versioned** (an integer in `<runtime>/mx.json`). A given CLI supports exactly one runtime version — CLI major ⇄ runtime version (CLI 2.x ⇄ runtime v2). After a major CLI upgrade, run `mx migrate` once to bring an existing runtime up to date.
 
