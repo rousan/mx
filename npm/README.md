@@ -60,6 +60,7 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 | `mx work health` / `mx work -n <name> health` | local-only work-folder audit (stray files, worktree presence, cross-work port collisions, archive invariants); augmented by the central `work-health` hook (`--all` includes archived) |
 | `mx health [--all]` | whole-runtime overview: every repo's health + every active work's health |
 | `mx bin ls` / `mx bin path` (alias `mx bins`) | list the runtime's `bin/` utility executables (mx-shipped + your own); `path` prints the dir for `export PATH="$(mx bin path):$PATH"` |
+| `mx divider <text> [-o]` | fill a terminal with `<text>` as large block letters (a visual separator for macOS Spaces); `-o` opens a new fullscreen Terminal (macOS) |
 
 ## License
 

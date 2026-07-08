@@ -2,6 +2,13 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 3.6.0 — 2026-07-08
+
+**`mx divider <text> [-o]`** — fill a terminal with `<text>` as large block letters, a visual separator for macOS Mission Control Spaces (e.g. an `IN REVIEWS` / `PR REVIEWS` window between clusters of work windows). Bare, it takes over the current terminal, draws the banner, and holds it (Ctrl-C or `q` to quit); `-o` opens a new fullscreen Terminal running the same banner (macOS). The text auto-scales to fill the terminal and re-renders on resize.
+
+- **Zero-dependency renderer:** a 5x7 block font in `@mx/core` (`renderBanner(text, cols, rows)`) — no `figlet`/`banner` binary needed. The CLI (`divider.ts`) owns the clear/hold/cursor/resize handling; `openFullscreenTerminal` (factored out of `openWorkLayout`) powers `-o`.
+- Personal window-organization aid; touches no runtime state. Minor — runtime stays v3, no migration.
+
 ## 3.5.0 — 2026-07-06
 
 **Runtime-wide `files/` store.** A new `<runtime>/files/` directory: a free-form place for operational **values** any work session can read — credentials, cluster names/URLs, usernames, API keys/tokens, endpoints, and other key-value meta a task needs to actually operate (a Playwright login, an authenticated API call, an ssh target). Created **empty** by `mx init` and backfilled by `mx sync`; mx only guarantees the directory exists and never reads, writes, or validates its contents — the layout is the agent's/user's to choose.

@@ -54,6 +54,9 @@ Bin (runtime-wide utility executables in <runtime>/bin, meant for PATH):
   mx bin ls   (alias mx bins)                           list bins (mx-shipped + your own); shows whether bin/ is on PATH
   mx bin path                                           print the bin/ dir: export PATH="$(mx bin path):$PATH"
 
+Divider (a fullscreen label to separate your Spaces):
+  mx divider <text> [-o]                                fill the terminal with <text> as large block letters and hold it (Ctrl-C / q to quit); -o opens a new fullscreen Terminal (macOS)
+
 The -n <name> selector may be omitted when your cwd implies it: inside a work folder or
 worktree (works/<work>/...) the work is inferred; inside repos/<repo>/... the repo is inferred.
 

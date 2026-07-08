@@ -54,6 +54,7 @@ import {
   readSessionTitle,
   findSessionsByName,
   parseInitWorktreeSpec,
+  renderBanner,
 } from '../src/index';
 import { compareVersions, maxVersion } from '../src/semver';
 import { resolveBase } from '../src/git';
@@ -648,6 +649,39 @@ describe('worktreeSetBranch', () => {
     const { root } = fixture();
     archiveWork(root, 'feat');
     expect(() => worktreeSetBranch(root, 'feat', 'app')).toThrow(/not on disk/);
+  });
+});
+
+describe('renderBanner (mx divider)', () => {
+  it('returns exactly `rows` lines, none wider than `cols`', () => {
+    const rows = 24;
+    const cols = 80;
+    const lines = renderBanner('IN REVIEWS', cols, rows).split('\n');
+    expect(lines).toHaveLength(rows);
+    expect(Math.max(...lines.map((l) => [...l].length))).toBeLessThanOrEqual(cols);
+  });
+
+  it('draws the text with block characters', () => {
+    const out = renderBanner('HI', 80, 24);
+    expect(out).toContain('█');
+  });
+
+  it('is blank for empty text (no block characters)', () => {
+    const out = renderBanner('', 80, 24);
+    expect(out).not.toContain('█');
+    expect(out.split('\n')).toHaveLength(24);
+  });
+
+  it('does not throw on unsupported characters (fall back to ?)', () => {
+    expect(() => renderBanner('A~B', 80, 24)).not.toThrow();
+    expect(renderBanner('A~B', 80, 24)).toContain('█');
+  });
+
+  it('scales down to still fit a very small terminal', () => {
+    const cols = 20;
+    const rows = 10;
+    const lines = renderBanner('PR REVIEWS', cols, rows).split('\n');
+    expect(lines).toHaveLength(rows);
   });
 });
 
