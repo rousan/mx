@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MxError } from '@mx/core';
 import { parseArgs } from './args';
-import { setPorcelain, emit, fail } from './output';
+import { setPorcelain, emit, fail, check, bold, dim } from './output';
 import { HELP } from './help';
 import { runGlobal } from './commands/global';
 import { dispatchRepo } from './commands/repo';
@@ -11,6 +11,8 @@ import { dispatchWork } from './commands/work';
 import { dispatchBin } from './commands/bin';
 import { dispatchHealth } from './commands/health';
 import { dispatchMissionControl } from './commands/missionControl';
+import { runDivider } from './divider';
+import { openFullscreenTerminal, shq } from './open';
 
 /**
  * CLI version, surfaced by `mx version` / `mx --version`. Read from the
@@ -67,6 +69,26 @@ export function main(): void {
       case 'mission-control':
       case 'mc':
         return dispatchMissionControl(positionals, flags);
+      case 'divider': {
+        // Fill a terminal with big block text as a visual separator for your
+        // Spaces. Bare: takes over the current terminal and holds. With -o:
+        // opens a new fullscreen Terminal (macOS) running this same command.
+        const text = positionals.slice(1).join(' ').trim();
+        if (!text) throw new MxError('usage: mx divider <text> [-o]', 'BAD_ARGS');
+        if (flags.open) {
+          // Re-invoke this exact CLI (node + entry script) in the new Terminal,
+          // without -o, so it clears + renders + holds there.
+          openFullscreenTerminal(
+            `${shq(process.execPath)} ${shq(process.argv[1])} divider ${shq(text)}`,
+          );
+          emit(
+            () => console.log(`${check()} opened divider ${bold(text)} ${dim('(new Terminal)')}`),
+            { divider: text, opened: true },
+          );
+          return;
+        }
+        return runDivider(text);
+      }
       default:
         throw new MxError(`unknown command: ${positionals[0]}`, 'BAD_ARGS');
     }

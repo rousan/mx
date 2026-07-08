@@ -54,6 +54,8 @@ export type { InitResult, SyncResult, MxConfig, HookEvent, RuntimeBin, RepoConfi
 export { claudeProjectDirName, readSessionTitle, findSessionsByName } from './claudeSessions';
 export type { ClaudeSession } from './claudeSessions';
 
+export { renderBanner } from './banner';
+
 export { compareVersions, maxVersion } from './semver';
 
 export { migrateRuntime } from './migrations';

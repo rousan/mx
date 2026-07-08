@@ -69,15 +69,27 @@ export interface OpenWorkOpts {
  * @param opts - Optional launch command to run in the new Terminal (e.g. a `claude` invocation).
  */
 export function openWorkLayout(workdir: string, opts: OpenWorkOpts = {}): void {
+  // The shell command Terminal runs: cd into the work folder, then optionally
+  // chain the caller's launch command (e.g. `claude --resume <id>`).
+  openFullscreenTerminal(`cd ${shq(workdir)}${opts.command ? ` && ${opts.command}` : ''}`);
+}
+
+/**
+ * macOS-only: open a **new fullscreen Terminal window** running `command`. The
+ * low-level primitive behind `mx work open` (which prefixes a `cd`) and
+ * `mx divider` (which runs the banner renderer). Throws `UNSUPPORTED` off macOS
+ * and `OSASCRIPT` if the AppleScript step fails.
+ *
+ * @param command - The shell command to run in the new Terminal window.
+ */
+export function openFullscreenTerminal(command: string): void {
   if (process.platform !== 'darwin') {
     throw new MxError('-o/--open is only supported on macOS', 'UNSUPPORTED');
   }
 
-  // The shell command Terminal runs: cd into the work folder, then optionally
-  // chain the caller's launch command (e.g. `claude --resume <id>`).
-  const shellCmd = `cd ${shq(workdir)}${opts.command ? ` && ${opts.command}` : ''}`;
+  const shellCmd = command;
 
-  // Open a new Terminal window cd'd into the work folder, then fullscreen it.
+  // Open a new Terminal window running the command, then fullscreen it.
   // When the frontmost Terminal window is already fullscreen, macOS's "prefer
   // tabs in full screen" setting forces `do script` to open a TAB rather than a
   // window. Detect that (window count didn't grow) and detach the tab into its
