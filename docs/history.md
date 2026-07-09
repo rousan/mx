@@ -2,6 +2,10 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 3.6.2 — 2026-07-09
+
+**`mx divider` renders text literally, with caller-controlled line breaks.** Spaces are now kept verbatim (`"  MAIN  "` keeps its padding) instead of being collapsed, and the banner no longer auto-wraps on whitespace. Instead, **you** control stacking: a `\n` (or a real newline) starts a new line, so `mx divider "IN\nPROGRESS"` stacks the two words and fills the window like a single word, while `"IN PROGRESS"` stays one line. The CLI preserves the argument's spaces (no trim) and collapses a real newline to `\n` when re-launching under `-o` so the AppleScript stays single-line. Renderer change in `@mx/core` (`renderBanner`) + CLI arg handling.
+
 ## 3.6.1 — 2026-07-09
 
 **`mx divider` renders much larger.** The banner now scales to fill the terminal (chunky letters at the largest cell size the width allows, height grown to match) instead of strict proportional scaling, which left a long label like `IN REVIEWS` tiny on a fullscreen window (7 rows). Also honors `COLUMNS`/`LINES` env vars as a size fallback for non-TTY (piped) output, so you can preview a size without going fullscreen. Renderer-only change in `@mx/core` (`renderBanner`) plus the CLI size fallback.

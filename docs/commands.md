@@ -433,7 +433,8 @@ The directory is created by `mx init` and refreshed by `mx sync`. mx-shipped bin
 
 Fill a terminal with `<text>` rendered as **large block letters**, as a visual separator for your macOS Mission Control Spaces (e.g. an `IN REVIEWS` or `PR REVIEWS` window between clusters of work windows). The text auto-scales to fill the terminal and re-renders when the window resizes.
 
-- **Bare** (`mx divider "IN REVIEWS"`) — takes over the **current** terminal: clears it, draws the banner, and **holds** it on screen (Ctrl-C or `q` to quit). Piped/non-TTY output just prints the banner once and returns.
+- **Rendered literally.** Spaces are kept verbatim (`"  MAIN  "` keeps its padding), and **you** control line breaks: a `\n` (or a real newline) starts a new stacked line. Nothing is auto-wrapped or collapsed — so to make a two-word label fill the window like a single word, stack it: `mx divider "IN\nPROGRESS"`.
+- **Bare** (`mx divider "IN REVIEWS"`) — takes over the **current** terminal: clears it, draws the banner, and **holds** it on screen (Ctrl-C or `q` to quit). Piped/non-TTY output prints once and returns (honoring `COLUMNS`/`LINES` for size).
 - **`-o` / `--open` (macOS)** — opens a **new fullscreen Terminal** running the same banner, so you can drag it into place in the Spaces strip. Off macOS this is `UNSUPPORTED` (a warning).
 
 This is a personal window-organization aid; it touches no runtime state. The renderer is a zero-dependency 5x7 block font (`renderBanner` in `@mx/core`), so it needs no `figlet`/`banner` binary.
