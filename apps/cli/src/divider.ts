@@ -19,15 +19,21 @@ const SHOW_CURSOR = '\x1b[?25h';
  * @param text - The label to display.
  */
 export function runDivider(text: string): void {
+  // Terminal size, falling back to COLUMNS/LINES env then a default — the env
+  // fallback lets a non-TTY (piped) run render at an explicit size for preview.
+  const dims = (): [number, number] => [
+    process.stdout.columns || Number(process.env.COLUMNS) || 80,
+    process.stdout.rows || Number(process.env.LINES) || 24,
+  ];
   const paint = (): void => {
-    const cols = process.stdout.columns || 80;
-    const rows = process.stdout.rows || 24;
+    const [cols, rows] = dims();
     process.stdout.write(CLEAR + renderBanner(text, cols, rows));
   };
 
   // Non-interactive (piped) stdout: emit once and return, no hold.
   if (!process.stdout.isTTY) {
-    process.stdout.write(renderBanner(text, process.stdout.columns || 80, process.stdout.rows || 24) + '\n');
+    const [cols, rows] = dims();
+    process.stdout.write(renderBanner(text, cols, rows) + '\n');
     return;
   }
 

@@ -2,6 +2,10 @@
 
 What each release brought. Reverse-chronological. Dates reflect when the corresponding tag was pushed.
 
+## 3.6.1 — 2026-07-09
+
+**`mx divider` renders much larger.** The banner now scales to fill the terminal (chunky letters at the largest cell size the width allows, height grown to match) instead of strict proportional scaling, which left a long label like `IN REVIEWS` tiny on a fullscreen window (7 rows). Also honors `COLUMNS`/`LINES` env vars as a size fallback for non-TTY (piped) output, so you can preview a size without going fullscreen. Renderer-only change in `@mx/core` (`renderBanner`) plus the CLI size fallback.
+
 ## 3.6.0 — 2026-07-08
 
 **`mx divider <text> [-o]`** — fill a terminal with `<text>` as large block letters, a visual separator for macOS Mission Control Spaces (e.g. an `IN REVIEWS` / `PR REVIEWS` window between clusters of work windows). Bare, it takes over the current terminal, draws the banner, and holds it (Ctrl-C or `q` to quit); `-o` opens a new fullscreen Terminal running the same banner (macOS). The text auto-scales to fill the terminal and re-renders on resize.
