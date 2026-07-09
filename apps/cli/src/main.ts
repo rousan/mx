@@ -73,16 +73,20 @@ export function main(): void {
         // Fill a terminal with big block text as a visual separator for your
         // Spaces. Bare: takes over the current terminal and holds. With -o:
         // opens a new fullscreen Terminal (macOS) running this same command.
-        const text = positionals.slice(1).join(' ').trim();
-        if (!text) throw new MxError('usage: mx divider <text> [-o]', 'BAD_ARGS');
+        // Preserve the caller's spaces verbatim (no trim); validate on content.
+        const text = positionals.slice(1).join(' ');
+        if (!text.trim()) throw new MxError('usage: mx divider <text> [-o]', 'BAD_ARGS');
         if (flags.open) {
           // Re-invoke this exact CLI (node + entry script) in the new Terminal,
-          // without -o, so it clears + renders + holds there.
+          // without -o, so it clears + renders + holds there. Collapse any real
+          // newline to the literal `\n` sequence so the AppleScript `do script`
+          // command stays single-line (renderBanner treats `\n` as a break).
+          const safe = text.replace(/\n/g, '\\n');
           openFullscreenTerminal(
-            `${shq(process.execPath)} ${shq(process.argv[1])} divider ${shq(text)}`,
+            `${shq(process.execPath)} ${shq(process.argv[1])} divider ${shq(safe)}`,
           );
           emit(
-            () => console.log(`${check()} opened divider ${bold(text)} ${dim('(new Terminal)')}`),
+            () => console.log(`${check()} opened divider ${bold(text.replace(/\n/g, ' '))} ${dim('(new Terminal)')}`),
             { divider: text, opened: true },
           );
           return;

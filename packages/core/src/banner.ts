@@ -80,56 +80,87 @@ function glyphFor(ch: string): string[] {
 }
 
 /**
- * Render `text` as large block letters centered in a `cols` by `rows` terminal,
- * scaled up to roughly fill the space. Returns exactly `rows` newline-separated
- * lines (blank where empty) using `█` for filled cells, so the caller can clear
- * the screen and print it as a full-screen banner.
+ * The unscaled bitmap of one text line: its `GLYPH_H` rows and total cell width.
+ */
+interface LineBitmap {
+  /** `GLYPH_H` strings of `#`/space — the line's glyphs joined by a blank column. */
+  rows: string[];
+  /** Width of each row in base cells. */
+  width: number;
+}
+
+/**
+ * Build the unscaled bitmap for a single line, **rendered literally** — every
+ * character (including spaces) becomes a glyph, so the caller's spacing is
+ * preserved exactly.
  *
- * @param text - The label to render (case-insensitive; unsupported chars become `?`).
+ * @param line - One (already uppercased) line of text.
+ * @returns Its base rows and width.
+ */
+function lineBitmap(line: string): LineBitmap {
+  const glyphs = [...line].map(glyphFor);
+  const rows: string[] = [];
+  for (let r = 0; r < GLYPH_H; r++) rows.push(glyphs.map((g) => g[r]).join(' '));
+  return { rows, width: glyphs.length === 0 ? 0 : glyphs.length * 5 + (glyphs.length - 1) };
+}
+
+/**
+ * Render `text` as large block letters centered in a `cols` by `rows` terminal,
+ * scaled up to fill the space. The text is rendered **literally**: spaces are
+ * preserved as-is (so `  MAIN  ` keeps its padding), and **you** control line
+ * breaks — a newline, either a real one or the two-character sequence `\n`,
+ * starts a new stacked line. Nothing is auto-wrapped or collapsed. Returns
+ * exactly `rows` newline-separated lines using `█` for filled cells.
+ *
+ * @param text - The label to render (case-insensitive; unsupported chars become `?`; `\n` or a real newline stacks lines; spaces are kept verbatim).
  * @param cols - Terminal width in columns.
  * @param rows - Terminal height in rows.
  * @returns The composed banner as a single string of `rows` lines.
  */
 export function renderBanner(text: string, cols: number, rows: number): string {
-  const chars = [...text.toUpperCase()];
-  const glyphs = chars.map(glyphFor);
-  // Base bitmap width: each glyph is 5 cells wide, joined by a 1-cell gap.
-  const baseW = glyphs.length === 0 ? 0 : glyphs.length * 5 + (glyphs.length - 1);
+  // Treat the literal two-character sequence "\n" as a line break too, since a
+  // real newline is awkward to pass on a command line.
+  const lines = text.replace(/\\n/g, '\n').toUpperCase().split('\n');
+  const blank = (): string => Array.from({ length: rows }, () => '').join('\n');
+  if (lines.every((l) => l === '')) return blank();
 
-  // Compose the 7 base rows (glyphs separated by a blank column).
-  const baseRows: string[] = [];
-  for (let r = 0; r < GLYPH_H; r++) {
-    baseRows.push(glyphs.map((g) => g[r]).join(' '));
-  }
+  const bitmaps = lines.map(lineBitmap);
+  const maxW = Math.max(1, ...bitmaps.map((b) => b.width));
+  const gap = 1; // blank base-rows between stacked lines
+  const totalBaseH = lines.length * GLYPH_H + (lines.length - 1) * gap;
 
-  // Scale up to fill the terminal. Width is the usual constraint (a long label
-  // caps how wide each cell can be), so take the largest cell width that fits
-  // and then grow the height to match — capped at the same factor so letters
-  // stay chunky (roughly square in cell counts) rather than proportional-but-
-  // tiny. This fills far more of a large fullscreen window than strict
-  // proportional scaling, which is what makes the banner readable at a glance.
+  // Scale up to fill the terminal, based on the widest line and the stacked
+  // height. Take the largest cell width the width allows, then grow the height
+  // to match (capped at the same factor so letters stay chunky, not needle
+  // thin). Since the caller controls wrapping, short lines fill the window.
   const marginH = 2;
   const marginV = 2;
-  const xMax = Math.floor((cols - marginH) / Math.max(1, baseW));
-  const yMax = Math.floor((rows - marginV) / GLYPH_H);
+  const xMax = Math.floor((cols - marginH) / maxW);
+  const yMax = Math.floor((rows - marginV) / Math.max(1, totalBaseH));
   const xscale = Math.max(1, xMax);
   const yscale = Math.max(1, Math.min(yMax, xscale));
 
-  // Scale each base row up (horizontally by xscale, vertically by yscale).
-  const scaled: string[] = [];
-  for (const row of baseRows) {
-    let line = '';
-    for (const cell of row) line += (cell === '#' ? '█' : ' ').repeat(xscale);
-    for (let k = 0; k < yscale; k++) scaled.push(line);
-  }
-  const lineW = baseW * xscale;
-
-  // Center vertically and horizontally, padding out to exactly `rows` lines.
-  const out: string[] = [];
-  const padTop = Math.max(0, Math.floor((rows - scaled.length) / 2));
+  const lineW = maxW * xscale;
   const padLeft = ' '.repeat(Math.max(0, Math.floor((cols - lineW) / 2)));
+
+  // Compose the scaled block, each line centered within the widest line's box.
+  const block: string[] = [];
+  bitmaps.forEach((bm, i) => {
+    const leadCells = Math.floor((maxW - bm.width) / 2);
+    for (const row of bm.rows) {
+      const padded = ' '.repeat(leadCells) + row + ' '.repeat(maxW - bm.width - leadCells);
+      let line = '';
+      for (const cell of padded) line += (cell === '#' ? '█' : ' ').repeat(xscale);
+      for (let k = 0; k < yscale; k++) block.push(line.trimEnd() === '' ? '' : padLeft + line);
+    }
+    if (i < lines.length - 1) for (let g = 0; g < gap * yscale; g++) block.push('');
+  });
+
+  // Center vertically, then pad/clip to exactly `rows` lines.
+  const out: string[] = [];
+  const padTop = Math.max(0, Math.floor((rows - block.length) / 2));
   for (let i = 0; i < padTop; i++) out.push('');
-  for (const l of scaled) out.push(l.trim() === '' ? '' : padLeft + l);
+  out.push(...block);
   while (out.length < rows) out.push('');
-  return out.join('\n');
+  return out.slice(0, rows).join('\n');
 }

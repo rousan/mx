@@ -683,6 +683,22 @@ describe('renderBanner (mx divider)', () => {
     const lines = renderBanner('PR REVIEWS', cols, rows).split('\n');
     expect(lines).toHaveLength(rows);
   });
+
+  it('stacks on a literal \\n and fills more height than the same text on one line', () => {
+    const filled = (s: string): number =>
+      renderBanner(s, 200, 50).split('\n').filter((l) => l.includes('█')).length;
+    // Two stacked words use more vertical band than one wide single line.
+    expect(filled('IN\\nREVIEWS')).toBeGreaterThan(filled('IN REVIEWS'));
+  });
+
+  it('stacks on a real newline the same as the literal \\n', () => {
+    expect(renderBanner('A\nB', 120, 40)).toBe(renderBanner('A\\nB', 120, 40));
+  });
+
+  it('respects spaces literally (does not collapse runs)', () => {
+    // Extra spaces widen the line, so at a fixed size the scale differs.
+    expect(renderBanner('A B', 60, 20)).not.toBe(renderBanner('A   B', 60, 20));
+  });
 });
 
 describe('parseInitWorktreeSpec (mx work new initial worktrees)', () => {
