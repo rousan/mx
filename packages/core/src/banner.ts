@@ -102,16 +102,18 @@ export function renderBanner(text: string, cols: number, rows: number): string {
     baseRows.push(glyphs.map((g) => g[r]).join(' '));
   }
 
-  // Pick a scale that fits both dimensions. A character cell is about twice as
-  // tall as wide, so we aim for xscale ≈ 2·yscale to keep letters looking
-  // square, but never exceed the width/height budget (each axis is clamped
-  // independently, so long text scales down instead of overflowing).
+  // Scale up to fill the terminal. Width is the usual constraint (a long label
+  // caps how wide each cell can be), so take the largest cell width that fits
+  // and then grow the height to match — capped at the same factor so letters
+  // stay chunky (roughly square in cell counts) rather than proportional-but-
+  // tiny. This fills far more of a large fullscreen window than strict
+  // proportional scaling, which is what makes the banner readable at a glance.
   const marginH = 2;
   const marginV = 2;
   const xMax = Math.floor((cols - marginH) / Math.max(1, baseW));
   const yMax = Math.floor((rows - marginV) / GLYPH_H);
-  const yscale = Math.max(1, Math.min(yMax, Math.floor(xMax / 2)));
-  const xscale = Math.max(1, Math.min(xMax, yscale * 2));
+  const xscale = Math.max(1, xMax);
+  const yscale = Math.max(1, Math.min(yMax, xscale));
 
   // Scale each base row up (horizontally by xscale, vertically by yscale).
   const scaled: string[] = [];
