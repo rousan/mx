@@ -11,7 +11,7 @@ How to set up, iterate on, and test mx.
 ## First-time setup
 
 ```bash
-git clone git@github.com:roulabs/mx.git && cd mx
+git clone git@github.com:rousan/mx.git && cd mx
 pnpm install
 pnpm build                       # populates npm/ (bin/mx.js + templates/ + LICENSE)
 export MX_RUNTIME="$PWD/.mx"     # gitignored dev runtime in this repo
@@ -73,7 +73,7 @@ This rule is **load-bearing under self-hosting** — see [self-hosting](self-hos
 There is **no global PATH coupling to this repo**. The global `mx` exists only when you install a build:
 
 ```bash
-npm i -g @roulabs/mx
+npm i -g @rousan/mx
 ```
 
 Within this repo, `pnpm mx` runs the local build via the workspace script (`node npm/bin/mx.js`). After changing CLI / core code: `pnpm build` (or keep `pnpm dev` watching) before the change takes effect.
@@ -87,3 +87,37 @@ Templates live at `/templates`. tsup copies them into `npm/templates/` at build,
 - `confirmYesNo()` delegates to `spawnSync('/bin/sh', ['-c', "read REPLY"])` because Node's `fs.readSync(0, …)` returns EAGAIN immediately on macOS in non-blocking stdin mode. The shell builtin `read` blocks on TTY correctly across macOS and Linux.
 - The first `pnpm install` on a corp npm mirror can be slow — not stuck.
 - `mx init` is idempotent; re-stamping never clobbers `repos/`, `works/`, or existing `context/INDEX.json`.
+
+## Documentation site (mx.rousanali.com)
+
+The docs are a [VitePress](https://vitepress.dev) site built **directly from the `docs/*.md` files** in this repo (this folder is the VitePress `srcDir`), so the site and the code never drift. Config lives in `docs/.vitepress/config.mts`; the landing page is `docs/index.md`.
+
+```bash
+pnpm docs:dev        # local dev server with hot reload
+pnpm docs:build      # production build -> docs/.vitepress/dist
+pnpm docs:preview    # preview the production build
+```
+
+Notes:
+
+- `docs/sessions/**` and `docs/README.md` are excluded from the site (`srcExclude`).
+- Markdown raw-HTML passthrough is **off** (`markdown.html: false`) because the CLI docs are full of `<name>` / `<repo>` placeholders that Vue would otherwise parse as tags. Code spans, fenced blocks, and `:::` containers are unaffected.
+
+### Hosting: Cloudflare Pages
+
+The site is served at **mx.rousanali.com** via Cloudflare Pages, connected to this repo's Git integration so deploys are automatic:
+
+- **production** deploy on every push to `main`;
+- a **preview** deploy (with its own URL) on every pull request.
+
+One-time setup in the Cloudflare Pages dashboard (Create project → Connect to Git → this repo):
+
+| Setting | Value |
+|---|---|
+| Framework preset | None (VitePress) |
+| Build command | `pnpm docs:build` |
+| Build output directory | `docs/.vitepress/dist` |
+| Root directory | `/` (repo root) |
+| Environment variable | `NODE_VERSION = 22` |
+
+pnpm is auto-detected from the `packageManager` field, and it installs `devDependencies` (VitePress) by default. Then add the custom domain `mx.rousanali.com` under the project's **Custom domains** tab (a `CNAME` is created automatically since the zone is on Cloudflare). No repo secrets or workflow are needed — the Pages Git integration handles prod + PR previews on its own.

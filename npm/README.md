@@ -9,7 +9,7 @@ The runtime is **versioned** (an integer in `<runtime>/mx.json`). A given CLI su
 ## Install
 
 ```bash
-npm install -g @roulabs/mx      # provides the `mx` command
+npm install -g @rousan/mx      # provides the `mx` command
 ```
 
 Requires Node >= 22 and git.
