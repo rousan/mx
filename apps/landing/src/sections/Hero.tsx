@@ -26,16 +26,16 @@ export function Hero() {
         </a>
 
         <h1 className="mx-auto mt-8 max-w-3xl text-5xl font-bold tracking-tight text-ink sm:text-6xl">
-          A coding agent on every
+          Work on parallel features
           <br />
-          feature, <span className="mx-grad-text">all at once</span>.
+          using <span className="mx-grad-text">coding agents</span>.
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-muted sm:text-xl">
           <span className="font-semibold text-ink-soft">mx</span> combines your coding agent’s
-          parallel sessions — Claude Code and friends — with git worktrees. Every feature gets its own
-          isolated folder, branch, ports, and agent session, so a fleet of agents can work at once
-          without tripping over each other.
+          parallel sessions — Claude Code, Cursor, and the rest — with git worktrees. Every feature
+          gets its own isolated folder, branch, ports, and agent session, so a fleet of agents can
+          work at once without tripping over each other.
         </p>
 
         {/* Primary install line — the single most important thing to copy. */}
