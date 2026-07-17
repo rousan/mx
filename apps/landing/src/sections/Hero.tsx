@@ -1,0 +1,71 @@
+import { CopyButton, Icon } from '../ui';
+import { PKG, REPO_URL } from '../content';
+
+/**
+ * The hero: the one-line promise, a subheadline that names the problem, the
+ * install command, and two calls to action. A faint parallel-lanes backdrop
+ * (see `.mx-lanes`) hints at features running side by side.
+ */
+export function Hero() {
+  return (
+    <section id="top" className="relative overflow-hidden">
+      {/* Decorative background: parallel lanes + a soft accent glow. */}
+      <div aria-hidden className="mx-lanes pointer-events-none absolute inset-0" />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-40 left-1/2 h-[520px] w-[820px] -translate-x-1/2 rounded-full opacity-20 blur-3xl"
+        style={{ background: 'radial-gradient(circle, var(--accent), transparent 65%)' }}
+      />
+
+      <div className="relative mx-auto w-full max-w-5xl px-5 pt-20 pb-24 text-center sm:pt-28 sm:pb-32">
+        <a
+          href={REPO_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3.5 py-1.5 text-xs text-muted backdrop-blur transition-colors hover:border-line-strong hover:text-ink"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-accent-2" />
+          Open source · MIT · built on git worktrees
+          <Icon name="arrow" className="h-3.5 w-3.5" />
+        </a>
+
+        <h1 className="mx-auto mt-8 max-w-3xl text-5xl font-bold tracking-tight text-ink sm:text-6xl">
+          Work on many features
+          <br />
+          at once, <span className="mx-grad-text">without the chaos</span>.
+        </h1>
+
+        <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-muted sm:text-xl">
+          <span className="font-semibold text-ink-soft">mx</span> gives every feature its own folder,
+          branch, and running app — so you switch between them instantly. No stashing, no
+          branch-juggling, no “port already in use.”
+        </p>
+
+        {/* Primary install line — the single most important thing to copy. */}
+        <div className="mx-auto mt-9 flex max-w-md items-center gap-3 rounded-xl border border-line bg-surface/70 px-4 py-3 backdrop-blur">
+          <code className="flex-1 text-left font-mono text-sm text-ink-soft">
+            <span className="mr-2 select-none text-accent">$</span>
+            npm i -g {PKG}
+          </code>
+          <CopyButton value={`npm i -g ${PKG}`} />
+        </div>
+
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href="#quickstart"
+            className="mx-grad inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-transform hover:-translate-y-0.5"
+          >
+            Get started
+            <Icon name="arrow" className="h-4 w-4" />
+          </a>
+          <a
+            href="#why"
+            className="inline-flex items-center gap-2 rounded-lg border border-line-strong px-5 py-2.5 text-sm font-semibold text-ink-soft transition-colors hover:bg-surface-2"
+          >
+            Why mx?
+          </a>
+        </div>
+      </div>
+    </section>
+  );
+}

@@ -90,22 +90,25 @@ Templates live at `/templates`. tsup copies them into `npm/templates/` at build,
 
 ## Documentation site (mx.rousanali.com)
 
-The docs are a [VitePress](https://vitepress.dev) site built **directly from the `docs/*.md` files** in this repo (this folder is the VitePress `srcDir`), so the site and the code never drift. Config lives in `docs/.vitepress/config.mts`; the landing page is `docs/index.md`.
+There are **two** doc surfaces in this repo, on purpose:
+
+- **`apps/landing/`** — the **public, beginner-first site** published at mx.rousanali.com. A standalone React/Vite/Tailwind app that teaches mx from zero (the problem it solves, the four-word mental model with a diagram, a four-command quickstart, a curated command reference, and an FAQ). This is what a newcomer sees. It intentionally does **not** import from `docs/` — it is hand-written for teaching, so the two can evolve independently without drift risk.
+- **`docs/*.md`** — the **deep reference** (runtime model, full command flags, architecture, release runbook, history). Optional VitePress site for reading these locally; also the source the landing page links out to for exhaustive detail.
 
 ```bash
-pnpm docs:dev        # local dev server with hot reload
-pnpm docs:build      # production build -> docs/.vitepress/dist
-pnpm docs:preview    # preview the production build
+pnpm landing:dev      # landing app dev server with hot reload
+pnpm landing:build    # production build -> apps/landing/dist
+pnpm landing:preview  # preview the production build
+
+pnpm docs:dev         # (optional) VitePress reference site from docs/*.md
+pnpm docs:build       # -> docs/.vitepress/dist
 ```
 
-Notes:
-
-- `docs/sessions/**` and `docs/README.md` are excluded from the site (`srcExclude`).
-- Markdown raw-HTML passthrough is **off** (`markdown.html: false`) because the CLI docs are full of `<name>` / `<repo>` placeholders that Vue would otherwise parse as tags. Code spans, fenced blocks, and `:::` containers are unaffected.
+The landing app lives in `apps/landing/src/`: content (features, concepts, quickstart steps, commands, FAQ) is data in `content.ts`; each page section is a component under `sections/`; `theme.ts` drives the light/dark toggle. To change copy, edit `content.ts`; to change layout, edit the relevant section.
 
 ### Hosting: Cloudflare Pages
 
-The site is served at **mx.rousanali.com** via Cloudflare Pages, connected to this repo's Git integration so deploys are automatic:
+The public site is served at **mx.rousanali.com** via Cloudflare Pages, connected to this repo's Git integration so deploys are automatic:
 
 - **production** deploy on every push to `main`;
 - a **preview** deploy (with its own URL) on every pull request.
@@ -114,10 +117,10 @@ One-time setup in the Cloudflare Pages dashboard (Create project → Connect to 
 
 | Setting | Value |
 |---|---|
-| Framework preset | None (VitePress) |
-| Build command | `pnpm docs:build` |
-| Build output directory | `docs/.vitepress/dist` |
+| Framework preset | None (Vite) |
+| Build command | `pnpm landing:build` |
+| Build output directory | `apps/landing/dist` |
 | Root directory | `/` (repo root) |
 | Environment variable | `NODE_VERSION = 22` |
 
-pnpm is auto-detected from the `packageManager` field, and it installs `devDependencies` (VitePress) by default. Then add the custom domain `mx.rousanali.com` under the project's **Custom domains** tab (a `CNAME` is created automatically since the zone is on Cloudflare). No repo secrets or workflow are needed — the Pages Git integration handles prod + PR previews on its own.
+pnpm is auto-detected from the `packageManager` field, and it installs `devDependencies` (Vite/Tailwind) by default. Then add the custom domain `mx.rousanali.com` under the project's **Custom domains** tab (a `CNAME` is created automatically since the zone is on Cloudflare). No repo secrets or workflow are needed — the Pages Git integration handles prod + PR previews on its own.

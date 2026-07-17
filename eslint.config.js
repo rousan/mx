@@ -22,6 +22,8 @@ export default tseslint.config(
       // The dashboard is a React/Vite app with its own conventions; the repo's
       // JSDoc-on-everything TS config doesn't apply to JSX components.
       'apps/mission-control/**',
+      // The landing + docs site is likewise a standalone React/Vite app.
+      'apps/landing/**',
       // VitePress docs-site config + build output; not part of the CLI/core.
       'docs/.vitepress/**',
     ],

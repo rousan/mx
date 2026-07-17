@@ -20,6 +20,9 @@
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
+    "landing:dev": "pnpm --filter @mx/landing run dev",
+    "landing:build": "pnpm --filter @mx/landing run build",
+    "landing:preview": "pnpm --filter @mx/landing run preview",
     "release": "bash scripts/release.sh"
   },
   "devDependencies": {

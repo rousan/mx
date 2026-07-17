@@ -18,6 +18,9 @@ node_modules/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 
+# landing + docs site build output
+apps/landing/dist/
+
 # playwright screenshot/console artifacts
 .playwright-mcp/
 

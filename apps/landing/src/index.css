@@ -1,0 +1,126 @@
+@import 'tailwindcss';
+
+/*
+ * Dark mode is driven by a `data-theme` attribute on <html> (stamped by the
+ * theme hook in theme.ts), NOT by the media query alone. This lets the manual
+ * light/dark toggle win deterministically while still defaulting to the OS
+ * preference on first load. Every `dark:` utility keys off this variant.
+ */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Semantic design tokens. Light values are the base; the dark override block
+ * below swaps them when <html data-theme="dark">. Exposing them through
+ * `@theme inline` lets us use them as Tailwind color utilities
+ * (e.g. `bg-surface`, `text-muted`, `border-line`).
+ */
+:root {
+  --bg: #fbfbfd;
+  --bg-soft: #f2f2f6;
+  --surface: #ffffff;
+  --surface-2: #f7f7fa;
+  --line: #e6e6ec;
+  --line-strong: #d6d6df;
+  --text: #17171c;
+  --text-soft: #3f3f4a;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --accent: #5b57e0;
+  --accent-ink: #4f46e5;
+  --accent-2: #0891b2;
+  --accent-soft: rgba(91, 87, 224, 0.1);
+  --amber: #b45309;
+  --code-bg: #f4f4f7;
+}
+
+[data-theme='dark'] {
+  --bg: #08080a;
+  --bg-soft: #0e0e12;
+  --surface: #101014;
+  --surface-2: #16161c;
+  --line: #22222a;
+  --line-strong: #2e2e38;
+  --text: #ededf2;
+  --text-soft: #c4c4cd;
+  --muted: #8b8b96;
+  --faint: #5c5c67;
+  --accent: #8b87ff;
+  --accent-ink: #a5a1ff;
+  --accent-2: #22d3ee;
+  --accent-soft: rgba(139, 135, 255, 0.12);
+  --amber: #fbbf24;
+  --code-bg: #0c0c10;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-soft: var(--bg-soft);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--text);
+  --color-ink-soft: var(--text-soft);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-2: var(--accent-2);
+  --color-amber: var(--amber);
+  --font-mono:
+    ui-monospace, 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* Offset in-page anchor jumps so the sticky nav doesn't cover section headings. */
+  scroll-padding-top: 5.5rem;
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* The signature gradient used on the wordmark and key accents — parallel
+ * indigo -> cyan streams, echoing mx's "many features at once" idea. */
+.mx-grad {
+  background-image: linear-gradient(115deg, var(--accent) 0%, var(--accent-2) 100%);
+}
+.mx-grad-text {
+  background-image: linear-gradient(115deg, var(--accent) 10%, var(--accent-2) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Faint parallel-lanes backdrop for the hero — a nod to worktrees running side by side. */
+.mx-lanes {
+  background-image: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--line) 55%, transparent) 0px,
+    color-mix(in srgb, var(--line) 55%, transparent) 1px,
+    transparent 1px,
+    transparent 132px
+  );
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, #000 30%, transparent 78%);
+}
+
+/* Respect users who prefer reduced motion — kill smooth scroll + animations. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
