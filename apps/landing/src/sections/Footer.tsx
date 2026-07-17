@@ -13,10 +13,11 @@ export function Footer() {
       <section className="border-t border-line">
         <div className="mx-auto w-full max-w-3xl px-5 py-20 text-center sm:py-24">
           <h2 className="text-3xl font-semibold tracking-tight text-ink sm:text-4xl">
-            Give every feature its own desk
+            Run a coding agent on every feature
           </h2>
           <p className="mx-auto mt-4 max-w-xl text-lg text-muted">
-            One global install, and your next parallel feature is a single command away.
+            One global install, and your next parallel feature — and its agent session — is a single
+            command away.
           </p>
           <div className="mx-auto mt-8 flex max-w-md items-center gap-3 rounded-xl border border-line bg-surface px-4 py-3">
             <code className="flex-1 text-left font-mono text-sm text-ink-soft">
@@ -35,7 +36,7 @@ export function Footer() {
               <span className="mx-grad-text">mx</span>
             </div>
             <p className="mt-1 text-sm text-muted">
-              Parallel work across shared repos, built on git worktrees.
+              A coding agent on every feature — parallel sessions on git worktrees.
             </p>
           </div>
 

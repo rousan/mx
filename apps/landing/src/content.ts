@@ -20,9 +20,15 @@ export interface Feature {
 
 /**
  * The headline capabilities, written for someone who has never heard of mx.
- * These deliberately avoid jargon; the Concepts section defines the terms.
+ * These deliberately avoid jargon; the Concepts section defines the terms. The
+ * parallel-agents card leads, since that is mx's reason for existing.
  */
 export const FEATURES: Feature[] = [
+  {
+    icon: 'sparkles',
+    title: 'A coding agent per feature',
+    body: 'Open a feature in a fullscreen terminal that resumes or starts its own Claude Code session, pre-seeded with context. Run several agents at once, one per feature, without them tripping over each other.',
+  },
   {
     icon: 'layers',
     title: 'A separate desk per feature',
@@ -49,9 +55,47 @@ export const FEATURES: Feature[] = [
     body: 'A new worktree can auto-copy your .env, install dependencies, or seed a database. One script per lifecycle event, in any language — so a fresh feature is ready the moment it exists.',
   },
   {
+    icon: 'activity',
+    title: 'Live mission control',
+    body: 'A local, read-only web dashboard streams the health of every repo and feature plus a consolidated ports board — so you can see your whole fleet at a glance.',
+  },
+];
+
+/**
+ * One point in the "Built for coding agents" section — the workflow details
+ * that make mx a fit for running many agent sessions in parallel.
+ */
+export interface AgentPoint {
+  icon: IconName;
+  title: string;
+  body: string;
+}
+
+/**
+ * How mx supports a fleet of coding agents, concretely. These map to real
+ * commands and hooks (mx work open, the session-prompt hook, per-feature ports,
+ * --porcelain output), so the section stays truthful rather than aspirational.
+ */
+export const AGENT_POINTS: AgentPoint[] = [
+  {
     icon: 'sparkles',
-    title: 'Made for parallel AI sessions',
-    body: 'Open a feature in a fullscreen terminal that resumes or starts its own Claude Code session, pre-seeded with context. Run several coding agents at once, one per feature, without them tripping over each other.',
+    title: 'One session per feature',
+    body: 'mx work open drops you into a fullscreen terminal that resumes — or starts — that feature’s Claude Code session. Each feature keeps its own conversation, history, and context.',
+  },
+  {
+    icon: 'plug',
+    title: 'Seed every session automatically',
+    body: 'A session-prompt hook generates each new session’s opening prompt — global, per-repo, or per-feature — so an agent starts with the right context instead of a blank slate.',
+  },
+  {
+    icon: 'switch',
+    title: 'No agents stepping on each other',
+    body: 'Every agent works in its own worktree, branch, and ports. Point a fleet at ten features at once; none share a checkout or fight over a port.',
+  },
+  {
+    icon: 'terminal',
+    title: 'Agent-friendly by design',
+    body: 'Every read command emits stable JSON with --porcelain, and mx infers the feature from the working directory — so an agent can drive mx as reliably as a person can.',
   },
 ];
 
@@ -229,8 +273,8 @@ export const FAQS: Faq[] = [
     a: 'Neither. Inside a worktree you use git exactly as you always have — branch, commit, push, open PRs. mx only orchestrates the folders, branches, ports, and workspaces around your repos. It generates a VS Code workspace file, but you edit however you like.',
   },
   {
-    q: 'Is this only useful with AI coding agents?',
-    a: 'No. mx is valuable for any parallel work — juggling several features, reviewing a PR while building another, or a full-stack change across repos. The AI-session support is a bonus layer on top: it happens to be great for running one Claude Code session per feature.',
+    q: 'Do I have to use it with AI coding agents?',
+    a: 'No. mx grew out of running many Claude Code sessions in parallel, and that’s its sweet spot — but the same isolation is just as useful for plain human work: juggling several features, reviewing a PR while building another, or a full-stack change across repos. The agent-session support sits on top; you can ignore it and still get all the worktree, branch, and port management.',
   },
   {
     q: 'Where does my actual code live?',
@@ -251,8 +295,8 @@ export const FAQS: Faq[] = [
  */
 export const NAV_LINKS: { label: string; href: string }[] = [
   { label: 'Why mx', href: '#why' },
+  { label: 'Agents', href: '#agents' },
   { label: 'Concepts', href: '#concepts' },
   { label: 'Quickstart', href: '#quickstart' },
   { label: 'Commands', href: '#commands' },
-  { label: 'FAQ', href: '#faq' },
 ];

@@ -21,20 +21,21 @@ export function Hero() {
           className="inline-flex items-center gap-2 rounded-full border border-line bg-surface/60 px-3.5 py-1.5 text-xs text-muted backdrop-blur transition-colors hover:border-line-strong hover:text-ink"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-accent-2" />
-          Open source · MIT · built on git worktrees
+          Open source · MIT · for Claude Code &amp; coding agents
           <Icon name="arrow" className="h-3.5 w-3.5" />
         </a>
 
         <h1 className="mx-auto mt-8 max-w-3xl text-5xl font-bold tracking-tight text-ink sm:text-6xl">
-          Work on many features
+          A coding agent on every
           <br />
-          at once, <span className="mx-grad-text">without the chaos</span>.
+          feature, <span className="mx-grad-text">all at once</span>.
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-muted sm:text-xl">
-          <span className="font-semibold text-ink-soft">mx</span> gives every feature its own folder,
-          branch, and running app — so you switch between them instantly. No stashing, no
-          branch-juggling, no “port already in use.”
+          <span className="font-semibold text-ink-soft">mx</span> combines your coding agent’s
+          parallel sessions — Claude Code and friends — with git worktrees. Every feature gets its own
+          isolated folder, branch, ports, and agent session, so a fleet of agents can work at once
+          without tripping over each other.
         </p>
 
         {/* Primary install line — the single most important thing to copy. */}

@@ -37,8 +37,8 @@ export function Why() {
           </Terminal>
           <p className="text-sm leading-relaxed text-muted">
             Every switch tears down your running app, risks port clashes, and evicts the mental
-            context you’d built up. Across two repos — say a frontend and an API — it’s twice the
-            teardown.
+            context you’d built up. And a coding agent can only work one checkout at a time — so
+            running several agents in parallel is off the table entirely.
           </p>
         </div>
 
@@ -61,8 +61,8 @@ export function Why() {
           </Terminal>
           <p className="text-sm leading-relaxed text-muted">
             No stashing. No re-install. No port fight. Each feature is a separate checkout in its own
-            folder, on its own branch, with its own ports — so switching is just{' '}
-            <Mono>cd</Mono>.
+            folder, on its own branch, with its own ports — so switching is just <Mono>cd</Mono>, and
+            each one can host its own coding-agent session.
           </p>
         </div>
       </div>

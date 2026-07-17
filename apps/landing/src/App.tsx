@@ -2,6 +2,7 @@ import { useTheme } from './theme';
 import { Nav } from './sections/Nav';
 import { Hero } from './sections/Hero';
 import { Why } from './sections/Why';
+import { Agents } from './sections/Agents';
 import { Concepts } from './sections/Concepts';
 import { Quickstart } from './sections/Quickstart';
 import { Features } from './sections/Features';
@@ -11,9 +12,10 @@ import { Footer } from './sections/Footer';
 
 /**
  * The mx landing + docs site: a single scrolling page that teaches mx from zero
- * — hook (Hero), problem (Why), vocabulary (Concepts), hands-on (Quickstart),
- * capabilities (Features), reference (Commands), objections (Faq), then a
- * closing CTA (Footer). Ordered so each section builds on the last.
+ * — hook (Hero), problem (Why), the core agent pitch (Agents), vocabulary
+ * (Concepts), hands-on (Quickstart), capabilities (Features), reference
+ * (Commands), objections (Faq), then a closing CTA (Footer). Ordered so each
+ * section builds on the last.
  */
 export function App() {
   const { theme, toggle } = useTheme();
@@ -23,6 +25,7 @@ export function App() {
       <main>
         <Hero />
         <Why />
+        <Agents />
         <Concepts />
         <Quickstart />
         <Features />
