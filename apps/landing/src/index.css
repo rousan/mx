@@ -9,47 +9,59 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /*
- * Semantic design tokens. Light values are the base; the dark override block
- * below swaps them when <html data-theme="dark">. Exposing them through
- * `@theme inline` lets us use them as Tailwind color utilities
- * (e.g. `bg-surface`, `text-muted`, `border-line`).
+ * Semantic design tokens — a calm, monochrome grayscale system in the spirit of
+ * a documentation site (and the mission-control dashboard). There is no chromatic
+ * accent: emphasis comes from ink weight and subtle gray steps, not hue. Light
+ * values are the base; the dark override block below swaps them when
+ * <html data-theme="dark">. Exposing them through `@theme inline` lets us use
+ * them as Tailwind color utilities (e.g. `bg-surface`, `text-muted`,
+ * `border-line`).
+ *
+ * The `--accent*` names are kept for stability across components, but they now
+ * resolve to grays: `--accent` a mid ink for eyebrows/icons, `--accent-ink` a
+ * strong ink for links, `--accent-strong` the near-black button fill (inverted
+ * to near-white in dark), and `--on-accent` the text that sits on it.
  */
 :root {
-  --bg: #fbfbfd;
-  --bg-soft: #f2f2f6;
+  --bg: #ffffff;
+  --bg-soft: #f7f7f8;
   --surface: #ffffff;
-  --surface-2: #f7f7fa;
-  --line: #e6e6ec;
-  --line-strong: #d6d6df;
-  --text: #17171c;
-  --text-soft: #3f3f4a;
+  --surface-2: #f4f4f5;
+  --line: #e4e4e7;
+  --line-strong: #d4d4d8;
+  --text: #18181b;
+  --text-soft: #3f3f46;
   --muted: #71717a;
   --faint: #a1a1aa;
-  --accent: #5b57e0;
-  --accent-ink: #4f46e5;
-  --accent-2: #0891b2;
-  --accent-soft: rgba(91, 87, 224, 0.1);
-  --amber: #b45309;
-  --code-bg: #f4f4f7;
+  --accent: #52525b;
+  --accent-ink: #27272a;
+  --accent-2: #71717a;
+  --accent-soft: #f4f4f5;
+  --accent-strong: #18181b;
+  --on-accent: #ffffff;
+  --amber: #71717a;
+  --code-bg: #f6f6f7;
 }
 
 [data-theme='dark'] {
-  --bg: #08080a;
-  --bg-soft: #0e0e12;
-  --surface: #101014;
-  --surface-2: #16161c;
-  --line: #22222a;
-  --line-strong: #2e2e38;
-  --text: #ededf2;
-  --text-soft: #c4c4cd;
-  --muted: #8b8b96;
-  --faint: #5c5c67;
-  --accent: #8b87ff;
-  --accent-ink: #a5a1ff;
-  --accent-2: #22d3ee;
-  --accent-soft: rgba(139, 135, 255, 0.12);
-  --amber: #fbbf24;
-  --code-bg: #0c0c10;
+  --bg: #09090b;
+  --bg-soft: #0c0c0f;
+  --surface: #111113;
+  --surface-2: #18181b;
+  --line: #26262b;
+  --line-strong: #3a3a42;
+  --text: #e7e7ea;
+  --text-soft: #c8c8ce;
+  --muted: #9a9aa4;
+  --faint: #63636d;
+  --accent: #a1a1aa;
+  --accent-ink: #e4e4e7;
+  --accent-2: #a1a1aa;
+  --accent-soft: #1b1b20;
+  --accent-strong: #fafafa;
+  --on-accent: #18181b;
+  --amber: #a1a1aa;
+  --code-bg: #0d0d11;
 }
 
 @theme inline {
@@ -88,16 +100,17 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* The signature gradient used on the wordmark and key accents — parallel
- * indigo -> cyan streams, echoing mx's "many features at once" idea. */
+/* Solid, monochrome "filled" treatment for primary buttons and step markers:
+ * a near-black fill in light mode, inverted to near-white in dark. `--on-accent`
+ * is the readable text color that sits on top. */
 .mx-grad {
-  background-image: linear-gradient(115deg, var(--accent) 0%, var(--accent-2) 100%);
+  background-color: var(--accent-strong);
+  color: var(--on-accent);
 }
+/* The wordmark and inline emphasis are just strong ink — emphasis comes from
+ * weight, not hue, per the monochrome direction. */
 .mx-grad-text {
-  background-image: linear-gradient(115deg, var(--accent) 10%, var(--accent-2) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--text);
 }
 
 /* Faint parallel-lanes backdrop for the hero — a nod to worktrees running side by side. */

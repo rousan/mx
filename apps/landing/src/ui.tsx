@@ -200,9 +200,10 @@ export function Terminal({ title, children }: { title?: string; children: ReactN
   return (
     <div className="overflow-hidden rounded-xl border border-line bg-[var(--code-bg)] shadow-sm">
       <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
-        <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
-        <span className="h-3 w-3 rounded-full bg-[#febc2e]" />
-        <span className="h-3 w-3 rounded-full bg-[#28c840]" />
+        {/* Monochrome window dots — the terminal chrome stays calm and grayscale. */}
+        <span className="h-3 w-3 rounded-full bg-line-strong" />
+        <span className="h-3 w-3 rounded-full bg-line-strong" />
+        <span className="h-3 w-3 rounded-full bg-line-strong" />
         {title ? <span className="ml-2 font-mono text-xs text-faint">{title}</span> : null}
       </div>
       <div className="overflow-x-auto px-4 py-4 font-mono text-[13px] leading-6">{children}</div>

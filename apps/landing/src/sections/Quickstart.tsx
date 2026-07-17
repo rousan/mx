@@ -20,7 +20,7 @@ export function Quickstart() {
 
         {STEPS.map((step) => (
           <li key={step.n} className="relative flex gap-5">
-            <span className="mx-grad z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white shadow-sm">
+            <span className="mx-grad z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-sm">
               {step.n}
             </span>
             <div className="min-w-0 flex-1 pt-1">

@@ -9,13 +9,9 @@ import { PKG, REPO_URL } from '../content';
 export function Hero() {
   return (
     <section id="top" className="relative overflow-hidden">
-      {/* Decorative background: parallel lanes + a soft accent glow. */}
+      {/* Decorative background: faint parallel lanes only — no colored glow, to
+          keep the monochrome, documentation-site calm. */}
       <div aria-hidden className="mx-lanes pointer-events-none absolute inset-0" />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-40 left-1/2 h-[520px] w-[820px] -translate-x-1/2 rounded-full opacity-20 blur-3xl"
-        style={{ background: 'radial-gradient(circle, var(--accent), transparent 65%)' }}
-      />
 
       <div className="relative mx-auto w-full max-w-5xl px-5 pt-20 pb-24 text-center sm:pt-28 sm:pb-32">
         <a
@@ -53,7 +49,7 @@ export function Hero() {
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <a
             href="#quickstart"
-            className="mx-grad inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-transform hover:-translate-y-0.5"
+            className="mx-grad inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold shadow-sm transition-transform hover:-translate-y-0.5"
           >
             Get started
             <Icon name="arrow" className="h-4 w-4" />
