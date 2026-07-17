@@ -191,6 +191,70 @@ export const STEPS: Step[] = [
 ];
 
 /**
+ * One step in the example end-to-end workflow. `body` explains the step; `cmds`
+ * are the optional literal commands for it.
+ */
+export interface WorkflowStep {
+  n: number;
+  title: string;
+  body: string;
+  cmds?: string[];
+}
+
+/**
+ * A concrete, opinionated way to work day to day with mx — one fullscreen macOS
+ * Space per feature (terminal split with the editor), the coding agent in the
+ * first terminal tab, and a swipe to switch features. mx doesn't require any of
+ * this; it's one workflow that works well, offered so a newcomer has a starting
+ * shape to copy rather than a blank page.
+ */
+export const WORKFLOW_STEPS: WorkflowStep[] = [
+  {
+    n: 1,
+    title: 'One fullscreen Space per feature',
+    body: 'Open a fullscreen terminal and create the work. Then jump into its folder and open the editor workspace mx generated for you — every repo’s worktree shows up as a folder in one window (code for VS Code, cursor for Cursor).',
+    cmds: [
+      'mx work new checkout-redesign app api',
+      'cd "$(mx work -n checkout-redesign path)"',
+      'code checkout-redesign.code-workspace',
+    ],
+  },
+  {
+    n: 2,
+    title: 'Split the terminal and editor side by side',
+    body: 'Put the terminal and the editor into a macOS split view — terminal on the left, editor on the right. That single fullscreen pane is one feature. Build the next feature the same way, in its own Space.',
+  },
+  {
+    n: 3,
+    title: 'Agent in tab 1, everything else in more tabs',
+    body: 'Run the feature’s Claude Code session in the first terminal tab. Use a second tab — or tmux panes — for the dev server, logs, and git, so each concern for that feature has its place.',
+    cmds: ['mx work open -n checkout-redesign'],
+  },
+  {
+    n: 4,
+    title: 'Hand the feature to the agent',
+    body: 'Once the session is up, ask it to create the worktrees for the repos the feature touches (through mx), give it the feature description to work from, and switch the session to auto mode for the best hands-off results.',
+  },
+  {
+    n: 5,
+    title: 'Switch features with a three-finger swipe',
+    body: 'Because each feature is its own fullscreen Space, a three-finger left/right swipe on the trackpad jumps you between features instantly — no windows to hunt for, nothing torn down behind you.',
+  },
+  {
+    n: 6,
+    title: 'Group your Spaces with labeled dividers',
+    body: 'Open Mission Control (a three-finger swipe up) to see every Space at once, and slot in labeled separators with mx divider so features cluster by stage — MAIN, IN PROGRESS, IN REVIEWS, PR REVIEWS. Each divider is just a Space filled with big block text, so the groups are easy to spot as you swipe.',
+    cmds: ['mx divider "IN PROGRESS" -o'],
+  },
+  {
+    n: 7,
+    title: 'Wrap up when it’s merged',
+    body: 'When the feature ships, ask the agent to write a session summary (per mx’s session rules), then archive the work — that frees its ports and worktrees while keeping the branches and summaries — and close the terminal and editor.',
+    cmds: ['mx work archive -n checkout-redesign'],
+  },
+];
+
+/**
  * A group of related CLI commands for the reference section, so the full
  * surface is scannable by intent rather than as one long flat list.
  */
@@ -298,5 +362,6 @@ export const NAV_LINKS: { label: string; href: string }[] = [
   { label: 'Agents', href: '#agents' },
   { label: 'Concepts', href: '#concepts' },
   { label: 'Quickstart', href: '#quickstart' },
+  { label: 'Workflow', href: '#workflow' },
   { label: 'Commands', href: '#commands' },
 ];
