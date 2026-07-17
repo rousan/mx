@@ -1,0 +1,69 @@
+name: Deploy landing
+
+# Publishes the landing + docs site (apps/landing) to Cloudflare Pages.
+#   - push to main            -> PRODUCTION deploy (serves mx.rousanali.com)
+#   - pull_request            -> PREVIEW deploy (its own *.pages.dev URL)
+# Only runs when the site or its build inputs actually change, so unrelated
+# commits don't trigger a deploy.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/landing/**'
+      - '.github/workflows/deploy-landing.yml'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+  pull_request:
+    paths:
+      - 'apps/landing/**'
+      - '.github/workflows/deploy-landing.yml'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+
+# One deploy per ref at a time; a newer push supersedes an in-flight one.
+concurrency:
+  group: deploy-landing-${{ github.ref }}
+  cancel-in-progress: true
+
+# The deploy authenticates to Cloudflare with an API token, not the GitHub
+# token, so read access to the repo is all this job needs.
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install
+
+      # Produces the static site at apps/landing/dist.
+      - run: pnpm landing:build
+
+      # Uploads dist to the Cloudflare Pages project. `--branch` decides the
+      # environment: the project's production branch (main) publishes to
+      # production; any other branch (a PR's head) publishes a preview.
+      - name: Deploy to Cloudflare Pages
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy apps/landing/dist
+            --project-name=mx-landing
+            --branch=${{ github.head_ref || github.ref_name }}
+
+      # Surface the deployment URL in the run summary (no PR comment, by design).
+      - name: Report deployment URL
+        if: ${{ steps.deploy.outputs.deployment-url != '' }}
+        run: echo "Deployed to ${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_STEP_SUMMARY"

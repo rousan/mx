@@ -106,21 +106,26 @@ pnpm docs:build       # -> docs/.vitepress/dist
 
 The landing app lives in `apps/landing/src/`: content (features, concepts, quickstart steps, commands, FAQ) is data in `content.ts`; each page section is a component under `sections/`; `theme.ts` drives the light/dark toggle. To change copy, edit `content.ts`; to change layout, edit the relevant section.
 
-### Hosting: Cloudflare Pages
+### Hosting: Cloudflare Pages (GitHub Actions)
 
-The public site is served at **mx.rousanali.com** via Cloudflare Pages, connected to this repo's Git integration so deploys are automatic:
+The public site is served at **mx.rousanali.com** via Cloudflare Pages, deployed by the **`.github/workflows/deploy-landing.yml`** GitHub Action (direct upload with `wrangler pages deploy`, not the dashboard Git integration):
 
 - **production** deploy on every push to `main`;
-- a **preview** deploy (with its own URL) on every pull request.
+- a **preview** deploy (its own `*.pages.dev` URL) on every pull request;
+- both gated on a `paths` filter, so only changes under `apps/landing/**` (or the lockfile / root `package.json` / the workflow itself) trigger a deploy.
 
-One-time setup in the Cloudflare Pages dashboard (Create project → Connect to Git → this repo):
+The workflow builds with `pnpm landing:build` and uploads `apps/landing/dist` to the Pages project **`mx-landing`** (created automatically on the first deploy). `--branch` selects the environment: the project's production branch (`main`) publishes to production; any other branch publishes a preview.
 
-| Setting | Value |
+Required repo secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
 |---|---|
-| Framework preset | None (Vite) |
-| Build command | `pnpm landing:build` |
-| Build output directory | `apps/landing/dist` |
-| Root directory | `/` (repo root) |
-| Environment variable | `NODE_VERSION = 22` |
+| `CLOUDFLARE_API_TOKEN` | A Cloudflare API token with the **Cloudflare Pages: Edit** permission. |
+| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID (dashboard sidebar / account URL). |
 
-pnpm is auto-detected from the `packageManager` field, and it installs `devDependencies` (Vite/Tailwind) by default. Then add the custom domain `mx.rousanali.com` under the project's **Custom domains** tab (a `CNAME` is created automatically since the zone is on Cloudflare). No repo secrets or workflow are needed — the Pages Git integration handles prod + PR previews on its own.
+One-time Cloudflare setup:
+
+1. After the first successful deploy, open the **`mx-landing`** project and confirm its **production branch** is `main` (Settings → Builds & deployments) so pushes to `main` publish to production rather than as previews.
+2. Add the custom domain `mx.rousanali.com` under the project's **Custom domains** tab (a `CNAME` is created automatically since the zone is on Cloudflare).
+
+The workflow reports the deployment URL in the run summary. It intentionally does **not** post a PR comment; grab the preview URL from the Actions run.
