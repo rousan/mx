@@ -1,0 +1,16 @@
+{
+  // Cloudflare Worker that serves the landing site as static assets.
+  // This is an assets-only Worker (no `main` script): wrangler uploads the
+  // built `dist/` directory and Cloudflare serves it from the edge. Deployed
+  // with `wrangler deploy` (production) or `wrangler versions upload` (preview).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mx-landing",
+  "compatibility_date": "2025-01-01",
+  "assets": {
+    // Built by `pnpm build` (vite) in this package, relative to this config.
+    "directory": "./dist",
+    // The site is a single HTML page with in-page anchors; serve index.html
+    // for any unmatched path so deep links and refreshes always resolve.
+    "not_found_handling": "single-page-application"
+  }
+}

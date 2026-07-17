@@ -21,6 +21,9 @@ docs/.vitepress/cache/
 # landing + docs site build output
 apps/landing/dist/
 
+# wrangler (Cloudflare Worker) local cache
+apps/landing/.wrangler/
+
 # playwright screenshot/console artifacts
 .playwright-mcp/
 
