@@ -1,6 +1,6 @@
 # Release runbook
 
-How to ship a new version of `@roulabs/mx`, and the gotchas caught the hard way that aren't obvious from code.
+How to ship a new version of `@rousan/mx`, and the gotchas caught the hard way that aren't obvious from code.
 
 ## The flow (automated — primary)
 
@@ -28,8 +28,8 @@ What the workflow does on each push to `main`:
 
 CI cannot use the interactive `--auth-type=web` browser flow. It needs an **npm automation token** (automation tokens bypass 2FA at publish time):
 
-1. Sign in at <https://www.npmjs.com> as a user with publish rights on the `@roulabs` org.
-2. Avatar → **Access Tokens** → **Generate New Token** → **Classic Token** → type **Automation** (or a **Granular Access Token** scoped to publish `@roulabs/mx`). Copy it — it's shown once.
+1. Sign in at <https://www.npmjs.com> as a user with publish rights on the `@rousan` org.
+2. Avatar → **Access Tokens** → **Generate New Token** → **Classic Token** → type **Automation** (or a **Granular Access Token** scoped to publish `@rousan/mx`). Copy it — it's shown once.
 3. In GitHub: repo **Settings → Secrets and variables → Actions → New repository secret**. Name it `NPM_TOKEN`, paste the value.
 
 `GITHUB_TOKEN` (used to push the tag and create the Release) is provided automatically by Actions; the workflow requests `contents: write` permission for it. No other secret is needed.
@@ -55,10 +55,10 @@ pnpm release                       # → scripts/release.sh
 1. **Verify `npm whoami`** — must be logged in.
 2. **Working tree clean** — refuses with `git status` short output if not.
 3. **Tag doesn't exist** locally or on origin (with a fresh `git fetch --tags`).
-4. **Version not already published** — `npm view @roulabs/mx@X.Y.Z` returns 404.
+4. **Version not already published** — `npm view @rousan/mx@X.Y.Z` returns 404.
 5. **Run `pnpm typecheck && pnpm lint && pnpm test && pnpm build`** — all green.
 6. **Show `npm pack --dry-run` tarball preview**.
-7. **Prompt: `Publish @roulabs/mx@X.Y.Z and tag vX.Y.Z? (y/N)`** — type `y`.
+7. **Prompt: `Publish @rousan/mx@X.Y.Z and tag vX.Y.Z? (y/N)`** — type `y`.
 8. **`npm publish --auth-type=web`** from `npm/` — opens a browser, you confirm in browser (handles 2FA cleanly).
 9. **`git tag -a vX.Y.Z -m vX.Y.Z`**, **`git push origin HEAD`**, **`git push origin vX.Y.Z`**.
 
@@ -70,13 +70,13 @@ The script fails fast on any preflight issue — safe to re-run.
 
 For a brand-new scoped package (`@org/pkg`), the org must exist on npm before you can publish. The npm CLI has `npm org set / rm / ls` but **no `create`**. Orgs are created via the web UI only: <https://www.npmjs.com/org/create>. Pick the **Free** plan (unlimited public packages, no card required).
 
-This bit us when first publishing `@roulabs/mx@1.0.0`. The publish errored with "Scope not found" until the `@roulabs` org existed on npm.
+This bit us when first publishing `@rousan/mx@1.0.0`. The publish errored with "Scope not found" until the `@rousan` org existed on npm.
 
 ### 2. `npm view <name>` returning 404 doesn't mean a name will publish
 
 npm has an **opaque similarity heuristic** that rejects unscoped names at publish time. `mxcli` was rejected at publish for being too similar to an existing `mx-cli` package, even though `npm view mxcli` had returned a clean 404.
 
-**Scoped names (`@org/name`) bypass this check entirely**, which is why we settled on `@roulabs/mx` after the `mxcli` attempt failed.
+**Scoped names (`@org/name`) bypass this check entirely**, which is why we settled on `@rousan/mx` after the `mxcli` attempt failed.
 
 ### 3. 2FA-protected accounts need `--auth-type=web` to publish without an OTP prompt
 
@@ -87,7 +87,7 @@ If your npm account has 2FA enabled (most do today), a plain `npm publish` trigg
 After a successful publish to a brand-new scoped org, `npm view @org/pkg` may return 404 for several minutes while the npm CDN and search index catch up. The package **is** published — the version-specific endpoint shows up immediately:
 
 ```bash
-curl -s https://registry.npmjs.org/@roulabs/mx/latest | head -c 200
+curl -s https://registry.npmjs.org/@rousan/mx/latest | head -c 200
 ```
 
 This isn't an error; just propagation lag. Don't try to "fix" by republishing.
@@ -111,7 +111,7 @@ The publishable package layout is `npm/` (committed: `package.json`, `README.md`
 If a release changes `templates/CLAUDE.md`, existing runtimes won't see it until the user runs:
 
 ```bash
-npm i -g @roulabs/mx@latest
+npm i -g @rousan/mx@latest
 mx sync
 ```
 
@@ -129,5 +129,5 @@ Semver, loosely interpreted (mx is at 2.x, internal-use):
 
 - **`pnpm publish` failing** → check `npm whoami`, check the scope exists, check the name isn't similarity-rejected, check 2FA isn't blocking.
 - **Tag pushed but npm shows old version** → wait 5 minutes (CDN), then check the `/latest` endpoint directly.
-- **`mx` from `$PATH` shows wrong version** → that's the globally installed one; might be stale. `npm i -g @roulabs/mx@latest` to refresh.
+- **`mx` from `$PATH` shows wrong version** → that's the globally installed one; might be stale. `npm i -g @rousan/mx@latest` to refresh.
 - **`pnpm mx version` shows the version from `npm/package.json`** — the CLI reads its own version from the package.json at startup (since v1.0.1).

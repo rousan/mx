@@ -1,0 +1,70 @@
+name: Deploy landing
+
+# Publishes the landing + docs site (apps/landing) to GitHub Pages.
+#   - push to main   -> build + deploy the live site (mx.rousanali.com)
+#   - pull_request   -> build only (a check that the site still compiles)
+# The custom domain is carried by apps/landing/public/CNAME, which Vite copies
+# into dist/ so the Pages artifact always declares mx.rousanali.com.
+# Only runs when the site or its build inputs actually change.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/landing/**'
+      - '.github/workflows/deploy-landing.yml'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+  pull_request:
+    paths:
+      - 'apps/landing/**'
+      - '.github/workflows/deploy-landing.yml'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+  workflow_dispatch:
+
+# GitHub Pages deployment needs these; id-token lets deploy-pages authenticate.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one in-flight Pages deployment at a time; don't cancel a running one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install
+
+      # Produces the static site (incl. the CNAME) at apps/landing/dist.
+      - run: pnpm landing:build
+
+      # Package dist/ as the Pages artifact for the deploy job to consume.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/landing/dist
+
+  deploy:
+    # Only publish from main; on PRs the build job above is just a check.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -30,20 +30,20 @@ a newer runtime. Don't try to work around the gate by editing files by hand.
 
 `mx/` is where **feature work** happens. Sessions launched here implement a feature inside a
 `works/<feature>/` folder. mx *itself* — this template, the `mx` CLI — is maintained in the
-`github.com/roulabs/mx` source repo. There are two valid setups for that source:
+`github.com/rousan/mx` source repo. There are two valid setups for that source:
 
 1. **It lives elsewhere** (the default): if you were opened here to change how mx works, you're in
    the wrong place — switch to that repo. Don't edit `repos/`, `works/`, or the runtime files from
    here.
 
 2. **It's hosted as a work in this runtime** (self-hosting / dogfooding): someone has run
-   `mx repo add git@github.com:roulabs/mx.git` and created one or more `works/<feature>/mx/`
+   `mx repo add git@github.com:rousan/mx.git` and created one or more `works/<feature>/mx/`
    worktrees for parallel mx development. In that case, working inside one of those worktrees IS
    valid — follow that worktree's own `CLAUDE.md` for the developer rules. The runtime rule that
    still applies here: **never run the worktree's locally-built mx CLI against this runtime**.
    Locally-built mx (`pnpm mx`, `node npm/bin/mx.js`) must be pointed at a sandbox (`$PWD/.mx` or
    `/tmp/...`) for any testing — otherwise it may re-stamp this `CLAUDE.md` with a work-in-progress
-   template. The published `mx` on `$PATH` (from `npm i -g @roulabs/mx`) is the safe one against
+   template. The published `mx` on `$PATH` (from `npm i -g @rousan/mx`) is the safe one against
    this runtime.
 
 ## Layout

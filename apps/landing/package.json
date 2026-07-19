@@ -1,0 +1,25 @@
+{
+  "name": "@mx/landing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "mx landing + docs site — the beginner-friendly public website published at https://mx.rousanali.com. A standalone React/Vite/Tailwind static site (built to apps/landing/dist and deployed to GitHub Pages). It teaches mx from zero; the deep reference lives in docs/.",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "tailwindcss": "^4.0.0",
+    "vite": "^6.0.0"
+  }
+}

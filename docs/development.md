@@ -11,7 +11,7 @@ How to set up, iterate on, and test mx.
 ## First-time setup
 
 ```bash
-git clone git@github.com:roulabs/mx.git && cd mx
+git clone git@github.com:rousan/mx.git && cd mx
 pnpm install
 pnpm build                       # populates npm/ (bin/mx.js + templates/ + LICENSE)
 export MX_RUNTIME="$PWD/.mx"     # gitignored dev runtime in this repo
@@ -73,7 +73,7 @@ This rule is **load-bearing under self-hosting** — see [self-hosting](self-hos
 There is **no global PATH coupling to this repo**. The global `mx` exists only when you install a build:
 
 ```bash
-npm i -g @roulabs/mx
+npm i -g @rousan/mx
 ```
 
 Within this repo, `pnpm mx` runs the local build via the workspace script (`node npm/bin/mx.js`). After changing CLI / core code: `pnpm build` (or keep `pnpm dev` watching) before the change takes effect.
@@ -87,3 +87,39 @@ Templates live at `/templates`. tsup copies them into `npm/templates/` at build,
 - `confirmYesNo()` delegates to `spawnSync('/bin/sh', ['-c', "read REPLY"])` because Node's `fs.readSync(0, …)` returns EAGAIN immediately on macOS in non-blocking stdin mode. The shell builtin `read` blocks on TTY correctly across macOS and Linux.
 - The first `pnpm install` on a corp npm mirror can be slow — not stuck.
 - `mx init` is idempotent; re-stamping never clobbers `repos/`, `works/`, or existing `context/INDEX.json`.
+
+## Documentation site (mx.rousanali.com)
+
+There are **two** doc surfaces in this repo, on purpose:
+
+- **`apps/landing/`** — the **public, beginner-first site** published at mx.rousanali.com. A standalone React/Vite/Tailwind app that teaches mx from zero (the problem it solves, the four-word mental model with a diagram, a four-command quickstart, a curated command reference, and an FAQ). This is what a newcomer sees. It intentionally does **not** import from `docs/` — it is hand-written for teaching, so the two can evolve independently without drift risk.
+- **`docs/*.md`** — the **deep reference** (runtime model, full command flags, architecture, release runbook, history). Optional VitePress site for reading these locally; also the source the landing page links out to for exhaustive detail.
+
+```bash
+pnpm landing:dev      # landing app dev server with hot reload
+pnpm landing:build    # production build -> apps/landing/dist
+pnpm landing:preview  # preview the production build
+
+pnpm docs:dev         # (optional) VitePress reference site from docs/*.md
+pnpm docs:build       # -> docs/.vitepress/dist
+```
+
+The landing app lives in `apps/landing/src/`: content (features, concepts, quickstart steps, commands, FAQ) is data in `content.ts`; each page section is a component under `sections/`; `theme.ts` drives the light/dark toggle. To change copy, edit `content.ts`; to change layout, edit the relevant section.
+
+### Hosting: GitHub Pages (GitHub Actions)
+
+The public site is served at **mx.rousanali.com** from **GitHub Pages**, deployed by the **`.github/workflows/deploy-landing.yml`** workflow (the official `upload-pages-artifact` + `deploy-pages` actions):
+
+- **push to `main`** → build with `pnpm landing:build` and deploy `apps/landing/dist` to Pages;
+- **pull request** → build only (a check that the site still compiles; Pages has no per-PR previews);
+- both gated on a `paths` filter, so only changes under `apps/landing/**` (or the lockfile / root `package.json` / the workflow itself) trigger it.
+
+The custom domain is carried by **`apps/landing/public/CNAME`** (contents: `mx.rousanali.com`), which Vite copies into `dist/` so every deployed artifact declares the domain — GitHub Pages won't drop it. No repo secrets are needed; Pages auth uses the workflow's `id-token`.
+
+One-time setup:
+
+1. Repo **Settings → Pages → Build and deployment → Source: GitHub Actions** (enables Actions-based Pages).
+2. In your DNS, add a `CNAME` record for `mx.rousanali.com` → `rousan.github.io` (apex/root would use A/AAAA records instead; this is a subdomain, so `CNAME` is correct).
+3. After the first deploy, Settings → Pages should show the custom domain as `mx.rousanali.com`; tick **Enforce HTTPS** once the certificate is issued.
+
+The workflow surfaces the live URL on the `github-pages` environment for the deploy run.

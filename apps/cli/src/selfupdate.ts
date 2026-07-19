@@ -3,7 +3,7 @@ import { compareVersions, maxVersion } from '@mx/core';
 import { cliVersion } from './paths';
 
 /** The published package name self-update targets. */
-const PKG = '@roulabs/mx';
+const PKG = '@rousan/mx';
 
 /**
  * Major version number from a semver string (`"2.3.1"` → `2`).
@@ -92,7 +92,7 @@ export interface SelfUpdateInfo {
 
 /**
  * Self-update the CLI to the newest release **within its current major**
- * (`npm i -g @roulabs/mx@^<major>`), and detect whether a newer major exists.
+ * (`npm i -g @rousan/mx@^<major>`), and detect whether a newer major exists.
  * Crossing a major is intentionally left to the user (it requires `mx migrate`
  * afterwards), so this only ever reports a newer major as a suggestion.
  *

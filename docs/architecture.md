@@ -5,11 +5,11 @@ mx is a TypeScript pnpm monorepo with **source code and the publishable npm pack
 ## The three pieces
 
 ```
-github.com/roulabs/mx
+github.com/rousan/mx
 ├── packages/core/        →  @mx/core             (source; pure domain logic)
 ├── apps/cli/             →  @mx/cli              (source; CLI surface; PRIVATE — never published)
 ├── apps/mission-control/ →  @mx/mission-control  (source; React/Vite/Tailwind dashboard; PRIVATE — ships only as a prebuilt single HTML)
-└── npm/                  →  @roulabs/mx          (publishable; `pnpm build` populates it)
+└── npm/                  →  @rousan/mx          (publishable; `pnpm build` populates it)
 ```
 
 ### `@mx/core` (`packages/core/`)
@@ -44,7 +44,7 @@ Key files in `apps/cli/src/`:
 - `args.ts` — argv parser with `Flags`: `porcelain`, `help`, `version`, `force`, `yes`, `all`, `archived`, `open`, `dryRun`, `quick`, `runtime`, `name`, `description`, `branch`, `base`
 - `output.ts` — `emit(human, data)`, `fail(err)`, the monochrome style helpers (`dim`, `bold`), the plain glyphs (`check()` = ✓, `warn()` = ⚠), and `confirmYesNo()` (sync TTY prompt via `spawnSync('/bin/sh', ['-c', 'read REPLY'])`)
 - `paths.ts` — `templatesDir()` resolves `<pkg>/bin/mx.js` → `<pkg>/templates`
-- `selfupdate.ts` — `mx update`: self-updates the CLI within its major via `npm i -g @roulabs/mx@^<major>`, detects a newer major and prints the deliberate upgrade suggestion, falls back to printing the manual command if npm is missing or the install fails
+- `selfupdate.ts` — `mx update`: self-updates the CLI within its major via `npm i -g @rousan/mx@^<major>`, detects a newer major and prints the deliberate upgrade suggestion, falls back to printing the manual command if npm is missing or the install fails
 - `hooks.ts` — the single hook runner: `runHook(root, event, ctx, quiet)` executes `<runtime>/hooks/<event>` (any shebang) with `ctx.cwd` + merged `MX_*` env if present, returning `{ran, ok, missing}`; `runPreHook` throws `HOOK_FAILED` on non-zero (abort), `runPostHook` warns. `commands/{work,repo}.ts` call these around worktree create/remove, work archive/unarchive, and repo fetch. (Replaced v2's `hydrate.ts` + `workhooks.ts`.)
 - `open.ts` — the macOS `mx work new -o` / `mx work open` helper (fullscreen Terminal in the work folder)
 - `help.ts` — `mx help` text
@@ -58,12 +58,12 @@ Key files in `apps/cli/src/`:
 
 ### `@mx/mission-control` (`apps/mission-control/`)
 
-The `mx mission-control` dashboard UI: a React + Vite + Tailwind app built to a **single self-contained `dist/index.html`** (via `vite-plugin-singlefile` — all JS/CSS inlined). Private and never published as a package; only the built HTML ships, copied into `npm/mission-control/` and served by the CLI's zero-dep server. React/Vite/Tailwind are dev-only, so the published `@roulabs/mx` keeps zero runtime dependencies. `pnpm build` builds this **before** `@mx/cli` so the copy step finds `dist/`.
+The `mx mission-control` dashboard UI: a React + Vite + Tailwind app built to a **single self-contained `dist/index.html`** (via `vite-plugin-singlefile` — all JS/CSS inlined). Private and never published as a package; only the built HTML ships, copied into `npm/mission-control/` and served by the CLI's zero-dep server. React/Vite/Tailwind are dev-only, so the published `@rousan/mx` keeps zero runtime dependencies. `pnpm build` builds this **before** `@mx/cli` so the copy step finds `dist/`.
 
 ### `npm/` (the publishable package)
 
 Committed:
-- `npm/package.json` — public metadata (`@roulabs/mx`, version, bin → `bin/mx.js`, `publishConfig.access: public`)
+- `npm/package.json` — public metadata (`@rousan/mx`, version, bin → `bin/mx.js`, `publishConfig.access: public`)
 - `npm/README.md` — consumer docs
 
 Built by `pnpm build` (gitignored):
@@ -97,13 +97,13 @@ apps/cli/src/       ┘                                        │
                   npm/package.json   (committed)             │
                   npm/README.md      (committed)             │
                                                              ↓
-                                                          @roulabs/mx@X.Y.Z on npm
+                                                          @rousan/mx@X.Y.Z on npm
                                                           tag vX.Y.Z on GitHub
 ```
 
 ## Zero runtime dependencies
 
-`@roulabs/mx` ships with **no `dependencies`** in its `package.json`. The CLI uses only Node builtins (`node:fs`, `node:path`, `node:child_process`, `node:url`, …). `@mx/core` is `noExternal`-bundled into the CLI by tsup so it's not declared either. Tooling (tsup, eslint, vitest, prettier) is `devDependencies` only.
+`@rousan/mx` ships with **no `dependencies`** in its `package.json`. The CLI uses only Node builtins (`node:fs`, `node:path`, `node:child_process`, `node:url`, …). `@mx/core` is `noExternal`-bundled into the CLI by tsup so it's not declared either. Tooling (tsup, eslint, vitest, prettier) is `devDependencies` only.
 
 ## Workflow
 

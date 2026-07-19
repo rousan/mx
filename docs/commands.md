@@ -78,13 +78,13 @@ Output enumerates every path actually written:
 
 ### `mx update`
 
-**Self-update the CLI** — not the runtime. Re-installs `@roulabs/mx` within its current major via `npm i -g @roulabs/mx@^<major>`, picking up the latest same-major release.
+**Self-update the CLI** — not the runtime. Re-installs `@rousan/mx` within its current major via `npm i -g @rousan/mx@^<major>`, picking up the latest same-major release.
 
 It also checks whether a newer **major** exists. If so, it prints a suggestion to cross the major deliberately:
 
 ```
-A newer major is available: @roulabs/mx@3.
-  npm i -g @roulabs/mx@3
+A newer major is available: @rousan/mx@3.
+  npm i -g @rousan/mx@3
   mx migrate
 ```
 

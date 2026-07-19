@@ -1,6 +1,6 @@
 {
-  "name": "@roulabs/mx",
-  "version": "3.6.2",
+  "name": "@rousan/mx",
+  "version": "4.0.0",
   "description": "mx — run several features in parallel across shared repos using git worktrees",
   "type": "module",
   "bin": {
@@ -12,10 +12,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/roulabs/mx.git"
+    "url": "git+https://github.com/rousan/mx.git"
   },
-  "homepage": "https://github.com/roulabs/mx#readme",
-  "bugs": "https://github.com/roulabs/mx/issues",
+  "homepage": "https://mx.rousanali.com",
+  "bugs": "https://github.com/rousan/mx/issues",
   "keywords": [
     "git",
     "worktree",

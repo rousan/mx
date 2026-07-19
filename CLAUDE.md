@@ -1,6 +1,6 @@
 # mx — source & control panel for the mx system
 
-This repo is the **source of truth** for **mx** ("multiplexer"), a system for running several features in parallel across shared repos using git worktrees. You are working on mx *itself* here — the CLI, the core library, the templates, the docs — not on any feature. The published CLI lives on npm as `@roulabs/mx` (command `mx`); the source is hosted at `github.com/roulabs/mx`.
+This repo is the **source of truth** for **mx** ("multiplexer"), a system for running several features in parallel across shared repos using git worktrees. You are working on mx *itself* here — the CLI, the core library, the templates, the docs — not on any feature. The published CLI lives on npm as `@rousan/mx` (command `mx`); the source is hosted at `github.com/rousan/mx`.
 
 mx produces a **runtime**: an `mx/` folder somewhere on the device, containing `repos/`, `works/`, and a `CLAUDE.md` stamped from the templates shipped inside the CLI. The source repo and any runtime are fully **decoupled** — this repo is never tied to a particular runtime.
 
@@ -14,7 +14,7 @@ A TypeScript pnpm monorepo. **Source code and publishable npm package live in se
 
 - **`packages/core` (`@mx/core`)** — pure, typed, unit-tested domain logic. Functions take inputs, return plain data, and `throw MxError`; they never `console.log` or `process.exit`, and never assume an on-disk layout (paths like the templates dir are passed in).
 - **`apps/cli` (`@mx/cli`, private)** — CLI source over `@mx/core`: arg parsing, cwd→`-n` inference, output formatting (`--porcelain` vs human), exit codes. Bundled by tsup into a single dependency-free entry. The package itself is private and never published; it exists only as a workspace member so pnpm can wire `@mx/core` in.
-- **`npm/` (`@roulabs/mx`)** — the publishable package. `package.json` and `README.md` are committed (public metadata + user docs). `bin/mx.js`, `templates/`, and `LICENSE` are produced by `pnpm build` (gitignored). `npm publish` runs from this folder.
+- **`npm/` (`@rousan/mx`)** — the publishable package. `package.json` and `README.md` are committed (public metadata + user docs). `bin/mx.js`, `templates/`, and `LICENSE` are produced by `pnpm build` (gitignored). `npm publish` runs from this folder.
 
 New behavior is normally a core function plus thin CLI wiring.
 
@@ -33,9 +33,11 @@ This CLAUDE.md is the entry point. For deeper material on any topic, see `/docs/
 
 When working on a specific area (release flow, command behaviour, etc.), open the matching doc — they have detail that didn't fit in this CLAUDE.md.
 
+These `docs/*.md` files are **also the source of the public docs site** at [mx.rousanali.com](https://mx.rousanali.com) — a VitePress site built directly from this folder (config in `docs/.vitepress/config.mts`, landing in `docs/index.md`). Run it with `pnpm docs:dev` / build with `pnpm docs:build`; it deploys on Cloudflare Pages (prod on `main`, preview per PR). Editing a doc updates both the repo and the site, so keep them accurate. See [docs/development.md § Documentation site](docs/development.md#documentation-site-mx-rousanali-com).
+
 ## Running the CLI (dev vs global)
 
-There is **no global PATH coupling to this repo**. The global `mx` exists only when you install a build: `npm i -g @roulabs/mx` (npm owns that bin).
+There is **no global PATH coupling to this repo**. The global `mx` exists only when you install a build: `npm i -g @rousan/mx` (npm owns that bin).
 
 For development, run the local build via the workspace:
 
@@ -81,7 +83,7 @@ These three are distinct — don't confuse them:
 
 It does **not** modify `work.json` contents, `.code-workspace` files, worktree code, session body files, context body files, user-edited hook bodies, or anything under `repos/<repo>/git/`. Its output header is "Synced runtime at …"; every reported path is either a re-stamped template or a newly-created empty directory.
 
-**`mx update`** is now a *different* command: it **self-updates the CLI** within its current major (`npm i -g @roulabs/mx@^<major>`), detects whether a newer major exists and suggests the deliberate upgrade (`npm i -g @roulabs/mx@<N>` then `mx migrate`), and is **not** version-gated. It falls back to printing the manual command if npm is missing or the install fails. **After a successful in-major update it automatically runs `mx sync`** — by shelling out to the freshly-installed global `mx` (this process is still the old code), so the new version's templates are what get stamped; in `--porcelain` mode the sync runs silently to keep stdout a single JSON object.
+**`mx update`** is now a *different* command: it **self-updates the CLI** within its current major (`npm i -g @rousan/mx@^<major>`), detects whether a newer major exists and suggests the deliberate upgrade (`npm i -g @rousan/mx@<N>` then `mx migrate`), and is **not** version-gated. It falls back to printing the manual command if npm is missing or the install fails. **After a successful in-major update it automatically runs `mx sync`** — by shelling out to the freshly-installed global `mx` (this process is still the old code), so the new version's templates are what get stamped; in `--porcelain` mode the sync runs silently to keep stdout a single JSON object.
 
 **`mx migrate`** upgrades an older-version runtime up to the version this CLI supports — the only runtime command allowed on a version mismatch. It validates the full migration chain before mutating (`NO_MIGRATION` on a gap, `CLI_TOO_OLD` if the runtime is newer), and reports per-step `warnings`. The **v1 → v2** step moves each clone into `repos/<repo>/git/` and each work's flat worktrees into `wt/`. The **v2 → v3** step centralizes hooks: it stamps the `<runtime>/hooks/` hub, writes each repo's `repo.json`, and **retires the old per-repo `hydrate.sh`/`health.sh` and per-work `hooks/`** — deleting them when they're unchanged from the mx default, but **keeping them with a warning** when customized (so you can fold the logic into the central hooks). `--dry-run` previews the whole plan (and warnings) without mutating.
 
@@ -106,7 +108,7 @@ You may dogfood mx by treating its source as just another repo in an mx runtime 
 
 ```bash
 # One-time, on your productive runtime:
-mx repo add git@github.com:roulabs/mx.git
+mx repo add git@github.com:rousan/mx.git
 
 # Per feature (repeatable for as many parallel mx features as you want):
 mx work new improve-mx-status-ui
@@ -122,7 +124,7 @@ There are two `mx` binaries available inside a self-hosted worktree, and they mu
 
 | binary | what it runs | use for |
 |---|---|---|
-| `mx` (on `$PATH`) | the **globally installed** `@roulabs/mx` — published version | productive runtime operations: `mx i`, `mx work archive feat`, etc. **Safe** against the productive runtime. |
+| `mx` (on `$PATH`) | the **globally installed** `@rousan/mx` — published version | productive runtime operations: `mx i`, `mx work archive feat`, etc. **Safe** against the productive runtime. |
 | `pnpm mx ...` or `node npm/bin/mx.js ...` | the **locally-built** CLI from your in-progress code | **testing only** — must always be pointed at a sandbox runtime, never the productive one. |
 
 The hard rule: **the locally-built CLI never sees the productive runtime.** Before any test, set `$MX_RUNTIME` to a sandbox:
@@ -148,7 +150,7 @@ Each `works/<feature>/wt/mx/` is fully independent: its own branch, its own `.mx
 ## Layout
 
 ```
-mx/                                  # pnpm workspace (TypeScript); repo = github.com/roulabs/mx
+mx/                                  # pnpm workspace (TypeScript); repo = github.com/rousan/mx
 ├── package.json                     # root scripts: build / dev / mx / typecheck / lint / test
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json · eslint.config.js · .prettierrc.json · .nvmrc · LICENSE
@@ -169,7 +171,7 @@ mx/                                  # pnpm workspace (TypeScript); repo = githu
 │       ├── src/                     # args, output, help, paths, selfupdate, setup, main,
 │       │                            #   commands/{global,repo,work}
 │       └── tsup.config.ts           # bundles src/bin/mx.ts -> ../../npm/bin/mx.js, copies assets
-└── npm/                             # @roulabs/mx — publishable package
+└── npm/                             # @rousan/mx — publishable package
     ├── package.json                 # committed (public metadata)
     ├── README.md                    # committed (consumer docs)
     ├── bin/mx.js                    # built by `pnpm build` (gitignored)
@@ -218,7 +220,7 @@ Implemented in `apps/cli` over `@mx/core`. Each command resolves the runtime via
 - **`mx init [path]`** — scaffold/adopt a runtime (target = path arg, else `$MX_RUNTIME`, else `~/mx`): create `repos/`, `works/`, `files/` (empty operational-values store), `.mx-root`; stamp `mx.json`, `CLAUDE.md`; stamp `context/INDEX.json` (only if missing — context is user data). Refuses to adopt a runtime whose `mx.json` differs (→ `mx migrate`, or upgrade the CLI). Idempotent; no clone; no pointer written.
 - **`mx info [--all] [--porcelain]`** — runtime path, repos + branches, works + worktrees + ports. Active works only by default; `--all` includes archived. Alias: `mx i`.
 - **`mx sync`** — (formerly `mx update`) re-stamp the runtime `CLAUDE.md`; stamp `context/INDEX.json` only if missing; backfill the central `hooks/` hub (stamp-if-missing), the runtime `bin/` + shipped utility bins, the runtime `files/` store, each repo's `repo.json`, the per-work dirs (`wt/`, `scripts/`, `files/`, `tmp/`, `sessions/`), and the per-work `CLAUDE.md`. Never modifies user data. Version-gated.
-- **`mx update`** — self-update the CLI within its major (`npm i -g @roulabs/mx@^<major>`); suggests a deliberate major upgrade if one exists. Not version-gated. After a successful update it auto-runs `mx sync` (via the freshly-installed global) to refresh the runtime.
+- **`mx update`** — self-update the CLI within its major (`npm i -g @rousan/mx@^<major>`); suggests a deliberate major upgrade if one exists. Not version-gated. After a successful update it auto-runs `mx sync` (via the freshly-installed global) to refresh the runtime.
 - **`mx migrate [--dry-run]`** — upgrade an older runtime to the supported version (the only runtime command allowed on a version mismatch); validates the chain first (`NO_MIGRATION` / `CLI_TOO_OLD`). v1→v2 moves clones into `git/` + worktrees into `wt/`; v2→v3 stamps the central `hooks/` hub, writes `repo.json`, and retires old per-repo/per-work scripts (default → removed, customized → kept + warned). `--dry-run` validates and prints the full plan + warnings without mutating; porcelain adds `dryRun: true`, `warnings`.
 - **`mx health [--all]`** — whole-runtime health overview: every repo's health block (as `mx repo health`) followed by every active work's health block (as `mx work health`); `--all` includes archived works. Porcelain returns `{repos, works}`.
 - **`mx mission-control [--port <n>] [-o]`** (alias `mx mc`) — start a local, read-only **live web dashboard** for the runtime: a calm monochrome overview of every repo's and work's health plus a consolidated ports board (port → service → worktree → work → `localhost` URL). Served by a zero-dependency `node:http` server that streams updates over SSE; the UI is a single self-contained HTML page (built from `apps/mission-control/`, bundled into the package). Blocks until Ctrl-C; `-o` opens the browser.
@@ -248,7 +250,7 @@ Key properties:
 
 ## Conventions
 
-- **TypeScript pnpm monorepo, zero runtime dependencies.** Both source packages (`@mx/core`, `@mx/cli`) use only `node:` builtins; tsup bundles `@mx/core` into the CLI so the published `@roulabs/mx` package installs no deps. Tooling (tsup, eslint, vitest, prettier) is devDeps only. `@mx/cli` is private; the published thing is the `npm/` folder.
+- **TypeScript pnpm monorepo, zero runtime dependencies.** Both source packages (`@mx/core`, `@mx/cli`) use only `node:` builtins; tsup bundles `@mx/core` into the CLI so the published `@rousan/mx` package installs no deps. Tooling (tsup, eslint, vitest, prettier) is devDeps only. `@mx/cli` is private; the published thing is the `npm/` folder.
 - **Workflow:** `pnpm typecheck` · `pnpm lint` · `pnpm test` · `pnpm build` (and `pnpm dev` to watch). Add a Vitest test in `packages/core/test` for new core logic.
 - **Runtime is env-addressed** (`$MX_RUNTIME` / `--runtime` / `~/mx`); never persist a runtime path in this repo. Dev uses the gitignored `.mx/` runtime.
 - **Release:** CI-driven via `.github/workflows/release.yml`. **Every merge to `main` must produce a new release** — the PR bumps `"version"` in `npm/package.json`, and on push to `main` the workflow runs typecheck/lint/test/build, `npm publish`es from `npm/` (auth via the `NPM_TOKEN` automation-token secret), tags `vX.Y.Z`, and creates a GitHub Release. If the version still matches an existing tag, the run **fails** demanding a bump (a merge without a bump is treated as a mistake). One-time setup: add an npm automation token as the `NPM_TOKEN` repo secret (see `docs/release.md`). The local `pnpm release` (`scripts/release.sh`) remains as a **manual fallback** — it verifies npm auth + clean tree + fresh tag + unpublished version, prompts to confirm, then `npm publish --auth-type=web` (browser confirm for 2FA) and pushes the tag. **Gotchas** (npm name similarity rejection on unscoped names; CDN propagation lag on first publish of a new scope; npm has no `org create` CLI command — orgs must be created at https://www.npmjs.com/org/create) are documented in `README.md` § Release.
@@ -258,8 +260,8 @@ Key properties:
 
 For a fresh session / new machine:
 
-- **Done and verified:** the full TS pnpm monorepo (`@mx/core` source + `@mx/cli` source + `npm/` publishable package), all commands (`init`, `info`, `sync`, `update`, `migrate`, `repo`, `work` incl. `worktree`/`port`/`path`/`open`), runtime versioning + container repo layout + central hook hub (v3), env-based runtime discovery, templates copied into `npm/templates/` at build time, CI workflow for PR checks, `scripts/release.sh` for local publishing, MIT license, and a consumer README at `npm/README.md`. `pnpm typecheck/lint/test/build` are green; the packed tarball installs via `npm i -g` and runs self-contained from outside the repo. Hosted at `github.com/roulabs/mx`, branch `main`.
-- **Shipped:** `@roulabs/mx` is live on npm at https://www.npmjs.com/package/@roulabs/mx (first release `v1.0.0` on 2026-06-04). For the currently-published version, run `git describe --tags --abbrev=0` or check the npm page. End-user install: `npm i -g @roulabs/mx` → `mx` command.
+- **Done and verified:** the full TS pnpm monorepo (`@mx/core` source + `@mx/cli` source + `npm/` publishable package), all commands (`init`, `info`, `sync`, `update`, `migrate`, `repo`, `work` incl. `worktree`/`port`/`path`/`open`), runtime versioning + container repo layout + central hook hub (v3), env-based runtime discovery, templates copied into `npm/templates/` at build time, CI workflow for PR checks, `scripts/release.sh` for local publishing, MIT license, and a consumer README at `npm/README.md`. `pnpm typecheck/lint/test/build` are green; the packed tarball installs via `npm i -g` and runs self-contained from outside the repo. Hosted at `github.com/rousan/mx`, branch `main`.
+- **Shipped:** `@rousan/mx` is live on npm at https://www.npmjs.com/package/@rousan/mx (first release `v1.0.0` on 2026-06-04). For the currently-published version, run `git describe --tags --abbrev=0` or check the npm page. End-user install: `npm i -g @rousan/mx` → `mx` command.
 - **Start working:** `pnpm install && pnpm build`, then `export MX_RUNTIME="$PWD/.mx"` and `pnpm mx init`. Iterate with `pnpm dev` (watch) + `pnpm mx ...`; run `pnpm typecheck && pnpm lint && pnpm test` before committing.
 - **Next release:** bump `npm/package.json` version in your PR, then merge to `main` — `.github/workflows/release.yml` publishes, tags, and creates the GitHub Release automatically (auth via the `NPM_TOKEN` secret). Forgetting the bump fails the run. `pnpm release` remains a local fallback.
 - **Not done yet:** per-runtime support for non-Claude agents (`AGENTS.md` for Codex, `.cursorrules` for Cursor). Optional next idea: isolated per-env state (separate DB schema / container) for safe parallel runs. (`mx open`-style terminal layout shipped in 2.0.0 as `mx work new -o`.)
