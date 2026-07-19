@@ -120,7 +120,7 @@ export const CONCEPTS: Concept[] = [
     term: 'Runtime',
     plain: 'One folder on your machine where mx keeps everything.',
     detail:
-      'Think of it as mx’s home base (default ~/mx). It holds your cloned repos and one folder per feature you’re working on. You can have several runtimes and switch with an environment variable.',
+      'Think of it as mx’s home base (default ~/mx) — one runtime for everything. It holds your cloned repos and one folder per feature you’re working on.',
   },
   {
     icon: 'box',
@@ -186,7 +186,7 @@ export const STEPS: Step[] = [
     title: 'Start a feature and dive in',
     cmd: 'mx work new my-feature app',
     comment: 'creates a worktree of "app" on branch my-feature',
-    body: 'This creates a feature and a git worktree for it. cd into works/my-feature/wt/app and you’re in a normal checkout on your feature branch — build, run, commit, push as usual. Start a second feature the same way; both stay isolated.',
+    body: 'This creates the feature and a worktree of app. Start your coding-agent session from the feature folder (works/my-feature) — it sees every worktree the feature has. The code lives in wt/app, a normal checkout on your branch; cd there when you want to run the dev server or git commands. Start a second feature the same way; both stay isolated.',
   },
 ];
 
