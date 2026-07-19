@@ -344,7 +344,7 @@ export function writeRuntimeVersion(root: string, version: number): void {
  */
 function versionMismatchMessage(actual: number): string {
   if (actual > RUNTIME_VERSION) {
-    return `runtime is v${actual}, newer than this mx supports (v${RUNTIME_VERSION}). Upgrade your mx CLI: \`npm i -g @roulabs/mx@latest\`.`;
+    return `runtime is v${actual}, newer than this mx supports (v${RUNTIME_VERSION}). Upgrade your mx CLI: \`npm i -g @rousan/mx@latest\`.`;
   }
   return `runtime is v${actual} but this mx supports runtime v${RUNTIME_VERSION}. Run \`mx migrate\` to upgrade the runtime.`;
 }

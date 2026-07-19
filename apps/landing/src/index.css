@@ -1,0 +1,153 @@
+@import 'tailwindcss';
+
+/*
+ * Dark mode is driven by a `data-theme` attribute on <html> (stamped by the
+ * theme hook in theme.ts), NOT by the media query alone. This lets the manual
+ * light/dark toggle win deterministically while still defaulting to the OS
+ * preference on first load. Every `dark:` utility keys off this variant.
+ */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/*
+ * Semantic design tokens — a calm, mostly-monochrome grayscale system with a
+ * single warm terra-cotta accent, in the spirit of a documentation site (and
+ * the sibling `ccal` project). Emphasis comes from ink weight and gray steps;
+ * the accent is used sparingly for the logo, one hero phrase, prompts, links,
+ * icon chips, and the primary button. Light values are the base; the dark
+ * override block below swaps them when <html data-theme="dark">. Exposing them
+ * through `@theme inline` lets us use them as Tailwind color utilities
+ * (e.g. `bg-surface`, `text-muted`, `border-line`, `text-accent`).
+ *
+ * Token roles: `--accent` the terra-cotta accent (prompts, icons, dots);
+ * `--accent-ink` a readable accent for links; `--accent-soft` a faint accent
+ * tint for icon chips; `--cta`/`--on-cta` the orange primary-button fill and its
+ * text; `--accent-strong`/`--on-accent` the neutral ink fill used for step
+ * markers (near-black in light, inverted to near-white in dark).
+ */
+:root {
+  --bg: #ffffff;
+  --bg-soft: #f7f7f8;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --line: #e4e4e7;
+  --line-strong: #d4d4d8;
+  --text: #18181b;
+  --text-soft: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --accent: #c0562f;
+  --accent-ink: #b04a26;
+  --accent-2: #c0562f;
+  --accent-soft: rgba(192, 86, 47, 0.1);
+  --accent-strong: #18181b;
+  --on-accent: #ffffff;
+  --cta: #c0562f;
+  --on-cta: #ffffff;
+  --amber: #71717a;
+  --code-bg: #f6f6f7;
+}
+
+[data-theme='dark'] {
+  --bg: #09090b;
+  --bg-soft: #0c0c0f;
+  --surface: #111113;
+  --surface-2: #18181b;
+  --line: #26262b;
+  --line-strong: #3a3a42;
+  --text: #e7e7ea;
+  --text-soft: #c8c8ce;
+  --muted: #9a9aa4;
+  --faint: #63636d;
+  --accent: #e0793f;
+  --accent-ink: #ea8a5a;
+  --accent-2: #e0793f;
+  --accent-soft: rgba(224, 121, 63, 0.15);
+  --accent-strong: #fafafa;
+  --on-accent: #18181b;
+  --cta: #c0562f;
+  --on-cta: #ffffff;
+  --amber: #a1a1aa;
+  --code-bg: #0d0d11;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-soft: var(--bg-soft);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--text);
+  --color-ink-soft: var(--text-soft);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-2: var(--accent-2);
+  --color-amber: var(--amber);
+  --font-mono:
+    ui-monospace, 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* Offset in-page anchor jumps so the sticky nav doesn't cover section headings. */
+  scroll-padding-top: 5.5rem;
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Neutral "ink fill" used for step markers: near-black in light, inverted to
+ * near-white in dark. `--on-accent` is the readable text color on top. */
+.mx-grad {
+  background-color: var(--accent-strong);
+  color: var(--on-accent);
+}
+/* The wordmark is strong ink — emphasis comes from weight, not hue. */
+.mx-grad-text {
+  color: var(--text);
+}
+/* The primary call-to-action button: the terra-cotta accent fill with white
+ * text (the one place the accent is used as a solid fill). */
+.mx-cta {
+  background-color: var(--cta);
+  color: var(--on-cta);
+}
+/* Inline accent emphasis — the single highlighted phrase in the hero headline. */
+.mx-accent-text {
+  color: var(--accent);
+}
+
+/* Faint parallel-lanes backdrop for the hero — a nod to worktrees running side by side. */
+.mx-lanes {
+  background-image: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--line) 55%, transparent) 0px,
+    color-mix(in srgb, var(--line) 55%, transparent) 1px,
+    transparent 1px,
+    transparent 132px
+  );
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, #000 30%, transparent 78%);
+}
+
+/* Respect users who prefer reduced motion — kill smooth scroll + animations. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

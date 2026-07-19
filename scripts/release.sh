@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Local release driver for the @roulabs/mx npm package.
+# Local release driver for the @rousan/mx npm package.
 #
 # Reads the target version from npm/package.json (you bump + commit it before
 # running this), runs the full check/build pipeline, publishes to npm using
@@ -90,4 +90,4 @@ ok "Pushed $tag"
 echo
 green "Released $name@$version"
 echo "  https://www.npmjs.com/package/$name/v/$version"
-echo "  https://github.com/roulabs/mx/releases/tag/$tag"
+echo "  https://github.com/rousan/mx/releases/tag/$tag"

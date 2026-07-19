@@ -5,7 +5,7 @@ mx ("multiplexer") is a CLI for running **several features in parallel across sh
 End-users install it with:
 
 ```bash
-npm i -g @roulabs/mx     # provides the `mx` command
+npm i -g @rousan/mx     # provides the `mx` command
 ```
 
 Requires Node ≥22 and git.
@@ -59,7 +59,7 @@ The runtime is **versioned**: `mx.json` records the on-disk layout version (CLI 
 
 ## Where things live in this repo
 
-The source repo at `github.com/roulabs/mx`:
+The source repo at `github.com/rousan/mx`:
 
 - `packages/core/` — `@mx/core`, pure domain logic (no I/O for stdout, no `process.exit`)
 - `apps/cli/` — `@mx/cli`, the CLI source wrapping `@mx/core`

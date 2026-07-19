@@ -14,6 +14,13 @@ npm/LICENSE
 # dependencies
 node_modules/
 
+# VitePress docs-site build output + cache
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+# landing + docs site build output
+apps/landing/dist/
+
 # playwright screenshot/console artifacts
 .playwright-mcp/
 

@@ -7,7 +7,7 @@ You can dogfood mx by treating its source as just another repo in an mx runtime 
 One-time, on your productive runtime:
 
 ```bash
-mx repo add git@github.com:roulabs/mx.git
+mx repo add git@github.com:rousan/mx.git
 ```
 
 Per feature (repeat for as many parallel mx features as you want):
@@ -28,7 +28,7 @@ There are two `mx` binaries available inside a self-hosted worktree, and they mu
 
 | binary | what it runs | use for |
 |---|---|---|
-| `mx` (on `$PATH`) | the **globally installed** `@roulabs/mx` — published version | productive runtime operations: `mx i`, `mx work archive feat`, etc. **Safe** against the productive runtime. |
+| `mx` (on `$PATH`) | the **globally installed** `@rousan/mx` — published version | productive runtime operations: `mx i`, `mx work archive feat`, etc. **Safe** against the productive runtime. |
 | `pnpm mx ...` or `node npm/bin/mx.js ...` | the **locally-built** CLI from your in-progress code | **testing only** — must always be pointed at a sandbox runtime, never the productive one. |
 
 ## The strict rule
@@ -97,7 +97,7 @@ Both load. They describe different layers and don't conflict — the source repo
 4. checks no `vX.Y.Z` tag exists locally or on origin
 5. runs `pnpm typecheck && pnpm lint && pnpm test && pnpm build`
 6. shows a tarball preview
-7. asks `Publish @roulabs/mx@X.Y.Z and tag vX.Y.Z? (y/N)`
+7. asks `Publish @rousan/mx@X.Y.Z and tag vX.Y.Z? (y/N)`
 8. on `y`: `npm publish --auth-type=web` from `npm/`, `git tag -a`, `git push origin HEAD`, `git push origin <tag>`
 
 The `--auth-type=web` step opens a browser for confirmation (handles 2FA). The push step uses the **current branch** — see the caveat above about feature-branch vs main.

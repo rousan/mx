@@ -329,7 +329,7 @@ export function migrateRuntime(
   if (from > RUNTIME_VERSION) {
     throw new MxError(
       `runtime is v${from}, newer than this mx supports (v${RUNTIME_VERSION}). ` +
-        `Upgrade your mx CLI: \`npm i -g @roulabs/mx@latest\`.`,
+        `Upgrade your mx CLI: \`npm i -g @rousan/mx@latest\`.`,
       'CLI_TOO_OLD',
     );
   }
