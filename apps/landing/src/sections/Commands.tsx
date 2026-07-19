@@ -23,7 +23,7 @@ export function Commands() {
             <ul className="mt-4 flex flex-col divide-y divide-line">
               {group.commands.map((c) => (
                 <li key={c.cmd} className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
-                  <code className="font-mono text-[13px] font-medium text-accent-ink">{c.cmd}</code>
+                  <code className="font-mono text-[13px] font-medium text-ink">{c.cmd}</code>
                   <span className="text-sm leading-relaxed text-muted">{c.desc}</span>
                 </li>
               ))}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Icon } from '../ui';
+import { Icon, Logo } from '../ui';
 import { NAV_LINKS, REPO_URL } from '../content';
 import type { Theme } from '../theme';
 
@@ -31,7 +31,8 @@ export function Nav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
       }`}
     >
       <nav className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5">
-        <a href="#top" className="flex items-baseline gap-0.5 font-mono text-xl font-bold">
+        <a href="#top" className="flex items-center gap-2 font-mono text-xl font-bold">
+          <Logo className="h-5 w-auto text-accent" />
           <span className="mx-grad-text">mx</span>
         </a>
 

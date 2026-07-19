@@ -9,18 +9,20 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /*
- * Semantic design tokens — a calm, monochrome grayscale system in the spirit of
- * a documentation site (and the mission-control dashboard). There is no chromatic
- * accent: emphasis comes from ink weight and subtle gray steps, not hue. Light
- * values are the base; the dark override block below swaps them when
- * <html data-theme="dark">. Exposing them through `@theme inline` lets us use
- * them as Tailwind color utilities (e.g. `bg-surface`, `text-muted`,
- * `border-line`).
+ * Semantic design tokens — a calm, mostly-monochrome grayscale system with a
+ * single warm terra-cotta accent, in the spirit of a documentation site (and
+ * the sibling `ccal` project). Emphasis comes from ink weight and gray steps;
+ * the accent is used sparingly for the logo, one hero phrase, prompts, links,
+ * icon chips, and the primary button. Light values are the base; the dark
+ * override block below swaps them when <html data-theme="dark">. Exposing them
+ * through `@theme inline` lets us use them as Tailwind color utilities
+ * (e.g. `bg-surface`, `text-muted`, `border-line`, `text-accent`).
  *
- * The `--accent*` names are kept for stability across components, but they now
- * resolve to grays: `--accent` a mid ink for eyebrows/icons, `--accent-ink` a
- * strong ink for links, `--accent-strong` the near-black button fill (inverted
- * to near-white in dark), and `--on-accent` the text that sits on it.
+ * Token roles: `--accent` the terra-cotta accent (prompts, icons, dots);
+ * `--accent-ink` a readable accent for links; `--accent-soft` a faint accent
+ * tint for icon chips; `--cta`/`--on-cta` the orange primary-button fill and its
+ * text; `--accent-strong`/`--on-accent` the neutral ink fill used for step
+ * markers (near-black in light, inverted to near-white in dark).
  */
 :root {
   --bg: #ffffff;
@@ -33,12 +35,14 @@
   --text-soft: #3f3f46;
   --muted: #71717a;
   --faint: #a1a1aa;
-  --accent: #52525b;
-  --accent-ink: #27272a;
-  --accent-2: #71717a;
-  --accent-soft: #f4f4f5;
+  --accent: #c0562f;
+  --accent-ink: #b04a26;
+  --accent-2: #c0562f;
+  --accent-soft: rgba(192, 86, 47, 0.1);
   --accent-strong: #18181b;
   --on-accent: #ffffff;
+  --cta: #c0562f;
+  --on-cta: #ffffff;
   --amber: #71717a;
   --code-bg: #f6f6f7;
 }
@@ -54,12 +58,14 @@
   --text-soft: #c8c8ce;
   --muted: #9a9aa4;
   --faint: #63636d;
-  --accent: #a1a1aa;
-  --accent-ink: #e4e4e7;
-  --accent-2: #a1a1aa;
-  --accent-soft: #1b1b20;
+  --accent: #e0793f;
+  --accent-ink: #ea8a5a;
+  --accent-2: #e0793f;
+  --accent-soft: rgba(224, 121, 63, 0.15);
   --accent-strong: #fafafa;
   --on-accent: #18181b;
+  --cta: #c0562f;
+  --on-cta: #ffffff;
   --amber: #a1a1aa;
   --code-bg: #0d0d11;
 }
@@ -100,17 +106,25 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Solid, monochrome "filled" treatment for primary buttons and step markers:
- * a near-black fill in light mode, inverted to near-white in dark. `--on-accent`
- * is the readable text color that sits on top. */
+/* Neutral "ink fill" used for step markers: near-black in light, inverted to
+ * near-white in dark. `--on-accent` is the readable text color on top. */
 .mx-grad {
   background-color: var(--accent-strong);
   color: var(--on-accent);
 }
-/* The wordmark and inline emphasis are just strong ink — emphasis comes from
- * weight, not hue, per the monochrome direction. */
+/* The wordmark is strong ink — emphasis comes from weight, not hue. */
 .mx-grad-text {
   color: var(--text);
+}
+/* The primary call-to-action button: the terra-cotta accent fill with white
+ * text (the one place the accent is used as a solid fill). */
+.mx-cta {
+  background-color: var(--cta);
+  color: var(--on-cta);
+}
+/* Inline accent emphasis — the single highlighted phrase in the hero headline. */
+.mx-accent-text {
+  color: var(--accent);
 }
 
 /* Faint parallel-lanes backdrop for the hero — a nod to worktrees running side by side. */
