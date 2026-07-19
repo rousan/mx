@@ -8,11 +8,11 @@
  */
 const STRIP: ({ divider: string } | { spaces: number })[] = [
   { divider: 'IN PROGRESS' },
-  { spaces: 3 },
+  { spaces: 4 },
   { divider: 'IN REVIEWS' },
   { spaces: 2 },
   { divider: 'PR REVIEWS' },
-  { spaces: 1 },
+  { spaces: 2 },
 ];
 
 /**
