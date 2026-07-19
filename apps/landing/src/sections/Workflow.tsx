@@ -2,19 +2,19 @@ import { Section, Command, Icon } from '../ui';
 import { WORKFLOW_STEPS } from '../content';
 
 /**
- * The "In practice" section: one concrete, opinionated daily workflow — a
- * fullscreen macOS Space per feature (terminal split with the editor), the
- * agent in the first terminal tab, and a three-finger swipe to switch. It opens
- * with a visual of the split layout, then the numbered steps. The lede stresses
- * that mx doesn't mandate any of this; it's a starting shape to copy.
+ * The workflow section — the concrete story of how a feature goes from new to
+ * merged with mx: one fullscreen macOS Space per feature (terminal split with
+ * the editor), the coding agent in the first terminal tab, a three-finger swipe
+ * to switch, and archive on merge. Told as *the* workflow (not a hedged "one of
+ * many"), with the it-doesn't-have-to-be-this-way note saved for the end.
  */
 export function Workflow() {
   return (
     <Section
       id="workflow"
-      eyebrow="In practice"
-      title="A workflow that works"
-      lede="mx is deliberately workflow-agnostic — it manages the folders, branches, and ports, and leaves the rest to you. But a blank page is hard, so here’s one setup that works well: a fullscreen Space per feature, with the agent and editor side by side."
+      eyebrow="The workflow"
+      title="A day with mx"
+      lede="One fullscreen Space per feature — your coding agent and editor side by side — and a swipe to move between them. Here’s the whole loop, from a fresh feature to a merged one."
       tinted
     >
       <SpaceMock />
@@ -43,87 +43,18 @@ export function Workflow() {
         ))}
       </ol>
 
-      <div className="mt-14">
-        <h3 className="text-lg font-semibold text-ink">Grouped in Mission Control</h3>
-        <p className="mt-1.5 mb-5 max-w-2xl text-sm leading-relaxed text-muted">
-          Swipe up with three fingers and your whole board appears: feature Spaces clustered between{' '}
-          <span className="font-mono text-ink-soft">mx divider</span> labels, so you always know what’s
-          in progress, in review, and merged.
+      {/* The flexibility note lives at the END — so the story reads as concrete
+          first, and "you don't have to do it this way" is the closing reassurance. */}
+      <div className="mt-12 rounded-xl border border-line bg-surface p-6">
+        <p className="text-sm leading-relaxed text-muted">
+          <span className="font-semibold text-ink">This is the setup mx was built around — not a
+          requirement.</span>{' '}
+          Use any editor, terminal, or window manager you like; mx just owns the folders, branches,
+          and ports underneath and stays out of the way. Once you have the loop, bend it to your own
+          tools.
         </p>
-        <SpacesStrip />
       </div>
     </Section>
-  );
-}
-
-/**
- * The ordered contents of the Mission Control Spaces strip: either a labeled
- * `mx divider` Space (a group header) or one or more feature Spaces (small
- * thumbnails) that belong to the preceding group. Mirrors the real layout a
- * user arranges — MAIN, then in-progress features, then review stages.
- */
-const STRIP: ({ divider: string } | { spaces: number })[] = [
-  { divider: 'MAIN' },
-  { spaces: 3 },
-  { divider: 'IN PROGRESS' },
-  { spaces: 4 },
-  { divider: 'IN REVIEWS' },
-  { spaces: 2 },
-  { divider: 'PR REVIEWS' },
-  { spaces: 1 },
-];
-
-/**
- * A horizontally-scrolling mock of the macOS Mission Control Spaces bar: big
- * block-text divider Spaces (from `mx divider`) act as group headers, with small
- * feature-Space thumbnails clustered under each. Recreates the user's real
- * board rather than a screenshot, so it stays crisp and theme-aware.
- */
-function SpacesStrip() {
-  return (
-    <div className="overflow-x-auto rounded-xl border border-line bg-surface-2 p-4">
-      <div className="flex items-stretch gap-2.5">
-        {STRIP.map((item, i) =>
-          'divider' in item ? (
-            <div
-              key={i}
-              className="flex h-16 shrink-0 items-center justify-center rounded-md border border-line-strong bg-surface px-4 font-mono text-xs font-bold tracking-widest text-ink"
-            >
-              {item.divider}
-            </div>
-          ) : (
-            Array.from({ length: item.spaces }).map((_, j) => <SpaceThumb key={`${i}-${j}`} />)
-          ),
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * One feature-Space thumbnail in the Mission Control strip — a tiny split-pane
- * window (terminal | editor) rendered abstractly with a few faint lines.
- */
-function SpaceThumb() {
-  return (
-    <div className="flex h-16 w-24 shrink-0 flex-col overflow-hidden rounded-md border border-line bg-surface">
-      <div className="flex items-center gap-1 border-b border-line px-1.5 py-1">
-        <span className="h-1 w-1 rounded-full bg-line-strong" />
-        <span className="h-1 w-1 rounded-full bg-line-strong" />
-      </div>
-      <div className="grid flex-1 grid-cols-2">
-        <div className="flex flex-col gap-1 border-r border-line p-1.5">
-          <span className="h-0.5 w-8 rounded bg-line-strong" />
-          <span className="h-0.5 w-6 rounded bg-line" />
-          <span className="h-0.5 w-7 rounded bg-line" />
-        </div>
-        <div className="flex flex-col gap-1 p-1.5">
-          <span className="h-0.5 w-5 rounded bg-line" />
-          <span className="h-0.5 w-8 rounded bg-line" />
-          <span className="h-0.5 w-6 rounded bg-line" />
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -214,10 +145,7 @@ function TermTab({ label, active }: { label: string; active?: boolean }) {
 function SwipeArrow({ direction }: { direction: 'left' | 'right' }) {
   return (
     <div className="hidden shrink-0 flex-col items-center gap-1 text-faint sm:flex">
-      <Icon
-        name="arrow"
-        className={`h-5 w-5 ${direction === 'left' ? 'rotate-180' : ''}`}
-      />
+      <Icon name="arrow" className={`h-5 w-5 ${direction === 'left' ? 'rotate-180' : ''}`} />
       <span className="w-14 text-center text-[10px] leading-tight">
         {direction === 'left' ? 'prev feature' : 'next feature'}
       </span>
