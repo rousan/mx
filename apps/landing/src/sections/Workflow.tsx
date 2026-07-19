@@ -71,8 +71,6 @@ const STRIP: ({ divider: string } | { spaces: number })[] = [
   { spaces: 2 },
   { divider: 'PR REVIEWS' },
   { spaces: 1 },
-  { divider: 'MX' },
-  { spaces: 1 },
 ];
 
 /**
