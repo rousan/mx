@@ -8,10 +8,11 @@ import tailwindcss from '@tailwindcss/vite';
  * Unlike the mission-control app (which inlines everything into a single
  * `index.html` so the CLI can embed it), this is a conventional multi-asset
  * static site. `vite build` emits `apps/landing/dist/` with hashed JS/CSS, and
- * Cloudflare Pages serves that folder at https://mx.rousanali.com (production on
- * merge to the default branch, preview per pull request).
+ * GitHub Pages serves that folder at https://mx.rousanali.com (deployed on merge
+ * to the default branch by .github/workflows/deploy-landing.yml).
  *
- * `base: '/'` because the site is served from the domain root.
+ * `base: '/'` because the site is served from the domain root (a custom domain),
+ * not a project subpath.
  */
 export default defineConfig({
   plugins: [react(), tailwindcss()],

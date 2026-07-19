@@ -1,9 +1,10 @@
 name: Deploy landing
 
-# Publishes the landing + docs site (apps/landing) as a Cloudflare Worker
-# (assets-only, via wrangler) — NOT Cloudflare Pages.
-#   - push to main   -> `wrangler deploy`         (PRODUCTION; serves mx.rousanali.com)
-#   - pull_request   -> `wrangler versions upload` (a preview version with its own URL)
+# Publishes the landing + docs site (apps/landing) to GitHub Pages.
+#   - push to main   -> build + deploy the live site (mx.rousanali.com)
+#   - pull_request   -> build only (a check that the site still compiles)
+# The custom domain is carried by apps/landing/public/CNAME, which Vite copies
+# into dist/ so the Pages artifact always declares mx.rousanali.com.
 # Only runs when the site or its build inputs actually change.
 
 on:
@@ -20,19 +21,21 @@ on:
       - '.github/workflows/deploy-landing.yml'
       - 'pnpm-lock.yaml'
       - 'package.json'
+  workflow_dispatch:
 
-# One deploy per ref at a time; a newer push supersedes an in-flight one.
-concurrency:
-  group: deploy-landing-${{ github.ref }}
-  cancel-in-progress: true
-
-# The deploy authenticates to Cloudflare with an API token, not the GitHub
-# token, so read access to the repo is all this job needs.
+# GitHub Pages deployment needs these; id-token lets deploy-pages authenticate.
 permissions:
   contents: read
+  pages: write
+  id-token: write
+
+# Allow one in-flight Pages deployment at a time; don't cancel a running one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,22 +49,22 @@ jobs:
 
       - run: pnpm install
 
-      # Produces the static site at apps/landing/dist.
+      # Produces the static site (incl. the CNAME) at apps/landing/dist.
       - run: pnpm landing:build
 
-      # Deploy the assets-only Worker. On a PR we upload a preview VERSION
-      # (does not touch production); on push to main we deploy to production.
-      # wrangler reads apps/landing/wrangler.jsonc (name: mx-landing).
-      - name: Deploy Worker
-        id: deploy
-        uses: cloudflare/wrangler-action@v3
+      # Package dist/ as the Pages artifact for the deploy job to consume.
+      - uses: actions/upload-pages-artifact@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/landing
-          command: ${{ github.event_name == 'pull_request' && 'versions upload' || 'deploy' }}
+          path: apps/landing/dist
 
-      # Surface the deployment URL in the run summary (no PR comment, by design).
-      - name: Report deployment URL
-        if: ${{ steps.deploy.outputs.deployment-url != '' }}
-        run: echo "Deployed to ${{ steps.deploy.outputs.deployment-url }}" >> "$GITHUB_STEP_SUMMARY"
+  deploy:
+    # Only publish from main; on PRs the build job above is just a check.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

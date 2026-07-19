@@ -106,26 +106,20 @@ pnpm docs:build       # -> docs/.vitepress/dist
 
 The landing app lives in `apps/landing/src/`: content (features, concepts, quickstart steps, commands, FAQ) is data in `content.ts`; each page section is a component under `sections/`; `theme.ts` drives the light/dark toggle. To change copy, edit `content.ts`; to change layout, edit the relevant section.
 
-### Hosting: Cloudflare Worker (wrangler, GitHub Actions)
+### Hosting: GitHub Pages (GitHub Actions)
 
-The public site is served at **mx.rousanali.com** by a **Cloudflare Worker** — an assets-only Worker that serves the built `dist/` from the edge (not Cloudflare Pages). Config is `apps/landing/wrangler.jsonc` (worker name **`mx-landing`**, `assets.directory: ./dist`, SPA fallback). Deployed by the **`.github/workflows/deploy-landing.yml`** GitHub Action:
+The public site is served at **mx.rousanali.com** from **GitHub Pages**, deployed by the **`.github/workflows/deploy-landing.yml`** workflow (the official `upload-pages-artifact` + `deploy-pages` actions):
 
-- **production** deploy (`wrangler deploy`) on every push to `main`;
-- a **preview version** (`wrangler versions upload`, its own version-preview URL) on every pull request — this never touches production;
-- both gated on a `paths` filter, so only changes under `apps/landing/**` (or the lockfile / root `package.json` / the workflow itself) trigger a deploy.
+- **push to `main`** → build with `pnpm landing:build` and deploy `apps/landing/dist` to Pages;
+- **pull request** → build only (a check that the site still compiles; Pages has no per-PR previews);
+- both gated on a `paths` filter, so only changes under `apps/landing/**` (or the lockfile / root `package.json` / the workflow itself) trigger it.
 
-The workflow builds with `pnpm landing:build`, then runs wrangler in `apps/landing`. Locally you can `pnpm --filter @mx/landing exec wrangler deploy` (or `pnpm --filter @mx/landing run cf:dev` to serve the assets Worker on localhost).
+The custom domain is carried by **`apps/landing/public/CNAME`** (contents: `mx.rousanali.com`), which Vite copies into `dist/` so every deployed artifact declares the domain — GitHub Pages won't drop it. No repo secrets are needed; Pages auth uses the workflow's `id-token`.
 
-Required repo secrets (Settings → Secrets and variables → Actions):
+One-time setup:
 
-| Secret | Value |
-|---|---|
-| `CLOUDFLARE_API_TOKEN` | A Cloudflare API token with the **Workers Scripts: Edit** permission (Workers, not Pages). |
-| `CLOUDFLARE_ACCOUNT_ID` | Your Cloudflare account ID (dashboard sidebar / account URL). |
+1. Repo **Settings → Pages → Build and deployment → Source: GitHub Actions** (enables Actions-based Pages).
+2. In your DNS, add a `CNAME` record for `mx.rousanali.com` → `rousan.github.io` (apex/root would use A/AAAA records instead; this is a subdomain, so `CNAME` is correct).
+3. After the first deploy, Settings → Pages should show the custom domain as `mx.rousanali.com`; tick **Enforce HTTPS** once the certificate is issued.
 
-One-time Cloudflare setup:
-
-1. The first push to `main` creates the `mx-landing` Worker. PR previews rely on Workers **preview URLs** — ensure the Worker has a `workers.dev` subdomain enabled (default) so `versions upload` yields a preview URL.
-2. Attach the custom domain `mx.rousanali.com` to the Worker (Workers & Pages → mx-landing → Settings → Domains & Routes → Add → Custom domain). A DNS record is created automatically since the zone is on Cloudflare.
-
-The workflow reports the deployment URL in the run summary. It intentionally does **not** post a PR comment; grab the preview URL from the Actions run.
+The workflow surfaces the live URL on the `github-pages` environment for the deploy run.
