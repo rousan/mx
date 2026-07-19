@@ -114,7 +114,7 @@ Read commands take `--porcelain` for stable JSON; mutations echo the resulting o
 
 ## Release
 
-Releases are **CI-driven**: bump `npm/package.json`'s `"version"` in a PR and merge to `main` — `.github/workflows/release.yml` runs the check pipeline, `npm publish`es from `npm/` (auth via the `NPM_TOKEN` secret), tags `vX.Y.Z`, and creates a GitHub Release. **Every merge to `main` must bump the version** or the run fails on the existing-tag guard. `pnpm release` (`scripts/release.sh`) remains a local fallback for emergencies. CI (`.github/workflows/ci.yml`) runs typecheck/lint/test/build on every PR.
+Releases are **CI-driven**: bump `npm/package.json`'s `"version"` in a PR and merge to `main` — `.github/workflows/release.yml` runs the check pipeline, `npm publish`es from `npm/` (auth via the `NPM_TOKEN` secret), tags `vX.Y.Z`, and creates a GitHub Release. **Every merge to `main` that changes package content must bump the version** or the run fails on the existing-tag guard. Merges touching only non-package paths — the landing site (`apps/landing/**`), `docs/**`, markdown, or repo tooling — are exempt via the workflow's `paths-ignore`, so a docs/site iteration ships to `main` (and redeploys the site) without an npm release. `pnpm release` (`scripts/release.sh`) remains a local fallback for emergencies. CI (`.github/workflows/ci.yml`) runs typecheck/lint/test/build on every PR.
 
 See **[docs/release.md](docs/release.md)** for the full runbook, the `NPM_TOKEN` setup, and every gotcha caught the hard way (npm name similarity, fresh-scope propagation lag, etc.).
 
