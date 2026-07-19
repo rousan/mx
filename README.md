@@ -1,4 +1,19 @@
-# mx
+<p align="center">
+  <img src="assets/logo.svg" alt="mx logo" width="88" />
+</p>
+
+<h1 align="center">mx</h1>
+
+<p align="center"><strong>Work on parallel features using coding agents.</strong></p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@rousan/mx"><img src="https://img.shields.io/npm/v/@rousan/mx?color=f59e0b&label=npm" alt="npm version" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/npm/l/@rousan/mx?color=f59e0b&label=license" alt="license" /></a>
+  <img src="https://img.shields.io/node/v/@rousan/mx?color=f59e0b&label=node" alt="node version" />
+  <a href="https://mx.rousanali.com"><img src="https://img.shields.io/badge/docs-mx.rousanali.com-f59e0b" alt="docs" /></a>
+</p>
+
+---
 
 Source and tooling for **mx** ("multiplexer") — a system for working on several features in parallel across multiple shared repos, using git worktrees. Each feature gets an isolated environment (its own worktrees, branches, ports, editor workspace), so you can switch between features instantly without stashing or branch-juggling.
 

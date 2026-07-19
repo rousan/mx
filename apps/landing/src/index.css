@@ -9,9 +9,10 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /*
- * Semantic design tokens — a calm, mostly-monochrome grayscale base with a soft
- * pastel accent drawn from the Tailwind palette (violet for the UI accent; the
- * logo itself is multi-pastel — teal/amber/rose/violet). Emphasis comes from ink
+ * Semantic design tokens — a calm, mostly-monochrome grayscale base with a warm
+ * amber/yellow accent drawn from the Tailwind palette (amber for the UI accent;
+ * the logo itself stays multi-pastel — teal/amber/rose with a violet source
+ * node). Emphasis comes from ink
  * weight and gray steps; the accent is used sparingly for the logo, one hero
  * phrase, prompts, links, icon chips, and the primary button. Light values are
  * the base; the dark override block below swaps them when
@@ -36,13 +37,13 @@
   --text-soft: #3f3f46;
   --muted: #71717a;
   --faint: #a1a1aa;
-  --accent: #8b5cf6; /* violet-500 */
-  --accent-ink: #7c3aed; /* violet-600 (readable link on white) */
-  --accent-2: #8b5cf6;
-  --accent-soft: rgba(139, 92, 246, 0.12); /* violet-500 @ 12% */
+  --accent: #d97706; /* amber-600 (readable amber on white) */
+  --accent-ink: #b45309; /* amber-700 (readable link on white) */
+  --accent-2: #d97706;
+  --accent-soft: rgba(245, 158, 11, 0.14); /* amber-500 @ 14% */
   --accent-strong: #18181b;
   --on-accent: #ffffff;
-  --cta: #7c3aed; /* violet-600 */
+  --cta: #f59e0b; /* amber-500 button, white text */
   --on-cta: #ffffff;
   --amber: #71717a;
   --code-bg: #f6f6f7;
@@ -59,13 +60,13 @@
   --text-soft: #c8c8ce;
   --muted: #9a9aa4;
   --faint: #63636d;
-  --accent: #a78bfa; /* violet-400 (brighter on the dark canvas) */
-  --accent-ink: #c4b5fd; /* violet-300 */
-  --accent-2: #a78bfa;
-  --accent-soft: rgba(167, 139, 250, 0.16); /* violet-400 @ 16% */
+  --accent: #fbbf24; /* amber-400 (bright gold on the dark canvas) */
+  --accent-ink: #fcd34d; /* amber-300 */
+  --accent-2: #fbbf24;
+  --accent-soft: rgba(251, 191, 36, 0.16); /* amber-400 @ 16% */
   --accent-strong: #fafafa;
   --on-accent: #18181b;
-  --cta: #7c3aed; /* violet-600 */
+  --cta: #f59e0b; /* amber-500 button, white text */
   --on-cta: #ffffff;
   --amber: #a1a1aa;
   --code-bg: #0d0d11;

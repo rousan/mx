@@ -19,6 +19,7 @@ on:
     paths-ignore:
       - 'apps/landing/**'
       - 'docs/**'
+      - 'assets/**'
       - '.npmrc'
       - '**/*.md'
       - '.github/workflows/deploy-landing.yml'
