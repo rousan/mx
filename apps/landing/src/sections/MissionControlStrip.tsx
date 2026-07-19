@@ -7,8 +7,6 @@
  * stages.
  */
 const STRIP: ({ divider: string } | { spaces: number })[] = [
-  { divider: 'MAIN' },
-  { spaces: 2 },
   { divider: 'IN PROGRESS' },
   { spaces: 3 },
   { divider: 'IN REVIEWS' },
