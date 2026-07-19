@@ -1,4 +1,19 @@
-# mx
+<p align="center">
+  <img src="assets/logo.svg" alt="mx logo" width="88" />
+</p>
+
+<h1 align="center">mx</h1>
+
+<p align="center"><strong>Work on parallel features using coding agents.</strong></p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@rousan/mx"><img src="https://img.shields.io/npm/v/@rousan/mx?color=f59e0b&label=npm" alt="npm version" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/npm/l/@rousan/mx?color=f59e0b&label=license" alt="license" /></a>
+  <img src="https://img.shields.io/node/v/@rousan/mx?color=f59e0b&label=node" alt="node version" />
+  <a href="https://mx.rousanali.com"><img src="https://img.shields.io/badge/docs-mx.rousanali.com-f59e0b" alt="docs" /></a>
+</p>
+
+---
 
 Source and tooling for **mx** ("multiplexer") — a system for working on several features in parallel across multiple shared repos, using git worktrees. Each feature gets an isolated environment (its own worktrees, branches, ports, editor workspace), so you can switch between features instantly without stashing or branch-juggling.
 
@@ -114,7 +129,7 @@ Read commands take `--porcelain` for stable JSON; mutations echo the resulting o
 
 ## Release
 
-Releases are **CI-driven**: bump `npm/package.json`'s `"version"` in a PR and merge to `main` — `.github/workflows/release.yml` runs the check pipeline, `npm publish`es from `npm/` (auth via the `NPM_TOKEN` secret), tags `vX.Y.Z`, and creates a GitHub Release. **Every merge to `main` must bump the version** or the run fails on the existing-tag guard. `pnpm release` (`scripts/release.sh`) remains a local fallback for emergencies. CI (`.github/workflows/ci.yml`) runs typecheck/lint/test/build on every PR.
+Releases are **CI-driven**: bump `npm/package.json`'s `"version"` in a PR and merge to `main` — `.github/workflows/release.yml` runs the check pipeline, `npm publish`es from `npm/` (auth via the `NPM_TOKEN` secret), tags `vX.Y.Z`, and creates a GitHub Release. **Every merge to `main` that changes package content must bump the version** or the run fails on the existing-tag guard. Merges touching only non-package paths — the landing site (`apps/landing/**`), `docs/**`, markdown, or repo tooling — are exempt via the workflow's `paths-ignore`, so a docs/site iteration ships to `main` (and redeploys the site) without an npm release. `pnpm release` (`scripts/release.sh`) remains a local fallback for emergencies. CI (`.github/workflows/ci.yml`) runs typecheck/lint/test/build on every PR.
 
 See **[docs/release.md](docs/release.md)** for the full runbook, the `NPM_TOKEN` setup, and every gotcha caught the hard way (npm name similarity, fresh-scope propagation lag, etc.).
 

@@ -32,7 +32,7 @@ export function Nav({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
     >
       <nav className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-5">
         <a href="#top" className="flex items-center gap-2 font-mono text-xl font-bold">
-          <Logo className="h-5 w-auto text-accent" />
+          <Logo className="h-5 w-auto" />
           <span className="mx-grad-text">mx</span>
         </a>
 
