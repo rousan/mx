@@ -9,10 +9,10 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /*
- * Semantic design tokens — a calm, mostly-monochrome grayscale base with a warm
- * amber/yellow accent drawn from the Tailwind palette (amber for the UI accent;
- * the logo itself stays multi-pastel — teal/amber/rose with a violet source
- * node). Emphasis comes from ink
+ * Semantic design tokens — a calm, mostly-monochrome grayscale base with a teal
+ * accent drawn from the Tailwind palette (teal for the UI accent, tying into the
+ * logo, which stays multi-pastel — teal/amber/rose with a violet source node).
+ * Emphasis comes from ink
  * weight and gray steps; the accent is used sparingly for the logo, one hero
  * phrase, prompts, links, icon chips, and the primary button. Light values are
  * the base; the dark override block below swaps them when
@@ -37,13 +37,13 @@
   --text-soft: #3f3f46;
   --muted: #71717a;
   --faint: #a1a1aa;
-  --accent: #d97706; /* amber-600 (readable amber on white) */
-  --accent-ink: #b45309; /* amber-700 (readable link on white) */
-  --accent-2: #d97706;
-  --accent-soft: rgba(245, 158, 11, 0.14); /* amber-500 @ 14% */
+  --accent: #0d9488; /* teal-600 (readable teal on white) */
+  --accent-ink: #0f766e; /* teal-700 (readable link on white) */
+  --accent-2: #0d9488;
+  --accent-soft: rgba(20, 184, 166, 0.12); /* teal-500 @ 12% */
   --accent-strong: #18181b;
   --on-accent: #ffffff;
-  --cta: #f59e0b; /* amber-500 button, white text */
+  --cta: #0d9488; /* teal-600 button, white text */
   --on-cta: #ffffff;
   --amber: #71717a;
   --code-bg: #f6f6f7;
@@ -60,13 +60,13 @@
   --text-soft: #c8c8ce;
   --muted: #9a9aa4;
   --faint: #63636d;
-  --accent: #fbbf24; /* amber-400 (bright gold on the dark canvas) */
-  --accent-ink: #fcd34d; /* amber-300 */
-  --accent-2: #fbbf24;
-  --accent-soft: rgba(251, 191, 36, 0.16); /* amber-400 @ 16% */
+  --accent: #2dd4bf; /* teal-400 (bright teal on the dark canvas) */
+  --accent-ink: #5eead4; /* teal-300 */
+  --accent-2: #2dd4bf;
+  --accent-soft: rgba(45, 212, 191, 0.16); /* teal-400 @ 16% */
   --accent-strong: #fafafa;
   --on-accent: #18181b;
-  --cta: #f59e0b; /* amber-500 button, white text */
+  --cta: #0d9488; /* teal-600 button, white text */
   --on-cta: #ffffff;
   --amber: #a1a1aa;
   --code-bg: #0d0d11;

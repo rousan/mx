@@ -12,12 +12,13 @@ import { Faq } from './sections/Faq';
 import { Footer } from './sections/Footer';
 
 /**
- * The mx landing + docs site: a single scrolling page that teaches mx from zero
- * — hook (Hero), problem (Why), the core agent pitch (Agents), vocabulary
- * (Concepts), hands-on (Quickstart), capabilities (Features), reference
- * (Commands), objections (Faq), then a closing CTA (Footer). Ordered so each
- * section builds on the last. Workflow (after Quickstart) shows one concrete
- * end-to-end setup for using it day to day.
+ * The mx landing + docs site: a single scrolling page that teaches mx from zero.
+ * The story opens concrete — hook (Hero, with the Mission Control board), the
+ * pain (Why), then immediately the day-to-day Mission Control workflow
+ * (Workflow) so a newcomer "gets it" fast. Only then does it go into detail:
+ * the agent pitch (Agents), vocabulary (Concepts), hands-on (Quickstart),
+ * capabilities (Features), reference (Commands), objections (Faq), and a closing
+ * CTA (Footer).
  */
 export function App() {
   const { theme, toggle } = useTheme();
@@ -27,10 +28,10 @@ export function App() {
       <main>
         <Hero />
         <Why />
+        <Workflow />
         <Agents />
         <Concepts />
         <Quickstart />
-        <Workflow />
         <Features />
         <Commands />
         <Faq />

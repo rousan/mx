@@ -34,9 +34,11 @@ export function Quickstart() {
 
       <div className="mt-10 rounded-xl border border-line bg-surface p-6">
         <p className="text-sm leading-relaxed text-muted">
-          Now <Mono>cd works/my-feature/wt/app</Mono> and you’re in a normal git checkout on your
-          feature branch. Build it, run it, commit, push, open a PR — all the usual way. Start a
-          second feature with another <Mono>mx work new</Mono> and the two stay completely isolated.
+          Your coding-agent session runs from the feature folder (<Mono>works/my-feature</Mono>) —
+          its home base, with all the worktrees in view. The code itself lives in{' '}
+          <Mono>wt/app</Mono>, a normal git checkout on your branch; <Mono>cd</Mono> there to start
+          the dev server, commit, or push. Spin up another feature with <Mono>mx work new</Mono> and
+          the two stay completely isolated.
         </p>
       </div>
     </Section>

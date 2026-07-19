@@ -1,4 +1,5 @@
 import { CopyButton, Icon, Logo } from '../ui';
+import { MissionControlStrip } from './MissionControlStrip';
 import { PKG, REPO_URL } from '../content';
 
 /**
@@ -63,6 +64,16 @@ export function Hero() {
           >
             Why mx?
           </a>
+        </div>
+
+        {/* The Mission Control board: every feature is its own Space, grouped by
+            stage — the whole "many parallel features" idea in one glance. */}
+        <div className="mt-16 text-left">
+          <MissionControlStrip />
+          <p className="mt-3 text-center text-sm text-muted">
+            Your whole board in macOS Mission Control — a Space per feature, grouped by stage with{' '}
+            <span className="font-mono text-ink-soft">mx divider</span>.
+          </p>
         </div>
       </div>
     </section>
