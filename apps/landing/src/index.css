@@ -9,14 +9,16 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /*
- * Semantic design tokens — a calm, mostly-monochrome grayscale system with a
- * single warm terra-cotta accent, in the spirit of a documentation site (and
- * the sibling `ccal` project). Emphasis comes from ink weight and gray steps;
- * the accent is used sparingly for the logo, one hero phrase, prompts, links,
- * icon chips, and the primary button. Light values are the base; the dark
- * override block below swaps them when <html data-theme="dark">. Exposing them
- * through `@theme inline` lets us use them as Tailwind color utilities
- * (e.g. `bg-surface`, `text-muted`, `border-line`, `text-accent`).
+ * Semantic design tokens — a calm, mostly-monochrome grayscale base with a warm
+ * amber/yellow accent drawn from the Tailwind palette (amber for the UI accent;
+ * the logo itself stays multi-pastel — teal/amber/rose with a violet source
+ * node). Emphasis comes from ink
+ * weight and gray steps; the accent is used sparingly for the logo, one hero
+ * phrase, prompts, links, icon chips, and the primary button. Light values are
+ * the base; the dark override block below swaps them when
+ * <html data-theme="dark">. Exposing them through `@theme inline` lets us use
+ * them as Tailwind color utilities (e.g. `bg-surface`, `text-muted`,
+ * `border-line`, `text-accent`).
  *
  * Token roles: `--accent` the terra-cotta accent (prompts, icons, dots);
  * `--accent-ink` a readable accent for links; `--accent-soft` a faint accent
@@ -35,13 +37,13 @@
   --text-soft: #3f3f46;
   --muted: #71717a;
   --faint: #a1a1aa;
-  --accent: #c0562f;
-  --accent-ink: #b04a26;
-  --accent-2: #c0562f;
-  --accent-soft: rgba(192, 86, 47, 0.1);
+  --accent: #d97706; /* amber-600 (readable amber on white) */
+  --accent-ink: #b45309; /* amber-700 (readable link on white) */
+  --accent-2: #d97706;
+  --accent-soft: rgba(245, 158, 11, 0.14); /* amber-500 @ 14% */
   --accent-strong: #18181b;
   --on-accent: #ffffff;
-  --cta: #c0562f;
+  --cta: #f59e0b; /* amber-500 button, white text */
   --on-cta: #ffffff;
   --amber: #71717a;
   --code-bg: #f6f6f7;
@@ -58,13 +60,13 @@
   --text-soft: #c8c8ce;
   --muted: #9a9aa4;
   --faint: #63636d;
-  --accent: #e0793f;
-  --accent-ink: #ea8a5a;
-  --accent-2: #e0793f;
-  --accent-soft: rgba(224, 121, 63, 0.15);
+  --accent: #fbbf24; /* amber-400 (bright gold on the dark canvas) */
+  --accent-ink: #fcd34d; /* amber-300 */
+  --accent-2: #fbbf24;
+  --accent-soft: rgba(251, 191, 36, 0.16); /* amber-400 @ 16% */
   --accent-strong: #fafafa;
   --on-accent: #18181b;
-  --cta: #c0562f;
+  --cta: #f59e0b; /* amber-500 button, white text */
   --on-cta: #ffffff;
   --amber: #a1a1aa;
   --code-bg: #0d0d11;

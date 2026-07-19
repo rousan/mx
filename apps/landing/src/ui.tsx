@@ -118,25 +118,26 @@ const ICON_PATHS: Record<IconName, ReactNode> = {
 /**
  * The mx logo mark: a "multiplex" fan-out — one node branching into three
  * parallel nodes — echoing mx running several features (worktrees) in parallel.
- * Drawn with `currentColor` so callers set the color (the accent) via className.
+ * Each of the three lanes is a different pastel (Tailwind teal/amber/rose -400)
+ * to underline the "many parallel" idea; the source node is violet (the UI
+ * accent). Colors are fixed so the mark reads the same in light and dark; the
+ * caller controls only size via className.
  *
- * @param props - Standard SVG props (notably `className` for size/color).
- * @returns The logo SVG, sized and colored from its className.
+ * @param props - Standard SVG props (notably `className` for size).
+ * @returns The multi-pastel logo SVG.
  */
 export function Logo(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 33 28" fill="none" aria-hidden="true" {...props}>
-      <g stroke="currentColor" strokeWidth={2.6} strokeLinecap="round">
-        <path d="M9 14 L26 6" />
-        <path d="M9 14 H26" />
-        <path d="M9 14 L26 22" />
+      <g strokeWidth={2.6} strokeLinecap="round">
+        <path d="M9 14 L26 6" stroke="#2dd4bf" />
+        <path d="M9 14 H26" stroke="#fbbf24" />
+        <path d="M9 14 L26 22" stroke="#fb7185" />
       </g>
-      <g fill="currentColor">
-        <circle cx="7" cy="14" r="3.6" />
-        <circle cx="26" cy="6" r="3.2" />
-        <circle cx="26" cy="14" r="3.2" />
-        <circle cx="26" cy="22" r="3.2" />
-      </g>
+      <circle cx="7" cy="14" r="3.6" fill="#a78bfa" />
+      <circle cx="26" cy="6" r="3.2" fill="#2dd4bf" />
+      <circle cx="26" cy="14" r="3.2" fill="#fbbf24" />
+      <circle cx="26" cy="22" r="3.2" fill="#fb7185" />
     </svg>
   );
 }

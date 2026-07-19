@@ -14,7 +14,7 @@ export function Hero() {
       <div aria-hidden className="mx-lanes pointer-events-none absolute inset-0" />
 
       <div className="relative mx-auto w-full max-w-5xl px-5 pt-16 pb-24 text-center sm:pt-20 sm:pb-32">
-        <Logo className="mx-auto mb-8 h-10 w-auto text-accent sm:h-12" />
+        <Logo className="mx-auto mb-8 h-10 w-auto sm:h-12" />
 
         <a
           href={REPO_URL}

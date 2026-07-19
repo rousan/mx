@@ -1,15 +1,29 @@
 name: Release
 
-# Every push to main (i.e. every merged PR) must produce a new release.
+# Every push to main that changes PACKAGE content must produce a new release.
 # The release version is whatever sits in npm/package.json — the PR is
 # responsible for bumping it. If that version was already released (its
 # vX.Y.Z tag already exists), the workflow FAILS, prompting a version bump,
-# because a merge to main without a version bump is a mistake under this
-# contract.
+# because a merge to main with package changes but no version bump is a mistake
+# under this contract.
+#
+# The `paths-ignore` below exempts non-package changes (the landing site, docs,
+# repo tooling, markdown) — those ship to main without an npm release, so a
+# docs/site iteration doesn't force a version bump. If a push touches ONLY
+# ignored paths, this workflow doesn't run; touch any non-ignored file and it
+# does (and then demands a bump).
 
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'apps/landing/**'
+      - 'docs/**'
+      - 'assets/**'
+      - '.npmrc'
+      - '**/*.md'
+      - '.github/workflows/deploy-landing.yml'
+      - '.github/workflows/release.yml'
 
 # Never run two releases at once; let an in-flight one finish.
 concurrency:
