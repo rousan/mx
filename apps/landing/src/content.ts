@@ -359,9 +359,8 @@ export const FAQS: Faq[] = [
  */
 export const NAV_LINKS: { label: string; href: string }[] = [
   { label: 'Why mx', href: '#why' },
+  { label: 'Workflow', href: '#workflow' },
   { label: 'Agents', href: '#agents' },
   { label: 'Concepts', href: '#concepts' },
-  { label: 'Quickstart', href: '#quickstart' },
-  { label: 'Workflow', href: '#workflow' },
   { label: 'Commands', href: '#commands' },
 ];
