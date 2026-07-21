@@ -903,6 +903,56 @@
     padding: 0.05em 0.35em;
   }
 
+  /* ---- Lifecycle flow (pause & resume) ---- */
+  .flow {
+    margin-top: 2rem;
+    display: flex;
+    align-items: stretch;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .flow-step {
+    flex: 1;
+    min-width: 210px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+  }
+  .flow-step.good {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .flow-step .st-h {
+    font-weight: 700;
+    font-size: 0.98rem;
+    margin-bottom: 0.4rem;
+  }
+  .flow-step .st-b {
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+  .flow-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0 0.1rem;
+  }
+  .flow-arrow .a {
+    font-size: 1.3rem;
+    line-height: 1;
+    color: var(--accent);
+  }
+  .flow-arrow code {
+    font-family: ui-monospace, monospace;
+    font-size: 0.66rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
   @media (max-width: 760px) {
     .works,
     .vs {
@@ -1137,9 +1187,44 @@
   <section class="slide" data-topic="Your board">
     <div class="inner">
       <p class="eyebrow">Your board</p>
-      <h2 class="head">Your whole day in Mission Control</h2>
+      <h2 class="head">One Space per feature, grouped by stage</h2>
       <div class="board"><div class="board-row" id="boardRow"></div></div>
       <p class="note">Every feature is its own macOS Space, grouped by stage with <code class="inline">mx divider</code> &mdash; so you always know what's in progress, in review, and shipped. Swipe to switch; nothing is ever torn down.</p>
+    </div>
+  </section>
+
+  <!-- Live dashboard -->
+  <section class="slide" data-topic="Live dashboard">
+    <div class="inner" style="max-width: 1220px; text-align: center">
+      <p class="eyebrow">mx mission-control</p>
+      <h2 class="head">See the whole runtime, live</h2>
+      <div class="shot"><img src="/deck/dashboard-shot.jpg" alt="mx mission-control dashboard: each work with its services, ports, and live localhost URLs" /></div>
+      <p class="note" style="margin-inline: auto"><code class="inline">mx mission-control</code> starts a local, read-only web dashboard &mdash; every work with its services, <b>allocated ports</b>, and live <code class="inline">localhost</code> URLs, plus repo and work <b>health</b>, streamed live. Here: 49 ports across the active works.</p>
+    </div>
+  </section>
+
+  <!-- Pause & resume -->
+  <section class="slide" data-topic="Pause &amp; resume">
+    <div class="inner">
+      <p class="eyebrow">Memory &amp; lifecycle</p>
+      <h2 class="head">Pause a feature, pick it up later</h2>
+      <div class="flow">
+        <div class="flow-step good">
+          <div class="st-h">Active</div>
+          <div class="st-b">Worktrees, ports, an agent session &mdash; and <code class="inline">sessions/*.md</code> notes as you go.</div>
+        </div>
+        <div class="flow-arrow"><span class="a">&rarr;</span><code>mx work archive</code></div>
+        <div class="flow-step">
+          <div class="st-h">Archived</div>
+          <div class="st-b">Worktrees &amp; ports freed. Branches and session summaries kept &mdash; recoverable.</div>
+        </div>
+        <div class="flow-arrow"><span class="a">&rarr;</span><code>mx work unarchive</code></div>
+        <div class="flow-step good">
+          <div class="st-h">Back to work</div>
+          <div class="st-b">Worktrees re-created; continue right where you left off.</div>
+        </div>
+      </div>
+      <p class="note">Every work keeps <b>session summaries</b> (<code class="inline">sessions/*.md</code>) &mdash; a distilled record of each session, so you or a fresh agent can resume cold. Done for now? <code class="inline">mx work archive</code> frees the ports and worktrees but keeps the branches and notes; <code class="inline">mx work unarchive</code> brings it all back.</p>
     </div>
   </section>
 
@@ -1280,7 +1365,7 @@
 <div class="chrome bottom">
   <span class="topic" id="topicLabel">mx</span>
   <span class="hint">&larr; &rarr; or space &middot; <span class="kbd">F</span> fullscreen &middot; <span class="kbd">T</span> theme</span>
-  <span class="count" id="counter">1 / 15</span>
+  <span class="count" id="counter">1 / 17</span>
 </div>
 
 <div class="progress" id="progress"></div>
