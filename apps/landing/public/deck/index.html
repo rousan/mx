@@ -1,0 +1,1395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>mx &mdash; demo deck</title>
+<meta name="description" content="A 15-slide deck introducing mx: parallel features with coding agents, worktrees, ports, and a shared context registry." />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+</head>
+<body>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-2: #f4f7f6;
+    --surface: #ffffff;
+    --surface-2: #f4f7f6;
+    --line: #e3e9e8;
+    --line-strong: #ccd5d3;
+    --ink: #13181a;
+    --ink-soft: #39433f;
+    --muted: #647170;
+    --faint: #98a2a0;
+    --accent: #0d9488;
+    --accent-ink: #0f766e;
+    --accent-soft: rgba(13, 148, 136, 0.1);
+    --pain: #d9633c;
+    --pain-soft: rgba(217, 99, 60, 0.1);
+    --p-teal: #14b8a6;
+    --p-amber: #f0a92a;
+    --p-rose: #f4667f;
+    --p-violet: #8b7ff0;
+    --code-bg: #f1f5f4;
+    --shadow: 0 1px 2px rgba(16, 24, 22, 0.05), 0 8px 30px rgba(16, 24, 22, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0a0f0e;
+      --bg-2: #0e1413;
+      --surface: #111817;
+      --surface-2: #151d1b;
+      --line: #222b29;
+      --line-strong: #35413f;
+      --ink: #e9eeec;
+      --ink-soft: #c3ccca;
+      --muted: #899492;
+      --faint: #58635f;
+      --accent: #2dd4bf;
+      --accent-ink: #5eead4;
+      --accent-soft: rgba(45, 212, 191, 0.14);
+      --pain: #f0855c;
+      --pain-soft: rgba(240, 133, 92, 0.14);
+      --p-teal: #2dd4bf;
+      --p-amber: #fbbf24;
+      --p-rose: #fb7185;
+      --p-violet: #a78bfa;
+      --code-bg: #0c1211;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 40px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme='dark'] {
+    --bg: #0a0f0e;
+    --bg-2: #0e1413;
+    --surface: #111817;
+    --surface-2: #151d1b;
+    --line: #222b29;
+    --line-strong: #35413f;
+    --ink: #e9eeec;
+    --ink-soft: #c3ccca;
+    --muted: #899492;
+    --faint: #58635f;
+    --accent: #2dd4bf;
+    --accent-ink: #5eead4;
+    --accent-soft: rgba(45, 212, 191, 0.14);
+    --pain: #f0855c;
+    --pain-soft: rgba(240, 133, 92, 0.14);
+    --p-teal: #2dd4bf;
+    --p-amber: #fbbf24;
+    --p-rose: #fb7185;
+    --p-violet: #a78bfa;
+    --code-bg: #0c1211;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 40px rgba(0, 0, 0, 0.35);
+  }
+  :root[data-theme='light'] {
+    --bg: #ffffff;
+    --bg-2: #f4f7f6;
+    --surface: #ffffff;
+    --surface-2: #f4f7f6;
+    --line: #e3e9e8;
+    --line-strong: #ccd5d3;
+    --ink: #13181a;
+    --ink-soft: #39433f;
+    --muted: #647170;
+    --faint: #98a2a0;
+    --accent: #0d9488;
+    --accent-ink: #0f766e;
+    --accent-soft: rgba(13, 148, 136, 0.1);
+    --pain: #d9633c;
+    --pain-soft: rgba(217, 99, 60, 0.1);
+    --p-teal: #14b8a6;
+    --p-amber: #f0a92a;
+    --p-rose: #f4667f;
+    --p-violet: #8b7ff0;
+    --code-bg: #f1f5f4;
+    --shadow: 0 1px 2px rgba(16, 24, 22, 0.05), 0 8px 30px rgba(16, 24, 22, 0.06);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    margin: 0;
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  .mono {
+    font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  }
+
+  /* ---- Deck frame ---- */
+  .deck {
+    position: fixed;
+    inset: 0;
+  }
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(3.4rem, 9vh, 5.5rem) clamp(1.5rem, 7vw, 7rem);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s ease;
+  }
+  .slide.active {
+    opacity: 1;
+    visibility: visible;
+  }
+  .inner {
+    width: 100%;
+    max-width: 1060px;
+  }
+  .slide.active .inner > * {
+    animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  }
+  .slide.active .inner > *:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+  .slide.active .inner > *:nth-child(3) {
+    animation-delay: 0.12s;
+  }
+  .slide.active .inner > *:nth-child(4) {
+    animation-delay: 0.18s;
+  }
+  .slide.active .inner > *:nth-child(5) {
+    animation-delay: 0.24s;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* ---- Chrome ---- */
+  .chrome {
+    position: fixed;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem clamp(1.5rem, 4vw, 3rem);
+    z-index: 20;
+    pointer-events: none;
+  }
+  .chrome.top {
+    top: 0;
+  }
+  .chrome.bottom {
+    bottom: 0;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+  }
+  .brand svg {
+    height: 20px;
+    width: auto;
+  }
+  .topic {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+  }
+  .count {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .hint {
+    font-size: 0.72rem;
+    color: var(--faint);
+  }
+  .tbtn {
+    pointer-events: auto;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+    border-radius: 8px;
+    width: 34px;
+    height: 34px;
+    display: inline-grid;
+    place-items: center;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tbtn:hover,
+  .tbtn:focus-visible {
+    color: var(--ink);
+    border-color: var(--line-strong);
+    outline: none;
+  }
+  .tbtn svg {
+    width: 17px;
+    height: 17px;
+  }
+  .progress {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    background: var(--accent);
+    z-index: 30;
+    transition: width 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .navzone {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: 20%;
+    z-index: 10;
+    cursor: pointer;
+  }
+  .navzone.left {
+    left: 0;
+  }
+  .navzone.right {
+    right: 0;
+  }
+
+  /* ---- Typography ---- */
+  .eyebrow {
+    font-family: ui-monospace, monospace;
+    font-size: clamp(0.72rem, 1.1vw, 0.85rem);
+    text-transform: uppercase;
+    letter-spacing: 0.24em;
+    color: var(--accent-ink);
+    margin: 0 0 1.3rem;
+  }
+  h1.display {
+    font-size: clamp(2.4rem, 6.2vw, 4.8rem);
+    line-height: 1.03;
+    letter-spacing: -0.03em;
+    font-weight: 800;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h2.head {
+    font-size: clamp(1.85rem, 4.4vw, 3.2rem);
+    line-height: 1.06;
+    letter-spacing: -0.025em;
+    font-weight: 800;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .lead {
+    font-size: clamp(1.05rem, 2vw, 1.45rem);
+    line-height: 1.5;
+    color: var(--muted);
+    margin: 1.4rem 0 0;
+    max-width: 48ch;
+  }
+  .accent {
+    color: var(--accent);
+  }
+  .note {
+    font-size: clamp(0.9rem, 1.4vw, 1.05rem);
+    color: var(--muted);
+    margin: 1.6rem 0 0;
+    max-width: 64ch;
+  }
+  .note b,
+  .lead b {
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+  code.inline {
+    font-family: ui-monospace, monospace;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.1em 0.45em;
+    font-size: 0.85em;
+    color: var(--ink-soft);
+  }
+  .kbd {
+    font-family: ui-monospace, monospace;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 0.05em 0.4em;
+    font-size: 0.9em;
+  }
+
+  /* ---- Title slide ---- */
+  .title-wrap {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .title-mark {
+    height: clamp(56px, 9vh, 84px);
+    width: auto;
+    margin-bottom: 1.5rem;
+  }
+  .title-wrap .lead {
+    margin-inline: auto;
+    text-align: center;
+  }
+  .metaline {
+    margin-top: 2.2rem;
+    display: flex;
+    gap: 0.75rem 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    color: var(--faint);
+  }
+  .metaline b {
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  /* ---- Command chip ---- */
+  .cmd {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 0.85rem 1.2rem;
+    font-family: ui-monospace, monospace;
+    font-size: clamp(0.95rem, 1.8vw, 1.2rem);
+    color: var(--ink-soft);
+  }
+  .cmd .dol {
+    color: var(--accent);
+    user-select: none;
+  }
+
+  /* ---- Mental model ---- */
+  .model {
+    margin-top: 2.1rem;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2);
+    border-radius: 18px;
+    padding: clamp(1rem, 2.5vw, 1.6rem);
+  }
+  .rt-label {
+    display: flex;
+    align-items: baseline;
+    gap: 0.7rem;
+    margin-bottom: 1rem;
+  }
+  .rt-label b {
+    font-size: 1.05rem;
+  }
+  .rt-label .mono {
+    color: var(--faint);
+    font-size: 0.8rem;
+  }
+  .rowlabel {
+    font-family: ui-monospace, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+  .repos {
+    display: flex;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.3rem;
+  }
+  .repo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.5rem 0.9rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.92rem;
+    color: var(--ink-soft);
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 3px;
+  }
+  .works {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+  }
+  .work {
+    border: 1px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 12px;
+    padding: 0.8rem;
+  }
+  .work .wname {
+    font-family: ui-monospace, monospace;
+    font-weight: 700;
+    color: var(--accent-ink);
+    font-size: 0.92rem;
+    margin-bottom: 0.5rem;
+  }
+  .wt {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.4rem 0.7rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    margin-top: 0.4rem;
+  }
+  .wt .port {
+    color: var(--accent);
+  }
+  .wt .br {
+    color: var(--muted);
+  }
+
+  /* ---- Fan diagram (source -> branches) ---- */
+  .fan {
+    margin-top: 2rem;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: clamp(1rem, 4vw, 3rem);
+  }
+  .fan-node {
+    width: 96px;
+    height: 96px;
+    border-radius: 20px;
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--accent);
+    text-align: center;
+    line-height: 1.2;
+  }
+  .fan-box {
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 0.9rem 1.1rem;
+    text-align: center;
+    box-shadow: var(--shadow);
+    max-width: 190px;
+  }
+  .fan-box b {
+    display: block;
+    font-family: ui-monospace, monospace;
+    font-size: 0.9rem;
+    color: var(--ink);
+  }
+  .fan-box .sub {
+    color: var(--faint);
+    font-size: 0.72rem;
+    margin-top: 0.3rem;
+  }
+  .fan-box .idx {
+    margin-top: 0.6rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: left;
+    line-height: 1.7;
+    border-top: 1px dashed var(--line);
+    padding-top: 0.5rem;
+  }
+  .fan-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .fan-branch {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+  }
+  .fan-connector {
+    height: 2px;
+    width: clamp(20px, 5vw, 60px);
+    flex-shrink: 0;
+    border-radius: 2px;
+  }
+  .fan-card {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 0.7rem 1rem;
+    box-shadow: var(--shadow);
+  }
+  .fan-card .fname {
+    font-weight: 700;
+    font-size: 0.98rem;
+  }
+  .fan-card .ftag {
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+  }
+  .pulse {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
+  }
+
+  /* ---- Board ---- */
+  .board {
+    margin-top: 2rem;
+    border: 1px solid var(--line);
+    background: var(--bg-2);
+    border-radius: 16px;
+    padding: 1.1rem;
+  }
+  .board-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    justify-content: center;
+  }
+  .divider {
+    height: 60px;
+    display: grid;
+    place-items: center;
+    padding: 0 0.9rem;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    border-radius: 9px;
+    font-family: ui-monospace, monospace;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+  }
+  .thumb {
+    width: 76px;
+    height: 60px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 9px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .thumb .bar {
+    display: flex;
+    gap: 3px;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .thumb .bar i {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--line-strong);
+  }
+  .thumb .panes {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .thumb .panes div {
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .thumb .panes div:first-child {
+    border-right: 1px solid var(--line);
+  }
+  .thumb .panes span {
+    height: 2px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+  .thumb .panes span.s {
+    background: var(--line-strong);
+    width: 70%;
+  }
+
+  /* ---- Impact chart ---- */
+  .chart {
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+  }
+  .gantt {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .gantt .glabel {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .gantt .glabel b {
+    color: var(--ink);
+    font-size: 0.95rem;
+  }
+  .track {
+    position: relative;
+    height: 40px;
+    border-radius: 8px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .seg {
+    position: absolute;
+    top: 6px;
+    height: 28px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, monospace;
+    font-size: 0.68rem;
+    color: var(--ink);
+    border: 1px solid transparent;
+  }
+  .axis {
+    display: flex;
+    justify-content: space-between;
+    font-family: ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: var(--faint);
+    margin-top: 0.2rem;
+  }
+
+  /* ---- Demo / live cue ---- */
+  .demo {
+    text-align: center;
+  }
+  .demo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #fff;
+    background: var(--accent);
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    margin-bottom: 1.8rem;
+  }
+  .demo-badge .rec {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #fff;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  .demo .lead,
+  .demo .note {
+    margin-inline: auto;
+    text-align: center;
+  }
+  .setup-list {
+    margin: 1.8rem auto 0;
+    max-width: 620px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    text-align: left;
+  }
+  .setup-list li {
+    list-style: none;
+    display: flex;
+    gap: 0.7rem;
+    align-items: flex-start;
+    font-size: 0.98rem;
+    color: var(--ink-soft);
+  }
+  .setup-list li::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: var(--accent);
+    margin-top: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  /* ---- Get started ---- */
+  .starts {
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    max-width: 560px;
+  }
+  .startrow {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .startnum {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+  .startrow .cmd {
+    flex: 1;
+    font-size: 1.05rem;
+  }
+
+  /* ---- Two-line worktree row (long real branch names) ---- */
+  .wtl {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.45rem 0.7rem;
+    margin-top: 0.4rem;
+    font-family: ui-monospace, monospace;
+  }
+  .wtl .top {
+    color: var(--ink-soft);
+    font-weight: 600;
+    font-size: 0.82rem;
+  }
+  .wtl .meta {
+    color: var(--muted);
+    font-size: 0.72rem;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .wtl .meta .port {
+    color: var(--accent);
+  }
+
+  /* ---- Real screenshot ---- */
+  .shot {
+    margin: 1.6rem auto 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    background: var(--surface);
+    width: fit-content;
+    max-width: 100%;
+  }
+  .shot img {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    max-height: 56vh;
+  }
+
+  /* ---- Comparison (why not roll your own) ---- */
+  .vs {
+    margin-top: 1.7rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .vs-card {
+    border-radius: 14px;
+    padding: 1.15rem 1.25rem;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .vs-card.pain {
+    border-color: var(--pain);
+    background: var(--pain-soft);
+  }
+  .vs-card.good {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .vs-h {
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 0.85rem;
+  }
+  .vs-card.pain .vs-h {
+    color: var(--pain);
+  }
+  .vs-card.good .vs-h {
+    color: var(--accent-ink);
+  }
+  .vs-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+  .vs-list li {
+    position: relative;
+    padding-left: 1.25rem;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    color: var(--ink-soft);
+  }
+  .vs-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.5em;
+    width: 6px;
+    height: 6px;
+    border-radius: 2px;
+  }
+  .vs-card.pain .vs-list li::before {
+    background: var(--pain);
+  }
+  .vs-card.good .vs-list li::before {
+    background: var(--accent);
+  }
+  .vs-list code {
+    font-family: ui-monospace, monospace;
+    font-size: 0.85em;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 0.05em 0.35em;
+  }
+
+  @media (max-width: 760px) {
+    .works,
+    .vs {
+      grid-template-columns: 1fr;
+    }
+    .navzone {
+      width: 15%;
+    }
+    .fan {
+      grid-template-columns: 1fr;
+      justify-items: center;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .slide,
+    .slide.active .inner > *,
+    .progress {
+      transition: none;
+      animation: none;
+    }
+    .pulse,
+    .rec {
+      animation: none;
+    }
+  }
+</style>
+
+<div class="deck" id="deck">
+  <!-- 1 &mdash; Title -->
+  <section class="slide" data-topic="mx">
+    <div class="inner title-wrap">
+      <svg class="title-mark" viewBox="0 0 33 28" fill="none" aria-hidden="true">
+        <g stroke-width="2.6" stroke-linecap="round">
+          <path d="M9 14 L26 6" stroke="#2dd4bf" />
+          <path d="M9 14 H26" stroke="#f0a92a" />
+          <path d="M9 14 L26 22" stroke="#f4667f" />
+        </g>
+        <circle cx="7" cy="14" r="3.6" fill="#8b7ff0" />
+        <circle cx="26" cy="6" r="3.2" fill="#2dd4bf" />
+        <circle cx="26" cy="14" r="3.2" fill="#f0a92a" />
+        <circle cx="26" cy="22" r="3.2" fill="#f4667f" />
+      </svg>
+      <p class="eyebrow">Engineering demo</p>
+      <h1 class="display">Work on parallel features<br />using <span class="accent">coding agents</span></h1>
+      <p class="lead">One engineer. A fleet of agents. Every feature in its own isolated world &mdash; folder, branch, and ports.</p>
+      <div class="metaline">
+        <span><b>npm i -g @rousan/mx</b></span>
+        <span>mx.rousanali.com</span>
+        <span>open source &middot; MIT</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 &mdash; Problem -->
+  <section class="slide" data-topic="The problem">
+    <div class="inner">
+      <p class="eyebrow">The problem</p>
+      <h2 class="head">Switching features costs you 20&nbsp;minutes</h2>
+      <p class="lead">You're deep in a feature. An urgent bug lands. Then the tax kicks in:</p>
+      <div class="chart" style="margin-top: 1.8rem">
+        <div class="gantt">
+          <div class="track" style="height: 46px; background: var(--pain-soft); border-color: var(--pain)">
+            <div class="seg" style="left: 1%; width: 17%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">git stash</div>
+            <div class="seg" style="left: 19.5%; width: 20%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">checkout + branch</div>
+            <div class="seg" style="left: 41%; width: 19.5%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">reinstall deps</div>
+            <div class="seg" style="left: 62%; width: 16%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">port clash</div>
+            <div class="seg" style="left: 79.5%; width: 19.5%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">rebuild context</div>
+          </div>
+        </div>
+      </div>
+      <p class="note">And a coding agent can only work <b>one checkout at a time</b> &mdash; so running several agents in parallel is off the table entirely.</p>
+    </div>
+  </section>
+
+  <!-- 3 &mdash; Idea -->
+  <section class="slide" data-topic="The idea">
+    <div class="inner">
+      <p class="eyebrow">The idea</p>
+      <h2 class="head">Give every feature its own&nbsp;desk</h2>
+      <p class="lead">Its own folder, branch, ports, and coding-agent session &mdash; that stays <span class="accent">exactly as you left it</span>.</p>
+      <p class="note">Built on native git worktrees, so there's no second copy of the repo and no stashing. Switching between features becomes a swipe, not a 20-minute reset.</p>
+    </div>
+  </section>
+
+  <!-- 4 &mdash; Mental model -->
+  <section class="slide" data-topic="How it's organized">
+    <div class="inner">
+      <p class="eyebrow">How it's organized</p>
+      <h2 class="head">Four words, and you've got it</h2>
+      <div class="model">
+        <div class="rt-label"><b>Runtime</b><span class="mono">~/mx &mdash; one folder for everything</span></div>
+        <div class="rowlabel">Repos &middot; cloned once, read-only</div>
+        <div class="repos">
+          <span class="repo"><span class="dot" style="background: var(--p-teal)"></span>muze-ai</span>
+          <span class="repo"><span class="dot" style="background: var(--p-violet)"></span>scaligent</span>
+          <span class="repo"><span class="dot" style="background: var(--p-amber)"></span>agents</span>
+          <span class="repo"><span class="dot" style="background: var(--p-rose)"></span>ngl</span>
+        </div>
+        <div class="rowlabel">Works &middot; one per feature &mdash; what you switch between</div>
+        <div class="works">
+          <div class="work">
+            <div class="wname">muze-ai-setup-grafana-alerts</div>
+            <div class="wtl"><div class="top">wt/muze-ai</div><div class="meta">muze-ai-setup-grafana-alerts &middot; <span class="port">web:3006</span> <span class="port">api:3007</span></div></div>
+          </div>
+          <div class="work">
+            <div class="wname">project-hummingbird</div>
+            <div class="wtl"><div class="top">wt/scaligent</div><div class="meta">SCAL-322651-project-hummingbird &middot; <span class="port">blink:3014</span> <span class="port">prism:3015</span></div></div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>Runtime</b> holds it all &middot; <b>Repo</b> is a clone &middot; <b>Work</b> is a feature &middot; <b>Worktree</b> (<code class="inline">wt/&lt;repo&gt;</code>) is the checkout you code in.</p>
+    </div>
+  </section>
+
+  <!-- 5 &mdash; The unlock -->
+  <section class="slide" data-topic="The unlock">
+    <div class="inner">
+      <p class="eyebrow">The unlock</p>
+      <h2 class="head">One agent per checkout &rarr; a fleet in parallel</h2>
+      <div class="fan">
+        <div class="fan-node">you</div>
+        <div class="fan-lines">
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-teal)"></span>
+            <div class="fan-card"><span class="fname">project-hummingbird</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-amber)"></span>
+            <div class="fan-card"><span class="fname">fast-spec-client-default</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-rose)"></span>
+            <div class="fan-card"><span class="fname">muze-ai-e2e-test-setup</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="note">Each agent lives in its own worktree, branch, and ports &mdash; so a fleet works at once, and none of them step on each other.</p>
+    </div>
+  </section>
+
+  <!-- 6 &mdash; Real screenshot -->
+  <section class="slide" data-topic="What it looks like">
+    <div class="inner" style="max-width: 1220px; text-align: center">
+      <p class="eyebrow">What one feature looks like</p>
+      <h2 class="head">One feature, one Space</h2>
+      <div class="shot"><img src="./setup-shot.jpg" alt="A feature Space: Claude Code in auto mode on the left, Cursor on the right" /></div>
+      <p class="note" style="margin-inline: auto">Real feature Space: coding agent in <b>auto mode</b> (left) working <code class="inline">register-muze-ai-client-to-llmgateway-v2-prod</code> across <b>scaligent</b> + <b>muze-ai</b>, Cursor beside it. Terminal left, editor right &mdash; one fullscreen macOS Space.</p>
+    </div>
+  </section>
+
+  <!-- 6 &mdash; Worktrees -->
+  <section class="slide" data-topic="Feature &middot; worktrees">
+    <div class="inner">
+      <p class="eyebrow">Feature &middot; worktrees</p>
+      <h2 class="head">Many working copies, one clone</h2>
+      <div class="fan">
+        <div class="fan-box">
+          <b>repos/muze-ai/git</b>
+          <div class="sub">pristine clone &middot; read-only</div>
+        </div>
+        <div class="fan-lines">
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-teal)"></span>
+            <div class="fan-card"><span class="fname mono">wt/muze-ai</span><span class="ftag">muze-ai-setup-grafana-alerts</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-amber)"></span>
+            <div class="fan-card"><span class="fname mono">wt/muze-ai</span><span class="ftag">SCAL-323999-fast-spec-client-default</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-rose)"></span>
+            <div class="fan-card"><span class="fname mono">wt/muze-ai</span><span class="ftag">SCAL-322510-e2e-test-suite</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="note">git worktrees let many branches be checked out at once, in separate folders, <b>sharing one <code class="inline">.git</code> object store</b> &mdash; full isolation with no duplicated repo on disk. mx creates and tracks them for you (<code class="inline">mx work new</code> / <code class="inline">worktree add</code>).</p>
+    </div>
+  </section>
+
+  <!-- 7 &mdash; Ports -->
+  <section class="slide" data-topic="Feature &middot; ports">
+    <div class="inner">
+      <p class="eyebrow">Feature &middot; ports</p>
+      <h2 class="head">No more "port already in use"</h2>
+      <div class="works" style="margin-top: 2rem">
+        <div class="work">
+          <div class="wname">muze-ai-setup-grafana-alerts</div>
+          <div class="wt"><span>web</span><span class="port">:3006</span></div>
+          <div class="wt"><span>api</span><span class="port">:3007</span></div>
+        </div>
+        <div class="work">
+          <div class="wname">fast-spec-client-default</div>
+          <div class="wt"><span>web</span><span class="port">:3004</span></div>
+          <div class="wt"><span>api</span><span class="port">:3005</span></div>
+        </div>
+      </div>
+      <p class="note">mx allocates each feature its own ports, <b>unique across the whole runtime</b> &mdash; so two copies of the same app (and their agents' dev servers) run side by side, no clashes. <code class="inline">mx work port set</code> hands out a free one; the ports board shows who owns what.</p>
+    </div>
+  </section>
+
+  <!-- 8 &mdash; Context -->
+  <section class="slide" data-topic="Feature &middot; context">
+    <div class="inner">
+      <p class="eyebrow">Feature &middot; context</p>
+      <h2 class="head">Shared memory across every feature</h2>
+      <div class="fan">
+        <div class="fan-box">
+          <b>context/</b>
+          <div class="sub">INDEX.json &middot; 77 entries</div>
+          <div class="idx">infra/v1-saas-cluster/setup<br />infra/v1-saas-cluster/aws-creds<br />base-agent/overview<br />&hellip;</div>
+        </div>
+        <div class="fan-lines">
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-teal)"></span>
+            <div class="fan-card"><span class="fname">project-hummingbird</span><span class="ftag">agent reads context</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-amber)"></span>
+            <div class="fan-card"><span class="fname">fast-spec-client-default</span><span class="ftag">agent reads context</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-rose)"></span>
+            <div class="fan-card"><span class="fname">muze-ai-e2e-test-setup</span><span class="ftag">agent reads context</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="note">A runtime-wide registry of findings, decisions, runbooks, and RCAs &mdash; indexed in <code class="inline">INDEX.json</code> (this runtime has <b>77 entries</b>). Every feature's agent reads the <b>same institutional memory</b>, so a hard-won discovery in one feature isn't re-learned in the next.</p>
+    </div>
+  </section>
+
+  <!-- 9 &mdash; Mission control -->
+  <section class="slide" data-topic="Your board">
+    <div class="inner">
+      <p class="eyebrow">Your board</p>
+      <h2 class="head">Your whole day in Mission Control</h2>
+      <div class="board"><div class="board-row" id="boardRow"></div></div>
+      <p class="note">Every feature is its own macOS Space, grouped by stage with <code class="inline">mx divider</code> &mdash; so you always know what's in progress, in review, and shipped. Swipe to switch; nothing is ever torn down.</p>
+    </div>
+  </section>
+
+  <!-- Why not roll your own -->
+  <section class="slide" data-topic="Why not roll your own">
+    <div class="inner">
+      <p class="eyebrow">Why not roll your own?</p>
+      <h2 class="head">"Can't I just use subagents, or a tab per feature?"</h2>
+      <div class="vs">
+        <div class="vs-card pain">
+          <div class="vs-h">Subagents in one session &middot; or a terminal tab per feature</div>
+          <ul class="vs-list">
+            <li>You wire up <code>git worktree</code> by hand &mdash; and clean it up by hand</li>
+            <li>Ports are your problem: pick them, track them, dodge clashes</li>
+            <li>No lifecycle &mdash; nothing to archive, recover, or tear down cleanly</li>
+            <li>Every session starts cold; no memory shared between features</li>
+            <li>Tabs, folders, and branches pile into clutter you hold in your head</li>
+          </ul>
+        </div>
+        <div class="vs-card good">
+          <div class="vs-h">With mx &mdash; it's managed</div>
+          <ul class="vs-list">
+            <li>One command: the work, its worktrees, branches, and workspace</li>
+            <li>Ports allocated &amp; tracked, unique across the whole runtime</li>
+            <li><code>mx work archive</code> / <code>unarchive</code> &mdash; a recoverable lifecycle</li>
+            <li>A runtime <b>context registry</b> every agent reads from</li>
+            <li>Mission Control board &mdash; the whole fleet at a glance</li>
+          </ul>
+        </div>
+      </div>
+      <p class="note">Subagents and worktrees are the primitives. mx is the <b>manager</b> around them &mdash; works, ports, repos, lifecycle, and shared context &mdash; so parallelism stays organized instead of turning into clutter.</p>
+    </div>
+  </section>
+
+  <!-- 10 &mdash; Impact -->
+  <section class="slide" data-topic="The payoff">
+    <div class="inner">
+      <p class="eyebrow">The payoff</p>
+      <h2 class="head">Serial &rarr; parallel</h2>
+      <div class="chart">
+        <div class="gantt">
+          <div class="glabel"><b>The old way</b><span>features one after another</span></div>
+          <div class="track">
+            <div class="seg" style="left: 1%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">hummingbird</div>
+            <div class="seg" style="left: 25.5%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">grafana-alerts</div>
+            <div class="seg" style="left: 50%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">fast-spec</div>
+            <div class="seg" style="left: 74%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">e2e-tests</div>
+          </div>
+        </div>
+        <div class="gantt">
+          <div class="glabel"><b>With mx</b><span>agents in parallel</span></div>
+          <div class="track" style="height: 54px">
+            <div class="seg" style="left: 1%; width: 23.5%; top: 6px; height: 8px; background: var(--accent-soft); border-color: var(--accent)"></div>
+            <div class="seg" style="left: 1%; width: 23.5%; top: 17px; height: 8px; background: var(--accent-soft); border-color: var(--accent)"></div>
+            <div class="seg" style="left: 1%; width: 23.5%; top: 28px; height: 8px; background: var(--accent-soft); border-color: var(--accent)"></div>
+            <div class="seg" style="left: 1%; width: 23.5%; top: 39px; height: 8px; background: var(--accent-soft); border-color: var(--accent)"></div>
+          </div>
+          <div class="axis"><span>start</span><span class="accent">done in ~1/4 the wall-clock</span></div>
+        </div>
+      </div>
+      <p class="note">More shipped per engineer &mdash; parallel instead of serial, and it compounds as agents do more of the typing.</p>
+    </div>
+  </section>
+
+  <!-- 11 &mdash; Get started -->
+  <section class="slide" data-topic="Try it">
+    <div class="inner">
+      <p class="eyebrow">Try it</p>
+      <h2 class="head">Two commands in</h2>
+      <div class="starts">
+        <div class="startrow"><span class="startnum">1</span><div class="cmd"><span class="dol">$</span>npm i -g @rousan/mx</div></div>
+        <div class="startrow"><span class="startnum">2</span><div class="cmd"><span class="dol">$</span>mx init</div></div>
+      </div>
+      <p class="note">Then <code class="inline">mx repo add</code> your repos and <code class="inline">mx work new</code> your first feature. Full guide, mental model, and command reference: <b class="accent">mx.rousanali.com</b></p>
+    </div>
+  </section>
+
+  <!-- 12 &mdash; My setup (live) -->
+  <section class="slide" data-topic="Live &middot; my setup">
+    <div class="inner demo">
+      <span class="demo-badge"><span class="rec"></span>Live &middot; my setup</span>
+      <h2 class="head">How I actually run mx</h2>
+      <ul class="setup-list">
+        <li>One fullscreen macOS Space per feature &mdash; <b>terminal + Cursor split side by side</b>.</li>
+        <li>Coding agent in the terminal (auto mode); dev server &amp; git in another tab.</li>
+        <li>Three-finger swipe between features; Mission Control for the whole board.</li>
+        <li>Grouped by stage with <code class="inline">mx divider</code> &mdash; in progress, in review, shipped.</li>
+      </ul>
+      <p class="note">Let me switch over and show you my real board.</p>
+    </div>
+  </section>
+
+  <!-- 13 &mdash; Thanks -->
+  <section class="slide" data-topic="Thanks">
+    <div class="inner title-wrap">
+      <svg class="title-mark" viewBox="0 0 33 28" fill="none" aria-hidden="true">
+        <g stroke-width="2.6" stroke-linecap="round">
+          <path d="M9 14 L26 6" stroke="#2dd4bf" />
+          <path d="M9 14 H26" stroke="#f0a92a" />
+          <path d="M9 14 L26 22" stroke="#f4667f" />
+        </g>
+        <circle cx="7" cy="14" r="3.6" fill="#8b7ff0" />
+        <circle cx="26" cy="6" r="3.2" fill="#2dd4bf" />
+        <circle cx="26" cy="14" r="3.2" fill="#f0a92a" />
+        <circle cx="26" cy="22" r="3.2" fill="#f4667f" />
+      </svg>
+      <h2 class="head">Give every feature its own desk.</h2>
+      <p class="lead">Questions? Let's run one live.</p>
+      <div class="metaline">
+        <span><b>npm i -g @rousan/mx</b></span>
+        <span>mx.rousanali.com</span>
+        <span>github.com/rousan/mx</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="chrome top">
+  <div class="brand">
+    <svg viewBox="0 0 33 28" fill="none" aria-hidden="true">
+      <g stroke-width="2.6" stroke-linecap="round">
+        <path d="M9 14 L26 6" stroke="#2dd4bf" />
+        <path d="M9 14 H26" stroke="#f0a92a" />
+        <path d="M9 14 L26 22" stroke="#f4667f" />
+      </g>
+      <circle cx="7" cy="14" r="3.6" fill="#8b7ff0" />
+      <circle cx="26" cy="6" r="3.2" fill="#2dd4bf" />
+      <circle cx="26" cy="14" r="3.2" fill="#f0a92a" />
+      <circle cx="26" cy="22" r="3.2" fill="#f4667f" />
+    </svg>
+    <span>mx</span>
+  </div>
+  <button class="tbtn" id="themeBtn" aria-label="Toggle theme" title="Toggle theme (t)">
+    <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></svg>
+  </button>
+</div>
+
+<div class="chrome bottom">
+  <span class="topic" id="topicLabel">mx</span>
+  <span class="hint">&larr; &rarr; or space &middot; <span class="kbd">F</span> fullscreen &middot; <span class="kbd">T</span> theme</span>
+  <span class="count" id="counter">1 / 15</span>
+</div>
+
+<div class="progress" id="progress"></div>
+<div class="navzone left" id="navLeft" aria-hidden="true"></div>
+<div class="navzone right" id="navRight" aria-hidden="true"></div>
+
+<script>
+  (function () {
+    var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+    var total = slides.length;
+    var i = 0;
+    var counter = document.getElementById('counter');
+    var topicLabel = document.getElementById('topicLabel');
+    var progress = document.getElementById('progress');
+
+    // Build the Mission Control board (dividers + feature-Space thumbnails).
+    var board = [
+      { d: 'IN PROGRESS' },
+      { s: 4 },
+      { d: 'IN REVIEWS' },
+      { s: 2 },
+      { d: 'PR REVIEWS' },
+      { s: 2 },
+    ];
+    var row = document.getElementById('boardRow');
+    board.forEach(function (item) {
+      if (item.d) {
+        var el = document.createElement('div');
+        el.className = 'divider';
+        el.textContent = item.d;
+        row.appendChild(el);
+      } else {
+        for (var k = 0; k < item.s; k++) {
+          var t = document.createElement('div');
+          t.className = 'thumb';
+          t.innerHTML =
+            '<div class="bar"><i></i><i></i></div>' +
+            '<div class="panes"><div><span class="s"></span><span></span><span></span></div>' +
+            '<div><span></span><span class="s"></span><span></span></div></div>';
+          row.appendChild(t);
+        }
+      }
+    });
+
+    function show(n) {
+      i = Math.max(0, Math.min(total - 1, n));
+      slides.forEach(function (s, idx) {
+        s.classList.toggle('active', idx === i);
+      });
+      counter.textContent = i + 1 + ' / ' + total;
+      topicLabel.textContent = slides[i].getAttribute('data-topic') || 'mx';
+      progress.style.width = ((i + 1) / total) * 100 + '%';
+      history.replaceState(null, '', '#' + (i + 1));
+    }
+    function next() {
+      show(i + 1);
+    }
+    function prev() {
+      show(i - 1);
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        e.preventDefault();
+        next();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prev();
+      } else if (e.key === 'Home') {
+        show(0);
+      } else if (e.key === 'End') {
+        show(total - 1);
+      } else if (e.key === 'f' || e.key === 'F') {
+        if (!document.fullscreenElement) {
+          if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+        } else if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      } else if (e.key === 't' || e.key === 'T') {
+        toggleTheme();
+      }
+    });
+    document.getElementById('navRight').addEventListener('click', next);
+    document.getElementById('navLeft').addEventListener('click', prev);
+
+    var sun =
+      '<circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />';
+    var moon = '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" />';
+    var themeIcon = document.getElementById('themeIcon');
+    function currentDark() {
+      var attr = document.documentElement.getAttribute('data-theme');
+      if (attr) return attr === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    function paintIcon() {
+      themeIcon.innerHTML = currentDark() ? sun : moon;
+    }
+    function toggleTheme() {
+      var dark = currentDark();
+      document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+      paintIcon();
+    }
+    document.getElementById('themeBtn').addEventListener('click', toggleTheme);
+    paintIcon();
+
+    var start = parseInt((location.hash || '').replace('#', ''), 10);
+    show(isNaN(start) ? 0 : start - 1);
+  })();
+</script>
+
+</body>
+</html>
