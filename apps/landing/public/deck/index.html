@@ -1165,75 +1165,122 @@
     color: var(--pain);
   }
 
-  /* ---- What is mx: the manager wrap ---- */
-  .wrap {
-    margin-top: 1.7rem;
-    border: 1.5px solid var(--accent);
-    border-radius: 18px;
-    background: var(--accent-soft);
-    padding: 1.4rem 1.2rem 1.2rem;
-    position: relative;
+  /* ---- Architecture overview (the whole system in one graph) ---- */
+  .arch {
+    margin-top: 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
   }
-  .wrap .wlabel {
-    position: absolute;
-    top: -0.72rem;
-    left: 1.2rem;
-    background: var(--accent);
-    color: #fff;
-    font-family: ui-monospace, monospace;
-    font-size: 0.7rem;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    padding: 0.18rem 0.7rem;
-    border-radius: 999px;
+  .arch-band {
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2);
+    border-radius: 12px;
+    padding: 0.7rem 0.9rem;
+    text-align: center;
   }
-  .wrap-adds {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.6rem;
-    margin-bottom: 1rem;
-  }
-  .add {
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 0.65rem 0.8rem;
-    font-size: 0.8rem;
-    color: var(--muted);
-    line-height: 1.35;
-  }
-  .add b {
+  .arch-tag {
     display: block;
     font-family: ui-monospace, monospace;
-    font-size: 0.72rem;
-    color: var(--accent-ink);
-    margin-bottom: 0.22rem;
-  }
-  .wrap-base {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-items: center;
-    border-top: 1px dashed var(--accent);
-    padding-top: 0.95rem;
-  }
-  .wrap-base .bl {
-    font-family: ui-monospace, monospace;
-    font-size: 0.64rem;
-    letter-spacing: 0.1em;
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--muted);
-    margin-right: 0.3rem;
+    margin-bottom: 0.55rem;
   }
-  .prim {
+  .arch-repos {
+    display: flex;
+    gap: 0.6rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .arch-repo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    padding: 0.4rem 0.85rem;
     font-family: ui-monospace, monospace;
-    font-size: 0.72rem;
-    background: var(--bg-2);
-    border: 1px solid var(--line-strong);
-    border-radius: 8px;
-    padding: 0.35rem 0.7rem;
+    font-size: 0.82rem;
     color: var(--ink-soft);
+  }
+  .arch-link {
+    text-align: center;
+    font-family: ui-monospace, monospace;
+    font-size: 0.64rem;
+    color: var(--faint);
+    letter-spacing: 0.03em;
+  }
+  .arch-works {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.7rem;
+  }
+  .awork {
+    border: 1.5px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 12px;
+    padding: 0.7rem 0.75rem 0.8rem;
+  }
+  .awork-head {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--accent-ink);
+    margin-bottom: 0.5rem;
+  }
+  .awork-head .role {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-weight: 400;
+    font-size: 0.62rem;
+    color: var(--muted);
+  }
+  .awt {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.38rem 0.55rem;
+    margin-top: 0.4rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: var(--ink-soft);
+  }
+  .awt .wn {
+    font-weight: 700;
+  }
+  .awt .br {
+    color: var(--muted);
+  }
+  .awt .pt {
+    margin-left: auto;
+    color: var(--accent);
+  }
+  .arch-context {
+    border: 1px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 12px;
+    padding: 0.7rem 0.9rem;
+    text-align: center;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    color: var(--accent-ink);
+  }
+  .arch-context .sub {
+    display: block;
+    color: var(--muted);
+    font-size: 0.66rem;
+    margin-top: 0.28rem;
   }
 
   /* ---- One work, many repos ---- */
@@ -1664,15 +1711,15 @@
       <h2 class="head">You're never working on just <span class="paint">one thing</span></h2>
       <div class="juggle">
         <div class="tkt on">
-          <div class="th">checkout-redesign</div>
+          <div class="th">feature-a</div>
           <div class="ts act"><span class="pulse"></span>agent working</div>
         </div>
         <div class="tkt">
-          <div class="th">dark-mode</div>
+          <div class="th">feature-b</div>
           <div class="ts wait"><span class="stall"></span>waiting on you</div>
         </div>
         <div class="tkt">
-          <div class="th">urgent bug: login</div>
+          <div class="th">feature-c &middot; urgent</div>
           <div class="ts wait"><span class="stall"></span>waiting on you</div>
         </div>
       </div>
@@ -1710,9 +1757,9 @@
           <div class="dh">A terminal tab per feature</div>
           <div class="tabs">
             <div class="strip">
-              <span class="tb act">checkout</span>
-              <span class="tb">dark-mode</span>
-              <span class="tb">login-fix</span>
+              <span class="tb act">feature-a</span>
+              <span class="tb">feature-b</span>
+              <span class="tb">feature-c</span>
               <span class="tb plus">+</span>
             </div>
             <div class="body"><span class="s"></span><span></span><span class="s"></span><span></span></div>
@@ -1733,9 +1780,9 @@
           <div class="cn">01 &middot; Ports</div>
           <div class="fig">
             <div class="pc">
-              <span class="pchip">web<br /><b>:3000</b></span>
+              <span class="pchip">repo-a<br /><b>:3000</b></span>
               <svg class="clash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 L4 13 h6 l-1 9 L20 10 h-6 z" /></svg>
-              <span class="pchip">web<br /><b>:3000</b></span>
+              <span class="pchip">repo-a<br /><b>:3000</b></span>
             </div>
           </div>
           <div class="cl">Two dev servers, one port. <b>Address already in use</b> &mdash; you juggle port numbers by hand.</div>
@@ -1744,7 +1791,7 @@
           <div class="cn">02 &middot; Hydration</div>
           <div class="fig">
             <div class="folder">
-              <div class="ftab">wt/web (fresh)</div>
+              <div class="ftab">wt/repo-a (fresh)</div>
               <div class="frow">.env <em>missing</em></div>
               <div class="frow">node_modules/ <em>missing</em></div>
               <div class="frow">db seed <em>missing</em></div>
@@ -1759,9 +1806,9 @@
               <span class="node-chip">one feature</span>
               <span class="link cut">&#8595;</span>
               <div class="two">
-                <span class="repo2">web</span>
+                <span class="repo2">repo-a</span>
                 <span class="link cut">&#8942;</span>
-                <span class="repo2 off">api</span>
+                <span class="repo2 off">repo-b</span>
               </div>
               <span class="lk">session = one repo</span>
             </div>
@@ -1798,30 +1845,44 @@
     </div>
   </section>
 
-  <!-- 6 &mdash; What is mx (short) -->
+  <!-- 6 &mdash; What is mx: the whole system in one graph -->
   <section class="slide" data-topic="What is mx">
     <div class="inner">
       <p class="eyebrow">What is mx</p>
-      <h2 class="head">A manager for parallel features</h2>
-      <p class="lead" style="max-width: 60ch">mx turns git worktrees + coding agents into <b>managed, parallel feature workspaces</b> &mdash; one command each.</p>
-      <div class="wrap">
-        <span class="wlabel">mx</span>
-        <div class="wrap-adds">
-          <div class="add"><b>works + lifecycle</b>one command; archive &amp; recover</div>
-          <div class="add"><b>allocated ports</b>unique across the runtime</div>
-          <div class="add"><b>hydrate hooks</b>env, deps, seed on create</div>
-          <div class="add"><b>context registry</b>shared agent memory</div>
-          <div class="add"><b>multi-repo works</b>one agent, many repos</div>
-          <div class="add"><b>mission control</b>the whole fleet at a glance</div>
+      <h2 class="head">The whole system in one picture</h2>
+      <div class="arch">
+        <div class="arch-band">
+          <span class="arch-tag">pristine repos &middot; cloned once, read-only</span>
+          <div class="arch-repos">
+            <span class="arch-repo"><span class="dot" style="background: var(--p-teal)"></span>repo-a</span>
+            <span class="arch-repo"><span class="dot" style="background: var(--p-violet)"></span>repo-b</span>
+            <span class="arch-repo"><span class="dot" style="background: var(--p-amber)"></span>repo-c</span>
+          </div>
         </div>
-        <div class="wrap-base">
-          <span class="bl">built on</span>
-          <span class="prim">git worktree</span>
-          <span class="prim">coding-agent session</span>
-          <span class="prim">git branch</span>
-          <span class="prim">dev server</span>
+        <div class="arch-link">&darr;&nbsp; worktrees fork from the repos &nbsp;&darr;</div>
+        <div>
+          <span class="arch-tag" style="text-align: center">works &middot; one per feature &mdash; agent + worktrees + branches + ports</span>
+          <div class="arch-works">
+            <div class="awork">
+              <div class="awork-head">feature-a<span class="role"><span class="pulse"></span>1 agent</span></div>
+              <div class="awt"><span class="wn">wt/repo-a</span><span class="br">feature-a</span><span class="pt">:3001</span></div>
+              <div class="awt"><span class="wn">wt/repo-b</span><span class="br">feature-a</span><span class="pt">:3002</span></div>
+            </div>
+            <div class="awork">
+              <div class="awork-head">feature-b<span class="role"><span class="pulse"></span>1 agent</span></div>
+              <div class="awt"><span class="wn">wt/repo-b</span><span class="br">feature-b</span><span class="pt">:3003</span></div>
+            </div>
+            <div class="awork">
+              <div class="awork-head">feature-c<span class="role"><span class="pulse"></span>1 agent</span></div>
+              <div class="awt"><span class="wn">wt/repo-a</span><span class="br">feature-c</span><span class="pt">:3007</span></div>
+              <div class="awt"><span class="wn">wt/repo-c</span><span class="br">feature-c</span><span class="pt">:3008</span></div>
+            </div>
+          </div>
         </div>
+        <div class="arch-link">&darr;&nbsp; every agent shares one memory &nbsp;&darr;</div>
+        <div class="arch-context"><b>central context</b> &mdash; shared across every feature<span class="sub">findings &middot; conventions &middot; runbooks &mdash; read by every agent</span></div>
       </div>
+      <p class="note">One graph, the whole system: <b>repos</b> up top (cloned once, read-only), <b>works</b> in the middle (one per feature &mdash; each with its own agent session and a worktree + branch + port per repo it touches), and one <b>central context</b> every agent reads from.</p>
     </div>
   </section>
 
@@ -1834,22 +1895,22 @@
         <div class="rt-label"><b>Runtime</b><span class="mono">~/mx &mdash; one folder for everything</span></div>
         <div class="rowlabel">Repos &middot; cloned once, read-only</div>
         <div class="repos">
-          <span class="repo"><span class="dot" style="background: var(--p-teal)"></span>web</span>
-          <span class="repo"><span class="dot" style="background: var(--p-violet)"></span>api</span>
-          <span class="repo"><span class="dot" style="background: var(--p-amber)"></span>mobile</span>
-          <span class="repo"><span class="dot" style="background: var(--p-rose)"></span>worker</span>
+          <span class="repo"><span class="dot" style="background: var(--p-teal)"></span>repo-a</span>
+          <span class="repo"><span class="dot" style="background: var(--p-violet)"></span>repo-b</span>
+          <span class="repo"><span class="dot" style="background: var(--p-amber)"></span>repo-c</span>
+          <span class="repo"><span class="dot" style="background: var(--p-rose)"></span>repo-d</span>
         </div>
         <div class="rowlabel">Works &middot; one per feature &mdash; each can span several repos</div>
         <div class="works">
           <div class="work">
-            <div class="wname">checkout-redesign</div>
-            <div class="wtl"><div class="top">wt/web</div><div class="meta">checkout-redesign &middot; <span class="port">web:3002</span></div></div>
-            <div class="wtl"><div class="top">wt/api</div><div class="meta">checkout-redesign &middot; <span class="port">api:4002</span></div></div>
+            <div class="wname">feature-a</div>
+            <div class="wtl"><div class="top">wt/repo-a</div><div class="meta">feature-a &middot; <span class="port">:3001</span></div></div>
+            <div class="wtl"><div class="top">wt/repo-b</div><div class="meta">feature-a &middot; <span class="port">:3002</span></div></div>
           </div>
           <div class="work">
-            <div class="wname">search-filters</div>
-            <div class="wtl"><div class="top">wt/web</div><div class="meta">search-filters &middot; <span class="port">web:3004</span></div></div>
-            <div class="wtl"><div class="top">wt/api</div><div class="meta">search-filters &middot; <span class="port">api:4004</span></div></div>
+            <div class="wname">feature-b</div>
+            <div class="wtl"><div class="top">wt/repo-b</div><div class="meta">feature-b &middot; <span class="port">:3003</span></div></div>
+            <div class="wtl"><div class="top">wt/repo-c</div><div class="meta">feature-b &middot; <span class="port">:3004</span></div></div>
           </div>
         </div>
       </div>
@@ -1864,13 +1925,13 @@
       <h2 class="head">The whole runtime is one folder</h2>
       <div class="tree"><span class="d">~/mx/</span>                       <span class="c">the runtime &mdash; one folder</span>
 &#9500;&#9472;&#9472; <span class="d">repos/</span>                  <span class="c">pristine clones (read-only)</span>
-&#9474;   &#9492;&#9472;&#9472; web/git &middot; api/git &middot; mobile/git &middot; worker/git
+&#9474;   &#9492;&#9472;&#9472; repo-a/git &middot; repo-b/git &middot; repo-c/git &middot; repo-d/git
 &#9500;&#9472;&#9472; <span class="d">works/</span>                  <span class="c">one folder per feature</span>
-&#9474;   &#9500;&#9472;&#9472; <span class="d">checkout-redesign/</span>
-&#9474;   &#9474;   &#9500;&#9472;&#9472; wt/web &middot; wt/api    <span class="c">a worktree per repo</span>
+&#9474;   &#9500;&#9472;&#9472; <span class="d">feature-a/</span>
+&#9474;   &#9474;   &#9500;&#9472;&#9472; wt/repo-a &middot; wt/repo-b  <span class="c">a worktree per repo</span>
 &#9474;   &#9474;   &#9500;&#9472;&#9472; sessions/          <span class="c">session summaries</span>
 &#9474;   &#9474;   &#9492;&#9472;&#9472; <span class="k">work.json</span>          <span class="c">manifest (mx-owned)</span>
-&#9474;   &#9492;&#9472;&#9472; <span class="d">dark-mode/</span> &middot; search-filters/ &middot; refund-flow/  <span class="c">&hellip;more</span>
+&#9474;   &#9492;&#9472;&#9472; <span class="d">feature-b/</span> &middot; feature-c/ &middot; feature-d/  <span class="c">&hellip;more</span>
 &#9500;&#9472;&#9472; <span class="d">context/</span>                <span class="c">shared memory &middot; institutional knowledge</span>
 &#9474;   &#9500;&#9472;&#9472; <span class="k">INDEX.json</span>          <span class="c">the searchable index</span>
 &#9474;   &#9500;&#9472;&#9472; auth/tokens.md      <span class="c">how the system works</span>
@@ -1895,15 +1956,15 @@
         <div class="fan-lines">
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-teal)"></span>
-            <div class="fan-card"><span class="fname">checkout-redesign</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
+            <div class="fan-card"><span class="fname">feature-a</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
           </div>
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-amber)"></span>
-            <div class="fan-card"><span class="fname">dark-mode</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
+            <div class="fan-card"><span class="fname">feature-b</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
           </div>
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-rose)"></span>
-            <div class="fan-card"><span class="fname">search-filters</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
+            <div class="fan-card"><span class="fname">feature-c</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
           </div>
         </div>
       </div>
@@ -1918,21 +1979,21 @@
       <h2 class="head">Many working copies, one clone</h2>
       <div class="fan">
         <div class="fan-box">
-          <b>repos/web/git</b>
+          <b>repos/repo-a/git</b>
           <div class="sub">pristine clone &middot; read-only</div>
         </div>
         <div class="fan-lines">
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-teal)"></span>
-            <div class="fan-card"><span class="fname mono">wt/web</span><span class="ftag">checkout-redesign</span></div>
+            <div class="fan-card"><span class="fname mono">wt/repo-a</span><span class="ftag">feature-a</span></div>
           </div>
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-amber)"></span>
-            <div class="fan-card"><span class="fname mono">wt/web</span><span class="ftag">dark-mode</span></div>
+            <div class="fan-card"><span class="fname mono">wt/repo-a</span><span class="ftag">feature-b</span></div>
           </div>
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-rose)"></span>
-            <div class="fan-card"><span class="fname mono">wt/web</span><span class="ftag">e2e-tests</span></div>
+            <div class="fan-card"><span class="fname mono">wt/repo-a</span><span class="ftag">feature-c</span></div>
           </div>
         </div>
       </div>
@@ -1952,12 +2013,12 @@
         </div>
         <span class="arrow">&rarr;</span>
         <div class="workbox">
-          <span class="wl">1 work &middot; checkout-redesign</span>
-          <div class="wt2"><span class="rn">wt/web</span><span class="br">branch: checkout-redesign</span></div>
-          <div class="wt2"><span class="rn">wt/api</span><span class="br">branch: checkout-redesign</span></div>
+          <span class="wl">1 work &middot; feature-a</span>
+          <div class="wt2"><span class="rn">wt/repo-a</span><span class="br">branch: feature-a</span></div>
+          <div class="wt2"><span class="rn">wt/repo-b</span><span class="br">branch: feature-a</span></div>
         </div>
       </div>
-      <p class="note"><span class="cb">The one-session-one-repo wall, gone.</span> A work groups a worktree <b>per repo</b> under one feature, so a single agent session edits across all of them &mdash; the frontend + backend change a per-repo tab simply can't make together.</p>
+      <p class="note"><span class="cb">The one-session-one-repo wall, gone.</span> A work groups a worktree <b>per repo</b> under one feature, so a single agent session edits across all of them &mdash; the change spanning <b>repo-a + repo-b</b> that a per-repo tab simply can't make together.</p>
     </div>
   </section>
 
@@ -1970,20 +2031,20 @@
         <div class="inst">
           <div class="ibar"><span class="idots"><i></i><i></i><i></i></span><span class="url">localhost:3002</span><span class="live"><span class="pulse"></span>up</span></div>
           <div class="ibody"><span class="s"></span><span></span><span></span><span class="s"></span></div>
-          <div class="feat">web &middot; <b>checkout-redesign</b></div>
+          <div class="feat">repo-a &middot; <b>feature-a</b></div>
         </div>
         <div class="inst">
           <div class="ibar"><span class="idots"><i></i><i></i><i></i></span><span class="url">localhost:3004</span><span class="live"><span class="pulse"></span>up</span></div>
           <div class="ibody"><span></span><span class="s"></span><span></span><span></span></div>
-          <div class="feat">web &middot; <b>dark-mode</b></div>
+          <div class="feat">repo-a &middot; <b>feature-b</b></div>
         </div>
         <div class="inst">
           <div class="ibar"><span class="idots"><i></i><i></i><i></i></span><span class="url">localhost:3006</span><span class="live"><span class="pulse"></span>up</span></div>
           <div class="ibody"><span class="s"></span><span></span><span class="s"></span><span></span></div>
-          <div class="feat">web &middot; <b>search-filters</b></div>
+          <div class="feat">repo-a &middot; <b>feature-c</b></div>
         </div>
       </div>
-      <p class="note"><span class="cb">The port clash, gone.</span> mx allocates each feature its own ports, <b>unique across the whole runtime</b> &mdash; so the very same app runs <b>three times at once</b>, one per feature, each with its own live URL. <code class="inline">mx work port set</code> hands out a free one; the ports board shows who owns what.</p>
+      <p class="note"><span class="cb">The port clash, gone.</span> mx allocates each feature its own ports, <b>unique across the whole runtime</b> &mdash; so the very same app (<b>repo-a</b>) runs <b>three times at once</b>, one per feature, each with its own live URL. <code class="inline">mx work port set</code> hands out a free one; the ports board shows who owns what.</p>
     </div>
   </section>
 
@@ -2022,15 +2083,15 @@
         <div class="fan-lines">
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-teal)"></span>
-            <div class="fan-card"><span class="fname">checkout-redesign</span><span class="ftag">agent reads context</span></div>
+            <div class="fan-card"><span class="fname">feature-a</span><span class="ftag">agent reads context</span></div>
           </div>
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-amber)"></span>
-            <div class="fan-card"><span class="fname">search-filters</span><span class="ftag">agent reads context</span></div>
+            <div class="fan-card"><span class="fname">feature-b</span><span class="ftag">agent reads context</span></div>
           </div>
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-rose)"></span>
-            <div class="fan-card"><span class="fname">e2e-tests</span><span class="ftag">agent reads context</span></div>
+            <div class="fan-card"><span class="fname">feature-c</span><span class="ftag">agent reads context</span></div>
           </div>
         </div>
       </div>
@@ -2102,10 +2163,10 @@
         <div class="gantt">
           <div class="glabel"><b>The old way</b><span>features one after another</span></div>
           <div class="track">
-            <div class="seg" style="left: 1%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">checkout</div>
-            <div class="seg" style="left: 25.5%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">dark-mode</div>
-            <div class="seg" style="left: 50%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">search</div>
-            <div class="seg" style="left: 74%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">e2e-tests</div>
+            <div class="seg" style="left: 1%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">feature-a</div>
+            <div class="seg" style="left: 25.5%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">feature-b</div>
+            <div class="seg" style="left: 50%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">feature-c</div>
+            <div class="seg" style="left: 74%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">feature-d</div>
           </div>
         </div>
         <div class="gantt">
