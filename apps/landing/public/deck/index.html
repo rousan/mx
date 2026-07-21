@@ -953,6 +953,31 @@
     white-space: nowrap;
   }
 
+  /* ---- Runtime folder tree ---- */
+  .tree {
+    margin-top: 2rem;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2);
+    border-radius: 14px;
+    padding: 1.3rem 1.6rem;
+    font-family: ui-monospace, monospace;
+    font-size: clamp(0.72rem, 1.35vw, 0.95rem);
+    line-height: 1.7;
+    color: var(--ink-soft);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .tree .d {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .tree .c {
+    color: var(--faint);
+  }
+  .tree .k {
+    color: var(--accent);
+  }
+
   @media (max-width: 760px) {
     .works,
     .vs {
@@ -1064,6 +1089,28 @@
         </div>
       </div>
       <p class="note"><b>Runtime</b> holds it all &middot; <b>Repo</b> is a clone &middot; <b>Work</b> is a feature &middot; <b>Worktree</b> (<code class="inline">wt/&lt;repo&gt;</code>) is the checkout you code in.</p>
+    </div>
+  </section>
+
+  <!-- Runtime folder structure -->
+  <section class="slide" data-topic="On disk">
+    <div class="inner">
+      <p class="eyebrow">On disk</p>
+      <h2 class="head">The whole runtime is one folder</h2>
+      <div class="tree"><span class="d">~/mx/</span>  <span class="c">the runtime &mdash; one folder</span>
+&#9500;&#9472;&#9472; <span class="d">repos/</span>  <span class="c">pristine clones (read-only)</span>
+&#9474;   &#9500;&#9472;&#9472; muze-ai/git
+&#9474;   &#9492;&#9472;&#9472; scaligent/git
+&#9500;&#9472;&#9472; <span class="d">works/</span>  <span class="c">one folder per feature</span>
+&#9474;   &#9492;&#9472;&#9472; <span class="d">project-hummingbird/</span>
+&#9474;       &#9500;&#9472;&#9472; wt/scaligent/  <span class="c">the worktree you code in</span>
+&#9474;       &#9500;&#9472;&#9472; sessions/  <span class="c">session summaries</span>
+&#9474;       &#9492;&#9472;&#9472; <span class="k">work.json</span>  <span class="c">manifest (mx-owned)</span>
+&#9500;&#9472;&#9472; <span class="d">context/</span>  <span class="c">shared memory &middot; INDEX.json</span>
+&#9500;&#9472;&#9472; <span class="d">hooks/</span>  <span class="c">lifecycle hook hub</span>
+&#9500;&#9472;&#9472; <span class="d">bin/</span>  <span class="c">runtime-wide CLI helpers</span>
+&#9492;&#9472;&#9472; <span class="d">files/</span>  <span class="c">shared operational values</span></div>
+      <p class="note"><b>mx owns the structure</b> &mdash; <code class="inline">work.json</code>, the editor workspace, and ports are written only through mx commands. <code class="inline">repos/</code> stay read-only; everything you build lives in <code class="inline">works/&lt;feature&gt;/wt/</code>.</p>
     </div>
   </section>
 
@@ -1180,6 +1227,27 @@
         </div>
       </div>
       <p class="note">A runtime-wide registry of findings, decisions, runbooks, and RCAs &mdash; indexed in <code class="inline">INDEX.json</code> (this runtime has <b>77 entries</b>). Every feature's agent reads the <b>same institutional memory</b>, so a hard-won discovery in one feature isn't re-learned in the next.</p>
+    </div>
+  </section>
+
+  <!-- Feature: hooks / hydrate -->
+  <section class="slide" data-topic="Feature &middot; hooks">
+    <div class="inner">
+      <p class="eyebrow">Feature &middot; hooks</p>
+      <h2 class="head">A fresh worktree, ready to run</h2>
+      <div class="fan">
+        <div class="fan-box">
+          <b>new worktree</b>
+          <div class="sub">mx work new / worktree add</div>
+        </div>
+        <div class="fan-lines">
+          <div class="fan-branch"><span class="fan-connector" style="background: var(--p-teal)"></span><div class="fan-card"><span class="fname mono">cp .env</span><span class="ftag">config in place</span></div></div>
+          <div class="fan-branch"><span class="fan-connector" style="background: var(--p-amber)"></span><div class="fan-card"><span class="fname mono">pnpm install</span><span class="ftag">deps ready</span></div></div>
+          <div class="fan-branch"><span class="fan-connector" style="background: var(--p-rose)"></span><div class="fan-card"><span class="fname mono">seed the db</span><span class="ftag">data ready</span></div></div>
+          <div class="fan-branch"><span class="fan-connector" style="background: var(--p-violet)"></span><div class="fan-card"><span class="fname mono">allocate ports</span><span class="ftag">no clashes</span></div></div>
+        </div>
+      </div>
+      <p class="note">The moment a worktree exists, mx fires the <code class="inline">post-worktree-create</code> hook &mdash; you decide what &ldquo;ready&rdquo; means (copy env, install, seed, &hellip;), in any language. It's one hub of lifecycle hooks: worktree create/remove, work archive/unarchive, repo fetch, health, and session-prompt.</p>
     </div>
   </section>
 
@@ -1365,7 +1433,7 @@
 <div class="chrome bottom">
   <span class="topic" id="topicLabel">mx</span>
   <span class="hint">&larr; &rarr; or space &middot; <span class="kbd">F</span> fullscreen &middot; <span class="kbd">T</span> theme</span>
-  <span class="count" id="counter">1 / 17</span>
+  <span class="count" id="counter">1 / 19</span>
 </div>
 
 <div class="progress" id="progress"></div>
