@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>mx &mdash; demo deck</title>
-<meta name="description" content="A 15-slide deck introducing mx: parallel features with coding agents, worktrees, ports, and a shared context registry." />
+<meta name="description" content="A story-driven deck for mx: the multi-feature juggle, why a tab-per-feature breaks, and how mx manages worktrees, ports, hooks, and shared context for a fleet of coding agents." />
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 </head>
 <body>
@@ -138,6 +138,7 @@
     opacity: 0;
     visibility: hidden;
     transition: opacity 0.4s ease;
+    overflow: hidden;
   }
   .slide.active {
     opacity: 1;
@@ -274,6 +275,9 @@
     color: var(--accent-ink);
     margin: 0 0 1.3rem;
   }
+  .eyebrow.pain {
+    color: var(--pain);
+  }
   h1.display {
     font-size: clamp(2.4rem, 6.2vw, 4.8rem);
     line-height: 1.03;
@@ -300,6 +304,9 @@
   .accent {
     color: var(--accent);
   }
+  .paint {
+    color: var(--pain);
+  }
   .note {
     font-size: clamp(0.9rem, 1.4vw, 1.05rem);
     color: var(--muted);
@@ -310,6 +317,10 @@
   .lead b {
     color: var(--ink-soft);
     font-weight: 600;
+  }
+  .note .cb {
+    color: var(--accent-ink);
+    font-weight: 700;
   }
   code.inline {
     font-family: ui-monospace, monospace;
@@ -329,7 +340,7 @@
     font-size: 0.9em;
   }
 
-  /* ---- Title slide ---- */
+  /* ---- Title / centered slide ---- */
   .title-wrap {
     text-align: center;
     display: flex;
@@ -358,6 +369,137 @@
   .metaline b {
     color: var(--accent-ink);
     font-weight: 600;
+  }
+
+  /* ---- Reveal (celebration) ---- */
+  .reveal .inner {
+    position: relative;
+    z-index: 3;
+  }
+  .pop-mark {
+    height: clamp(66px, 11vh, 100px);
+    width: auto;
+    margin-bottom: 1.4rem;
+  }
+  .slide.active .pop-mark {
+    animation: popIn 0.62s cubic-bezier(0.2, 1.5, 0.35, 1) both;
+  }
+  @keyframes popIn {
+    0% {
+      opacity: 0;
+      transform: scale(0.2) rotate(-8deg);
+    }
+    60% {
+      transform: scale(1.12) rotate(3deg);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(0);
+    }
+  }
+  .confetti {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .confetti i {
+    position: absolute;
+    top: 44%;
+    left: 50%;
+    width: 9px;
+    height: 13px;
+    border-radius: 2px;
+    opacity: 0;
+  }
+  .slide.active .confetti i {
+    animation: burst 1.2s ease-out forwards;
+  }
+  @keyframes burst {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) rotate(0) scale(0.6);
+    }
+    8% {
+      opacity: 1;
+    }
+    70% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1);
+    }
+  }
+  .balloon {
+    position: absolute;
+    bottom: -170px;
+    width: 44px;
+    height: 56px;
+    border-radius: 50% 50% 47% 47%;
+    opacity: 0;
+    z-index: 1;
+  }
+  .balloon::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -28px;
+    width: 1px;
+    height: 28px;
+    background: var(--line-strong);
+    transform: translateX(-50%);
+  }
+  .balloon.b1 {
+    left: 16%;
+    background: var(--p-teal);
+  }
+  .balloon.b2 {
+    left: 33%;
+    width: 38px;
+    height: 48px;
+    background: var(--p-amber);
+  }
+  .balloon.b3 {
+    left: 64%;
+    background: var(--p-rose);
+  }
+  .balloon.b4 {
+    left: 83%;
+    width: 40px;
+    height: 50px;
+    background: var(--p-violet);
+  }
+  .slide.active .balloon {
+    animation: floatUp 3.8s ease-in forwards;
+  }
+  .slide.active .balloon.b2 {
+    animation-delay: 0.25s;
+  }
+  .slide.active .balloon.b3 {
+    animation-delay: 0.12s;
+  }
+  .slide.active .balloon.b4 {
+    animation-delay: 0.35s;
+  }
+  @keyframes floatUp {
+    0% {
+      opacity: 0;
+      bottom: -170px;
+      transform: translateX(0);
+    }
+    12% {
+      opacity: 0.9;
+    }
+    50% {
+      transform: translateX(14px);
+    }
+    100% {
+      opacity: 0;
+      bottom: 120%;
+      transform: translateX(-6px);
+    }
   }
 
   /* ---- Command chip ---- */
@@ -702,6 +844,541 @@
     margin-top: 0.2rem;
   }
 
+  /* ---- Juggle (the reality) ---- */
+  .juggle {
+    margin-top: 1.9rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.9rem;
+  }
+  .tkt {
+    position: relative;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 0.95rem 1.05rem;
+    box-shadow: var(--shadow);
+  }
+  .tkt.on {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .tkt .th {
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .tkt .ts {
+    margin-top: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+  }
+  .tkt .ts.act {
+    color: var(--accent-ink);
+  }
+  .tkt .ts.wait {
+    color: var(--pain);
+  }
+  .tkt .ts .pulse {
+    background: var(--accent);
+  }
+  .tkt .ts .stall {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: var(--pain);
+  }
+  .swtax {
+    margin-top: 1.5rem;
+  }
+  .swtax .cap {
+    font-family: ui-monospace, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.55rem;
+  }
+
+  /* ---- DIY temptation ---- */
+  .diy {
+    margin-top: 1.9rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .diy-card {
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 1.15rem 1.2rem 1.3rem;
+    box-shadow: var(--shadow);
+  }
+  .diy-card .dh {
+    font-weight: 700;
+    font-size: 0.92rem;
+    margin-bottom: 1.15rem;
+  }
+  .sa {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .node-chip {
+    font-family: ui-monospace, monospace;
+    font-size: 0.76rem;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2);
+    border-radius: 9px;
+    padding: 0.4rem 0.85rem;
+    color: var(--ink-soft);
+  }
+  .stem {
+    width: 2px;
+    height: 14px;
+    background: var(--line-strong);
+  }
+  .sa-kids {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .sa-kids .k {
+    width: 40px;
+    height: 28px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-monospace, monospace;
+    font-size: 0.64rem;
+    color: var(--muted);
+  }
+  .sa-share {
+    margin-top: 0.2rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: var(--pain);
+    border: 1px dashed var(--pain);
+    background: var(--pain-soft);
+    border-radius: 8px;
+    padding: 0.4rem 0.7rem;
+  }
+  .tabs {
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg-2);
+  }
+  .tabs .strip {
+    display: flex;
+    gap: 3px;
+    padding: 6px 6px 0;
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  .tabs .tb {
+    font-family: ui-monospace, monospace;
+    font-size: 0.66rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid var(--line);
+    border-bottom: none;
+    border-radius: 7px 7px 0 0;
+    background: var(--surface);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .tabs .tb.act {
+    color: var(--ink);
+    background: var(--bg-2);
+  }
+  .tabs .tb.plus {
+    color: var(--faint);
+  }
+  .tabs .body {
+    height: 74px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+  }
+  .tabs .body span {
+    height: 3px;
+    border-radius: 3px;
+    background: var(--line);
+  }
+  .tabs .body span.s {
+    background: var(--line-strong);
+    width: 55%;
+  }
+  .diy-cap {
+    margin-top: 1.15rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+    text-align: center;
+  }
+  .diy-cap b {
+    color: var(--ink-soft);
+  }
+
+  /* ---- The cracks ---- */
+  .cracks {
+    margin-top: 1.7rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  .crack {
+    border: 1px solid var(--pain);
+    background: var(--pain-soft);
+    border-radius: 14px;
+    padding: 1.05rem 1.1rem 1.15rem;
+    display: flex;
+    flex-direction: column;
+  }
+  .crack .cn {
+    font-family: ui-monospace, monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pain);
+    margin-bottom: 0.9rem;
+  }
+  .crack .fig {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 104px;
+    margin-bottom: 0.95rem;
+  }
+  .crack .cl {
+    font-size: 0.86rem;
+    line-height: 1.42;
+    color: var(--ink-soft);
+  }
+  .crack .cl b {
+    color: var(--pain);
+    font-weight: 700;
+  }
+  .pc {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .pchip {
+    font-family: ui-monospace, monospace;
+    font-size: 0.74rem;
+    background: var(--surface);
+    border: 1px solid var(--pain);
+    border-radius: 8px;
+    padding: 0.4rem 0.55rem;
+    color: var(--ink-soft);
+    text-align: center;
+    line-height: 1.3;
+  }
+  .pchip b {
+    color: var(--pain);
+  }
+  .clash {
+    width: 26px;
+    height: 26px;
+    color: var(--pain);
+    flex-shrink: 0;
+  }
+  .folder {
+    width: 100%;
+    max-width: 200px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .folder .ftab {
+    font-family: ui-monospace, monospace;
+    font-size: 0.68rem;
+    padding: 0.35rem 0.6rem;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-soft);
+    background: var(--bg-2);
+  }
+  .folder .frow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: ui-monospace, monospace;
+    font-size: 0.68rem;
+    padding: 0.32rem 0.6rem;
+    color: var(--faint);
+    border-top: 1px dashed var(--line);
+  }
+  .folder .frow em {
+    font-style: normal;
+    color: var(--pain);
+    font-size: 0.62rem;
+  }
+  .mrep {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .mrep .two {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .repo2 {
+    font-family: ui-monospace, monospace;
+    font-size: 0.68rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    padding: 0.32rem 0.55rem;
+    background: var(--surface);
+    color: var(--ink-soft);
+  }
+  .repo2.off {
+    opacity: 0.5;
+    border-style: dashed;
+    border-color: var(--pain);
+    color: var(--pain);
+  }
+  .mrep .link {
+    font-size: 1rem;
+    color: var(--line-strong);
+  }
+  .mrep .link.cut {
+    color: var(--pain);
+  }
+  .mrep .lk {
+    font-family: ui-monospace, monospace;
+    font-size: 0.64rem;
+    color: var(--pain);
+  }
+
+  /* ---- What is mx: the manager wrap ---- */
+  .wrap {
+    margin-top: 1.7rem;
+    border: 1.5px solid var(--accent);
+    border-radius: 18px;
+    background: var(--accent-soft);
+    padding: 1.4rem 1.2rem 1.2rem;
+    position: relative;
+  }
+  .wrap .wlabel {
+    position: absolute;
+    top: -0.72rem;
+    left: 1.2rem;
+    background: var(--accent);
+    color: #fff;
+    font-family: ui-monospace, monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 0.18rem 0.7rem;
+    border-radius: 999px;
+  }
+  .wrap-adds {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+  .add {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.65rem 0.8rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+    line-height: 1.35;
+  }
+  .add b {
+    display: block;
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    color: var(--accent-ink);
+    margin-bottom: 0.22rem;
+  }
+  .wrap-base {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    border-top: 1px dashed var(--accent);
+    padding-top: 0.95rem;
+  }
+  .wrap-base .bl {
+    font-family: ui-monospace, monospace;
+    font-size: 0.64rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-right: 0.3rem;
+  }
+  .prim {
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    background: var(--bg-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    padding: 0.35rem 0.7rem;
+    color: var(--ink-soft);
+  }
+
+  /* ---- One work, many repos ---- */
+  .multi {
+    margin-top: 2rem;
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: center;
+    gap: clamp(0.7rem, 3vw, 2rem);
+  }
+  .agent-cap {
+    font-family: ui-monospace, monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 0.55rem;
+    max-width: 96px;
+    line-height: 1.4;
+  }
+  .multi .arrow {
+    font-size: 1.7rem;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .workbox {
+    border: 1.5px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 16px;
+    padding: 1.15rem 1.15rem 1rem;
+    position: relative;
+  }
+  .workbox .wl {
+    position: absolute;
+    top: -0.72rem;
+    left: 1rem;
+    background: var(--accent);
+    color: #fff;
+    font-family: ui-monospace, monospace;
+    font-size: 0.64rem;
+    font-weight: 700;
+    padding: 0.17rem 0.6rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .workbox .wt2 {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.6rem 0.85rem;
+    margin-top: 0.55rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+  }
+  .workbox .wt2:first-of-type {
+    margin-top: 0.35rem;
+  }
+  .workbox .wt2 .rn {
+    font-weight: 700;
+  }
+  .workbox .wt2 .br {
+    color: var(--muted);
+    font-size: 0.7rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: auto;
+  }
+
+  /* ---- Ports: multiple app instances ---- */
+  .instances {
+    margin-top: 2rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  .inst {
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .inst .ibar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-2);
+  }
+  .inst .idots {
+    display: flex;
+    gap: 3px;
+  }
+  .inst .idots i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--line-strong);
+  }
+  .inst .url {
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+  }
+  .inst .live {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.62rem;
+    color: var(--accent-ink);
+  }
+  .inst .ibody {
+    padding: 0.85rem 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    height: 78px;
+  }
+  .inst .ibody span {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--line);
+  }
+  .inst .ibody span.s {
+    width: 60%;
+    background: var(--line-strong);
+  }
+  .inst .feat {
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    padding: 0 0.9rem 0.75rem;
+  }
+  .inst .feat b {
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+
   /* ---- Demo / live cue ---- */
   .demo {
     text-align: center;
@@ -788,7 +1465,7 @@
     font-size: 1.05rem;
   }
 
-  /* ---- Two-line worktree row (long real branch names) ---- */
+  /* ---- Two-line worktree row ---- */
   .wtl {
     background: var(--surface);
     border: 1px solid var(--line);
@@ -830,77 +1507,6 @@
     width: auto;
     max-width: 100%;
     max-height: 56vh;
-  }
-
-  /* ---- Comparison (why not roll your own) ---- */
-  .vs {
-    margin-top: 1.7rem;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-  }
-  .vs-card {
-    border-radius: 14px;
-    padding: 1.15rem 1.25rem;
-    border: 1px solid var(--line);
-    background: var(--surface);
-  }
-  .vs-card.pain {
-    border-color: var(--pain);
-    background: var(--pain-soft);
-  }
-  .vs-card.good {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-  }
-  .vs-h {
-    font-weight: 700;
-    font-size: 0.95rem;
-    margin-bottom: 0.85rem;
-  }
-  .vs-card.pain .vs-h {
-    color: var(--pain);
-  }
-  .vs-card.good .vs-h {
-    color: var(--accent-ink);
-  }
-  .vs-list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-  }
-  .vs-list li {
-    position: relative;
-    padding-left: 1.25rem;
-    font-size: 0.9rem;
-    line-height: 1.45;
-    color: var(--ink-soft);
-  }
-  .vs-list li::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0.5em;
-    width: 6px;
-    height: 6px;
-    border-radius: 2px;
-  }
-  .vs-card.pain .vs-list li::before {
-    background: var(--pain);
-  }
-  .vs-card.good .vs-list li::before {
-    background: var(--accent);
-  }
-  .vs-list code {
-    font-family: ui-monospace, monospace;
-    font-size: 0.85em;
-    background: var(--code-bg);
-    border: 1px solid var(--line);
-    border-radius: 5px;
-    padding: 0.05em 0.35em;
   }
 
   /* ---- Lifecycle flow (pause & resume) ---- */
@@ -955,14 +1561,14 @@
 
   /* ---- Runtime folder tree ---- */
   .tree {
-    margin-top: 2rem;
+    margin-top: 1.7rem;
     border: 1px solid var(--line-strong);
     background: var(--bg-2);
     border-radius: 14px;
-    padding: 1.3rem 1.6rem;
+    padding: 1.2rem 1.5rem;
     font-family: ui-monospace, monospace;
-    font-size: clamp(0.72rem, 1.35vw, 0.95rem);
-    line-height: 1.7;
+    font-size: clamp(0.66rem, 1.15vw, 0.86rem);
+    line-height: 1.55;
     color: var(--ink-soft);
     overflow-x: auto;
     white-space: pre;
@@ -980,8 +1586,21 @@
 
   @media (max-width: 760px) {
     .works,
-    .vs {
+    .diy {
       grid-template-columns: 1fr;
+    }
+    .juggle,
+    .cracks,
+    .wrap-adds,
+    .instances {
+      grid-template-columns: 1fr;
+    }
+    .multi {
+      grid-template-columns: 1fr;
+      justify-items: center;
+    }
+    .multi .arrow {
+      transform: rotate(90deg);
     }
     .navzone {
       width: 15%;
@@ -999,8 +1618,15 @@
       animation: none;
     }
     .pulse,
-    .rec {
+    .rec,
+    .pop-mark,
+    .confetti i,
+    .balloon {
       animation: none;
+    }
+    .confetti,
+    .balloon {
+      display: none;
     }
   }
 </style>
@@ -1031,38 +1657,175 @@
     </div>
   </section>
 
-  <!-- 2 &mdash; Problem -->
-  <section class="slide" data-topic="The problem">
+  <!-- 2 &mdash; The reality (juggle) -->
+  <section class="slide" data-topic="The reality">
     <div class="inner">
-      <p class="eyebrow">The problem</p>
-      <h2 class="head">Switching features costs you 20&nbsp;minutes</h2>
-      <p class="lead">You're deep in a feature. An urgent bug lands. Then the real cost begins:</p>
-      <div class="chart" style="margin-top: 1.8rem">
-        <div class="gantt">
-          <div class="track" style="height: 46px; background: var(--pain-soft); border-color: var(--pain)">
-            <div class="seg" style="left: 1%; width: 17%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">git stash</div>
-            <div class="seg" style="left: 19.5%; width: 20%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">checkout + branch</div>
-            <div class="seg" style="left: 41%; width: 19.5%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">reinstall deps</div>
-            <div class="seg" style="left: 62%; width: 16%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">port clash</div>
-            <div class="seg" style="left: 79.5%; width: 19.5%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">rebuild context</div>
+      <p class="eyebrow pain">The reality</p>
+      <h2 class="head">You're never working on just <span class="paint">one thing</span></h2>
+      <div class="juggle">
+        <div class="tkt on">
+          <div class="th">checkout-redesign</div>
+          <div class="ts act"><span class="pulse"></span>agent working</div>
+        </div>
+        <div class="tkt">
+          <div class="th">dark-mode</div>
+          <div class="ts wait"><span class="stall"></span>waiting on you</div>
+        </div>
+        <div class="tkt">
+          <div class="th">urgent bug: login</div>
+          <div class="ts wait"><span class="stall"></span>waiting on you</div>
+        </div>
+      </div>
+      <div class="swtax">
+        <div class="cap">and every switch runs the meter</div>
+        <div class="track" style="height: 44px; background: var(--pain-soft); border-color: var(--pain)">
+          <div class="seg" style="left: 1%; width: 17%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">git stash</div>
+          <div class="seg" style="left: 19.5%; width: 20%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">checkout + branch</div>
+          <div class="seg" style="left: 41%; width: 19.5%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">reinstall deps</div>
+          <div class="seg" style="left: 62%; width: 16%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">port clash</div>
+          <div class="seg" style="left: 79.5%; width: 19.5%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">rebuild context</div>
+        </div>
+      </div>
+      <p class="note">Three things in flight, but you can only stand in <b>one checkout at a time</b> &mdash; so two of them sit idle, and each hop back costs you ~20 minutes.</p>
+    </div>
+  </section>
+
+  <!-- 3 &mdash; The obvious answer (DIY) -->
+  <section class="slide" data-topic="Roll your own?">
+    <div class="inner">
+      <p class="eyebrow">The obvious answer</p>
+      <h2 class="head">&ldquo;Can't I just use subagents, or a tab per feature?&rdquo;</h2>
+      <div class="diy">
+        <div class="diy-card">
+          <div class="dh">One session, many subagents</div>
+          <div class="sa">
+            <span class="node-chip">agent session</span>
+            <span class="stem"></span>
+            <div class="sa-kids"><span class="k">sub</span><span class="k">sub</span><span class="k">sub</span></div>
+            <span class="stem"></span>
+            <span class="sa-share">all share one checkout</span>
+          </div>
+        </div>
+        <div class="diy-card">
+          <div class="dh">A terminal tab per feature</div>
+          <div class="tabs">
+            <div class="strip">
+              <span class="tb act">checkout</span>
+              <span class="tb">dark-mode</span>
+              <span class="tb">login-fix</span>
+              <span class="tb plus">+</span>
+            </div>
+            <div class="body"><span class="s"></span><span></span><span class="s"></span><span></span></div>
           </div>
         </div>
       </div>
-      <p class="note">And a coding agent can only work <b>one checkout at a time</b> &mdash; so running several agents in parallel is off the table entirely.</p>
+      <p class="diy-cap">A reasonable instinct. It even works &mdash; <b>for about a day.</b></p>
     </div>
   </section>
 
-  <!-- 3 &mdash; Idea -->
-  <section class="slide" data-topic="The idea">
+  <!-- 4 &mdash; Where it cracks -->
+  <section class="slide" data-topic="The cracks">
     <div class="inner">
-      <p class="eyebrow">The idea</p>
-      <h2 class="head">Give every feature its own&nbsp;desk</h2>
-      <p class="lead">Its own folder, branch, ports, and coding-agent session &mdash; that stays <span class="accent">exactly as you left it</span>.</p>
-      <p class="note">Built on native git worktrees, so there's no second copy of the repo and no stashing. Switching between features becomes a swipe, not a 20-minute reset.</p>
+      <p class="eyebrow pain">Where it cracks</p>
+      <h2 class="head">Three cracks show up fast</h2>
+      <div class="cracks">
+        <div class="crack">
+          <div class="cn">01 &middot; Ports</div>
+          <div class="fig">
+            <div class="pc">
+              <span class="pchip">web<br /><b>:3000</b></span>
+              <svg class="clash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 L4 13 h6 l-1 9 L20 10 h-6 z" /></svg>
+              <span class="pchip">web<br /><b>:3000</b></span>
+            </div>
+          </div>
+          <div class="cl">Two dev servers, one port. <b>Address already in use</b> &mdash; you juggle port numbers by hand.</div>
+        </div>
+        <div class="crack">
+          <div class="cn">02 &middot; Hydration</div>
+          <div class="fig">
+            <div class="folder">
+              <div class="ftab">wt/web (fresh)</div>
+              <div class="frow">.env <em>missing</em></div>
+              <div class="frow">node_modules/ <em>missing</em></div>
+              <div class="frow">db seed <em>missing</em></div>
+            </div>
+          </div>
+          <div class="cl">A raw worktree is empty. <b>Copy env, install, seed</b> &mdash; by hand, every single time.</div>
+        </div>
+        <div class="crack">
+          <div class="cn">03 &middot; Multi-repo</div>
+          <div class="fig">
+            <div class="mrep">
+              <span class="node-chip">one feature</span>
+              <span class="link cut">&#8595;</span>
+              <div class="two">
+                <span class="repo2">web</span>
+                <span class="link cut">&#8942;</span>
+                <span class="repo2 off">api</span>
+              </div>
+              <span class="lk">session = one repo</span>
+            </div>
+          </div>
+          <div class="cl">A feature spans two repos, but a session lives in <b>one checkout</b> &mdash; the second repo is out of reach.</div>
+        </div>
+      </div>
+      <p class="note">And it gets worse over time: <b>no lifecycle</b> to archive or recover a feature, <b>no shared memory</b> between them, and a pile of tabs, folders, and branches you track <b>in your head</b>.</p>
     </div>
   </section>
 
-  <!-- 4 &mdash; Mental model -->
+  <!-- 5 &mdash; The reveal (celebration) -->
+  <section class="slide reveal" data-topic="The answer">
+    <div class="balloon b1"></div>
+    <div class="balloon b2"></div>
+    <div class="balloon b3"></div>
+    <div class="balloon b4"></div>
+    <div class="confetti" id="confetti"></div>
+    <div class="inner title-wrap">
+      <svg class="pop-mark" viewBox="0 0 33 28" fill="none" aria-hidden="true">
+        <g stroke-width="2.6" stroke-linecap="round">
+          <path d="M9 14 L26 6" stroke="#2dd4bf" />
+          <path d="M9 14 H26" stroke="#f0a92a" />
+          <path d="M9 14 L26 22" stroke="#f4667f" />
+        </g>
+        <circle cx="7" cy="14" r="3.6" fill="#8b7ff0" />
+        <circle cx="26" cy="6" r="3.2" fill="#2dd4bf" />
+        <circle cx="26" cy="14" r="3.2" fill="#f0a92a" />
+        <circle cx="26" cy="22" r="3.2" fill="#f4667f" />
+      </svg>
+      <p class="eyebrow">The answer</p>
+      <h1 class="display">Meet <span class="accent">mx</span></h1>
+      <p class="lead">The one tool that makes all three cracks disappear.</p>
+    </div>
+  </section>
+
+  <!-- 6 &mdash; What is mx (short) -->
+  <section class="slide" data-topic="What is mx">
+    <div class="inner">
+      <p class="eyebrow">What is mx</p>
+      <h2 class="head">A manager for parallel features</h2>
+      <p class="lead" style="max-width: 60ch">mx turns git worktrees + coding agents into <b>managed, parallel feature workspaces</b> &mdash; one command each.</p>
+      <div class="wrap">
+        <span class="wlabel">mx</span>
+        <div class="wrap-adds">
+          <div class="add"><b>works + lifecycle</b>one command; archive &amp; recover</div>
+          <div class="add"><b>allocated ports</b>unique across the runtime</div>
+          <div class="add"><b>hydrate hooks</b>env, deps, seed on create</div>
+          <div class="add"><b>context registry</b>shared agent memory</div>
+          <div class="add"><b>multi-repo works</b>one agent, many repos</div>
+          <div class="add"><b>mission control</b>the whole fleet at a glance</div>
+        </div>
+        <div class="wrap-base">
+          <span class="bl">built on</span>
+          <span class="prim">git worktree</span>
+          <span class="prim">coding-agent session</span>
+          <span class="prim">git branch</span>
+          <span class="prim">dev server</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 &mdash; Mental model -->
   <section class="slide" data-topic="How it's organized">
     <div class="inner">
       <p class="eyebrow">How it's organized</p>
@@ -1071,50 +1834,58 @@
         <div class="rt-label"><b>Runtime</b><span class="mono">~/mx &mdash; one folder for everything</span></div>
         <div class="rowlabel">Repos &middot; cloned once, read-only</div>
         <div class="repos">
-          <span class="repo"><span class="dot" style="background: var(--p-teal)"></span>muze-ai</span>
-          <span class="repo"><span class="dot" style="background: var(--p-violet)"></span>scaligent</span>
-          <span class="repo"><span class="dot" style="background: var(--p-amber)"></span>agents</span>
-          <span class="repo"><span class="dot" style="background: var(--p-rose)"></span>ngl</span>
+          <span class="repo"><span class="dot" style="background: var(--p-teal)"></span>web</span>
+          <span class="repo"><span class="dot" style="background: var(--p-violet)"></span>api</span>
+          <span class="repo"><span class="dot" style="background: var(--p-amber)"></span>mobile</span>
+          <span class="repo"><span class="dot" style="background: var(--p-rose)"></span>worker</span>
         </div>
-        <div class="rowlabel">Works &middot; one per feature &mdash; what you switch between</div>
+        <div class="rowlabel">Works &middot; one per feature &mdash; each can span several repos</div>
         <div class="works">
           <div class="work">
-            <div class="wname">muze-ai-setup-grafana-alerts</div>
-            <div class="wtl"><div class="top">wt/muze-ai</div><div class="meta">muze-ai-setup-grafana-alerts &middot; <span class="port">web:3006</span> <span class="port">api:3007</span></div></div>
+            <div class="wname">checkout-redesign</div>
+            <div class="wtl"><div class="top">wt/web</div><div class="meta">checkout-redesign &middot; <span class="port">web:3002</span></div></div>
+            <div class="wtl"><div class="top">wt/api</div><div class="meta">checkout-redesign &middot; <span class="port">api:4002</span></div></div>
           </div>
           <div class="work">
-            <div class="wname">project-hummingbird</div>
-            <div class="wtl"><div class="top">wt/scaligent</div><div class="meta">SCAL-322651-project-hummingbird &middot; <span class="port">blink:3014</span> <span class="port">prism:3015</span></div></div>
+            <div class="wname">search-filters</div>
+            <div class="wtl"><div class="top">wt/web</div><div class="meta">search-filters &middot; <span class="port">web:3004</span></div></div>
+            <div class="wtl"><div class="top">wt/api</div><div class="meta">search-filters &middot; <span class="port">api:4004</span></div></div>
           </div>
         </div>
       </div>
-      <p class="note"><b>Runtime</b> holds it all &middot; <b>Repo</b> is a clone &middot; <b>Work</b> is a feature &middot; <b>Worktree</b> (<code class="inline">wt/&lt;repo&gt;</code>) is the checkout you code in.</p>
+      <p class="note"><b>Runtime</b> holds it all &middot; <b>Repo</b> is a clone &middot; <b>Work</b> is a feature &middot; <b>Worktree</b> (<code class="inline">wt/&lt;repo&gt;</code>) is a checkout you code in &mdash; a work can have <b>one per repo</b>.</p>
     </div>
   </section>
 
-  <!-- Runtime folder structure -->
+  <!-- 8 &mdash; Runtime folder structure -->
   <section class="slide" data-topic="On disk">
     <div class="inner">
       <p class="eyebrow">On disk</p>
       <h2 class="head">The whole runtime is one folder</h2>
-      <div class="tree"><span class="d">~/mx/</span>  <span class="c">the runtime &mdash; one folder</span>
-&#9500;&#9472;&#9472; <span class="d">repos/</span>  <span class="c">pristine clones (read-only)</span>
-&#9474;   &#9500;&#9472;&#9472; muze-ai/git
-&#9474;   &#9492;&#9472;&#9472; scaligent/git
-&#9500;&#9472;&#9472; <span class="d">works/</span>  <span class="c">one folder per feature</span>
-&#9474;   &#9492;&#9472;&#9472; <span class="d">project-hummingbird/</span>
-&#9474;       &#9500;&#9472;&#9472; wt/scaligent/  <span class="c">the worktree you code in</span>
-&#9474;       &#9500;&#9472;&#9472; sessions/  <span class="c">session summaries</span>
-&#9474;       &#9492;&#9472;&#9472; <span class="k">work.json</span>  <span class="c">manifest (mx-owned)</span>
-&#9500;&#9472;&#9472; <span class="d">context/</span>  <span class="c">shared memory &middot; INDEX.json</span>
-&#9500;&#9472;&#9472; <span class="d">hooks/</span>  <span class="c">lifecycle hook hub</span>
-&#9500;&#9472;&#9472; <span class="d">bin/</span>  <span class="c">runtime-wide CLI helpers</span>
-&#9492;&#9472;&#9472; <span class="d">files/</span>  <span class="c">shared operational values</span></div>
+      <div class="tree"><span class="d">~/mx/</span>                       <span class="c">the runtime &mdash; one folder</span>
+&#9500;&#9472;&#9472; <span class="d">repos/</span>                  <span class="c">pristine clones (read-only)</span>
+&#9474;   &#9492;&#9472;&#9472; web/git &middot; api/git &middot; mobile/git &middot; worker/git
+&#9500;&#9472;&#9472; <span class="d">works/</span>                  <span class="c">one folder per feature</span>
+&#9474;   &#9500;&#9472;&#9472; <span class="d">checkout-redesign/</span>
+&#9474;   &#9474;   &#9500;&#9472;&#9472; wt/web &middot; wt/api    <span class="c">a worktree per repo</span>
+&#9474;   &#9474;   &#9500;&#9472;&#9472; sessions/          <span class="c">session summaries</span>
+&#9474;   &#9474;   &#9492;&#9472;&#9472; <span class="k">work.json</span>          <span class="c">manifest (mx-owned)</span>
+&#9474;   &#9492;&#9472;&#9472; <span class="d">dark-mode/</span> &middot; search-filters/ &middot; refund-flow/  <span class="c">&hellip;more</span>
+&#9500;&#9472;&#9472; <span class="d">context/</span>                <span class="c">shared memory &middot; institutional knowledge</span>
+&#9474;   &#9500;&#9472;&#9472; <span class="k">INDEX.json</span>          <span class="c">the searchable index</span>
+&#9474;   &#9500;&#9472;&#9472; auth/tokens.md      <span class="c">how the system works</span>
+&#9474;   &#9500;&#9472;&#9472; conventions/style.md  <span class="c">team rules &amp; conventions</span>
+&#9474;   &#9492;&#9472;&#9472; runbooks/deploy.md  <span class="c">step-by-step runbooks</span>
+&#9500;&#9472;&#9472; <span class="d">hooks/</span>                  <span class="c">lifecycle hooks</span>
+&#9474;   &#9500;&#9472;&#9472; post-worktree-create  <span class="c">hydrate: cp .env, install, seed</span>
+&#9474;   &#9492;&#9472;&#9472; session-prompt &middot; work-health &middot; repo-fetch  <span class="c">&hellip;</span>
+&#9500;&#9472;&#9472; <span class="d">bin/</span>   dcs &middot; lcs        <span class="c">runtime-wide CLI helpers</span>
+&#9492;&#9472;&#9472; <span class="d">files/</span> creds.env &middot; clusters.json  <span class="c">shared operational values</span></div>
       <p class="note"><b>mx owns the structure</b> &mdash; <code class="inline">work.json</code>, the editor workspace, and ports are written only through mx commands. <code class="inline">repos/</code> stay read-only; everything you build lives in <code class="inline">works/&lt;feature&gt;/wt/</code>.</p>
     </div>
   </section>
 
-  <!-- 5 &mdash; The unlock -->
+  <!-- 9 &mdash; The unlock -->
   <section class="slide" data-topic="The unlock">
     <div class="inner">
       <p class="eyebrow">The unlock</p>
@@ -1124,15 +1895,15 @@
         <div class="fan-lines">
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-teal)"></span>
-            <div class="fan-card"><span class="fname">project-hummingbird</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
+            <div class="fan-card"><span class="fname">checkout-redesign</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
           </div>
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-amber)"></span>
-            <div class="fan-card"><span class="fname">fast-spec-client-default</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
+            <div class="fan-card"><span class="fname">dark-mode</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
           </div>
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-rose)"></span>
-            <div class="fan-card"><span class="fname">muze-ai-e2e-test-setup</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
+            <div class="fan-card"><span class="fname">search-filters</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
           </div>
         </div>
       </div>
@@ -1140,38 +1911,28 @@
     </div>
   </section>
 
-  <!-- 6 &mdash; Real screenshot -->
-  <section class="slide" data-topic="What it looks like">
-    <div class="inner" style="max-width: 1220px; text-align: center">
-      <p class="eyebrow">What one feature looks like</p>
-      <h2 class="head">One feature, one Space</h2>
-      <div class="shot"><img src="/deck/setup-shot.jpg" alt="A feature Space: Claude Code in auto mode on the left, Cursor on the right" /></div>
-      <p class="note" style="margin-inline: auto">Real feature Space: coding agent in <b>auto mode</b> (left) working <code class="inline">register-muze-ai-client-to-llmgateway-v2-prod</code> across <b>scaligent</b> + <b>muze-ai</b>, Cursor beside it. Terminal left, editor right &mdash; one fullscreen macOS Space.</p>
-    </div>
-  </section>
-
-  <!-- 6 &mdash; Worktrees -->
+  <!-- 10 &mdash; Worktrees -->
   <section class="slide" data-topic="Feature &middot; worktrees">
     <div class="inner">
       <p class="eyebrow">Feature &middot; worktrees</p>
       <h2 class="head">Many working copies, one clone</h2>
       <div class="fan">
         <div class="fan-box">
-          <b>repos/muze-ai/git</b>
+          <b>repos/web/git</b>
           <div class="sub">pristine clone &middot; read-only</div>
         </div>
         <div class="fan-lines">
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-teal)"></span>
-            <div class="fan-card"><span class="fname mono">wt/muze-ai</span><span class="ftag">muze-ai-setup-grafana-alerts</span></div>
+            <div class="fan-card"><span class="fname mono">wt/web</span><span class="ftag">checkout-redesign</span></div>
           </div>
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-amber)"></span>
-            <div class="fan-card"><span class="fname mono">wt/muze-ai</span><span class="ftag">SCAL-323999-fast-spec-client-default</span></div>
+            <div class="fan-card"><span class="fname mono">wt/web</span><span class="ftag">dark-mode</span></div>
           </div>
           <div class="fan-branch">
             <span class="fan-connector" style="background: var(--p-rose)"></span>
-            <div class="fan-card"><span class="fname mono">wt/muze-ai</span><span class="ftag">SCAL-322510-e2e-test-suite</span></div>
+            <div class="fan-card"><span class="fname mono">wt/web</span><span class="ftag">e2e-tests</span></div>
           </div>
         </div>
       </div>
@@ -1179,58 +1940,54 @@
     </div>
   </section>
 
-  <!-- 7 &mdash; Ports -->
+  <!-- 11 &mdash; One work, many repos (rebuts crack #3) -->
+  <section class="slide" data-topic="Feature &middot; repos">
+    <div class="inner">
+      <p class="eyebrow">Feature &middot; repos</p>
+      <h2 class="head">One feature, many repos &mdash; one agent covers all</h2>
+      <div class="multi">
+        <div>
+          <div class="fan-node">one<br />agent</div>
+          <div class="agent-cap">works across both repos</div>
+        </div>
+        <span class="arrow">&rarr;</span>
+        <div class="workbox">
+          <span class="wl">1 work &middot; checkout-redesign</span>
+          <div class="wt2"><span class="rn">wt/web</span><span class="br">branch: checkout-redesign</span></div>
+          <div class="wt2"><span class="rn">wt/api</span><span class="br">branch: checkout-redesign</span></div>
+        </div>
+      </div>
+      <p class="note"><span class="cb">The one-session-one-repo wall, gone.</span> A work groups a worktree <b>per repo</b> under one feature, so a single agent session edits across all of them &mdash; the frontend + backend change a per-repo tab simply can't make together.</p>
+    </div>
+  </section>
+
+  <!-- 12 &mdash; Ports (rebuts crack #1) -->
   <section class="slide" data-topic="Feature &middot; ports">
     <div class="inner">
       <p class="eyebrow">Feature &middot; ports</p>
-      <h2 class="head">No more "port already in use"</h2>
-      <div class="works" style="margin-top: 2rem">
-        <div class="work">
-          <div class="wname">muze-ai-setup-grafana-alerts</div>
-          <div class="wt"><span>web</span><span class="port">:3006</span></div>
-          <div class="wt"><span>api</span><span class="port">:3007</span></div>
+      <h2 class="head">Run the same app many times, side by side</h2>
+      <div class="instances">
+        <div class="inst">
+          <div class="ibar"><span class="idots"><i></i><i></i><i></i></span><span class="url">localhost:3002</span><span class="live"><span class="pulse"></span>up</span></div>
+          <div class="ibody"><span class="s"></span><span></span><span></span><span class="s"></span></div>
+          <div class="feat">web &middot; <b>checkout-redesign</b></div>
         </div>
-        <div class="work">
-          <div class="wname">fast-spec-client-default</div>
-          <div class="wt"><span>web</span><span class="port">:3004</span></div>
-          <div class="wt"><span>api</span><span class="port">:3005</span></div>
+        <div class="inst">
+          <div class="ibar"><span class="idots"><i></i><i></i><i></i></span><span class="url">localhost:3004</span><span class="live"><span class="pulse"></span>up</span></div>
+          <div class="ibody"><span></span><span class="s"></span><span></span><span></span></div>
+          <div class="feat">web &middot; <b>dark-mode</b></div>
+        </div>
+        <div class="inst">
+          <div class="ibar"><span class="idots"><i></i><i></i><i></i></span><span class="url">localhost:3006</span><span class="live"><span class="pulse"></span>up</span></div>
+          <div class="ibody"><span class="s"></span><span></span><span class="s"></span><span></span></div>
+          <div class="feat">web &middot; <b>search-filters</b></div>
         </div>
       </div>
-      <p class="note">mx allocates each feature its own ports, <b>unique across the whole runtime</b> &mdash; so two copies of the same app (and their agents' dev servers) run side by side, no clashes. <code class="inline">mx work port set</code> hands out a free one; the ports board shows who owns what.</p>
+      <p class="note"><span class="cb">The port clash, gone.</span> mx allocates each feature its own ports, <b>unique across the whole runtime</b> &mdash; so the very same app runs <b>three times at once</b>, one per feature, each with its own live URL. <code class="inline">mx work port set</code> hands out a free one; the ports board shows who owns what.</p>
     </div>
   </section>
 
-  <!-- 8 &mdash; Context -->
-  <section class="slide" data-topic="Feature &middot; context">
-    <div class="inner">
-      <p class="eyebrow">Feature &middot; context</p>
-      <h2 class="head">Shared memory across every feature</h2>
-      <div class="fan">
-        <div class="fan-box">
-          <b>context/</b>
-          <div class="sub">INDEX.json &middot; 77 entries</div>
-          <div class="idx">infra/v1-saas-cluster/setup<br />infra/v1-saas-cluster/aws-creds<br />base-agent/overview<br />&hellip;</div>
-        </div>
-        <div class="fan-lines">
-          <div class="fan-branch">
-            <span class="fan-connector" style="background: var(--p-teal)"></span>
-            <div class="fan-card"><span class="fname">project-hummingbird</span><span class="ftag">agent reads context</span></div>
-          </div>
-          <div class="fan-branch">
-            <span class="fan-connector" style="background: var(--p-amber)"></span>
-            <div class="fan-card"><span class="fname">fast-spec-client-default</span><span class="ftag">agent reads context</span></div>
-          </div>
-          <div class="fan-branch">
-            <span class="fan-connector" style="background: var(--p-rose)"></span>
-            <div class="fan-card"><span class="fname">muze-ai-e2e-test-setup</span><span class="ftag">agent reads context</span></div>
-          </div>
-        </div>
-      </div>
-      <p class="note">A runtime-wide registry of findings, decisions, runbooks, and RCAs &mdash; indexed in <code class="inline">INDEX.json</code> (this runtime has <b>77 entries</b>). Every feature's agent reads the <b>same institutional memory</b>, so a hard-won discovery in one feature isn't re-learned in the next.</p>
-    </div>
-  </section>
-
-  <!-- Feature: hooks / hydrate -->
+  <!-- 13 &mdash; Hooks / hydrate (rebuts crack #2) -->
   <section class="slide" data-topic="Feature &middot; hooks">
     <div class="inner">
       <p class="eyebrow">Feature &middot; hooks</p>
@@ -1247,31 +2004,71 @@
           <div class="fan-branch"><span class="fan-connector" style="background: var(--p-violet)"></span><div class="fan-card"><span class="fname mono">allocate ports</span><span class="ftag">no clashes</span></div></div>
         </div>
       </div>
-      <p class="note">The moment a worktree exists, mx fires the <code class="inline">post-worktree-create</code> hook &mdash; you decide what &ldquo;ready&rdquo; means (copy env, install, seed, &hellip;), in any language. It's one hub of lifecycle hooks: worktree create/remove, work archive/unarchive, repo fetch, health, and session-prompt.</p>
+      <p class="note"><span class="cb">The hand-hydration, automated.</span> The moment a worktree exists, mx fires the <code class="inline">post-worktree-create</code> hook &mdash; you decide what &ldquo;ready&rdquo; means (copy env, install, seed, &hellip;), in any language. It's one hub of lifecycle hooks: worktree create/remove, work archive/unarchive, repo fetch, health, and session-prompt.</p>
     </div>
   </section>
 
-  <!-- 9 &mdash; Mission control -->
+  <!-- 14 &mdash; Context -->
+  <section class="slide" data-topic="Feature &middot; context">
+    <div class="inner">
+      <p class="eyebrow">Feature &middot; context</p>
+      <h2 class="head">Shared memory across every feature</h2>
+      <div class="fan">
+        <div class="fan-box">
+          <b>context/</b>
+          <div class="sub">INDEX.json &middot; 40 entries</div>
+          <div class="idx">auth/tokens<br />conventions/code-style<br />runbooks/deploy<br />&hellip;</div>
+        </div>
+        <div class="fan-lines">
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-teal)"></span>
+            <div class="fan-card"><span class="fname">checkout-redesign</span><span class="ftag">agent reads context</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-amber)"></span>
+            <div class="fan-card"><span class="fname">search-filters</span><span class="ftag">agent reads context</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-rose)"></span>
+            <div class="fan-card"><span class="fname">e2e-tests</span><span class="ftag">agent reads context</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><span class="cb">The shared memory you didn't have.</span> A runtime-wide registry of findings, decisions, conventions, and runbooks &mdash; indexed in <code class="inline">INDEX.json</code>. Every feature's agent reads the <b>same institutional memory</b>, so a hard-won discovery in one feature isn't re-learned in the next.</p>
+    </div>
+  </section>
+
+  <!-- 15 &mdash; Real screenshot -->
+  <section class="slide" data-topic="What it looks like">
+    <div class="inner" style="max-width: 1220px; text-align: center">
+      <p class="eyebrow">What one feature looks like</p>
+      <h2 class="head">One feature, one Space</h2>
+      <div class="shot"><img src="/deck/setup-shot.jpg" alt="A feature Space: a coding agent in auto mode on the left, the editor on the right" /></div>
+      <p class="note" style="margin-inline: auto">A real feature Space: the coding agent in <b>auto mode</b> (left) working one feature across two repos, the editor beside it. Terminal left, editor right &mdash; one fullscreen macOS Space per feature.</p>
+    </div>
+  </section>
+
+  <!-- 16 &mdash; Mission control board -->
   <section class="slide" data-topic="Your board">
     <div class="inner">
       <p class="eyebrow">Your board</p>
       <h2 class="head">One Space per feature, grouped by stage</h2>
       <div class="board"><div class="board-row" id="boardRow"></div></div>
-      <p class="note">Every feature is its own macOS Space, grouped by stage with <code class="inline">mx divider</code> &mdash; so you always know what's in progress, in review, and shipped. Swipe to switch; nothing is ever torn down.</p>
+      <p class="note"><span class="cb">The clutter, organized.</span> Every feature is its own macOS Space, grouped by stage with <code class="inline">mx divider</code> &mdash; so you always know what's in progress, in review, and shipped. Swipe to switch; nothing is ever torn down.</p>
     </div>
   </section>
 
-  <!-- Live dashboard -->
+  <!-- 17 &mdash; Live dashboard -->
   <section class="slide" data-topic="Live dashboard">
     <div class="inner" style="max-width: 1220px; text-align: center">
       <p class="eyebrow">mx mission-control</p>
       <h2 class="head">See the whole runtime, live</h2>
       <div class="shot"><img src="/deck/dashboard-shot.jpg" alt="mx mission-control dashboard: each work with its services, ports, and live localhost URLs" /></div>
-      <p class="note" style="margin-inline: auto"><code class="inline">mx mission-control</code> starts a local, read-only web dashboard &mdash; every work with its services, <b>allocated ports</b>, and live <code class="inline">localhost</code> URLs, plus repo and work <b>health</b>, streamed live. Here: 49 ports across the active works.</p>
+      <p class="note" style="margin-inline: auto"><code class="inline">mx mission-control</code> starts a local, read-only web dashboard &mdash; every work with its services, <b>allocated ports</b>, and live <code class="inline">localhost</code> URLs, plus repo and work <b>health</b>, streamed live.</p>
     </div>
   </section>
 
-  <!-- Pause & resume -->
+  <!-- 18 &mdash; Pause & resume -->
   <section class="slide" data-topic="Pause &amp; resume">
     <div class="inner">
       <p class="eyebrow">Memory &amp; lifecycle</p>
@@ -1292,42 +2089,11 @@
           <div class="st-b">Worktrees re-created; continue right where you left off.</div>
         </div>
       </div>
-      <p class="note">Every work keeps <b>session summaries</b> (<code class="inline">sessions/*.md</code>) &mdash; a distilled record of each session, so you or a fresh agent can resume cold. Done for now? <code class="inline">mx work archive</code> frees the ports and worktrees but keeps the branches and notes; <code class="inline">mx work unarchive</code> brings it all back.</p>
+      <p class="note"><span class="cb">The lifecycle you were missing.</span> Every work keeps <b>session summaries</b> (<code class="inline">sessions/*.md</code>) &mdash; a distilled record of each session, so you or a fresh agent can resume cold. <code class="inline">mx work archive</code> frees the ports and worktrees but keeps the branches and notes; <code class="inline">mx work unarchive</code> brings it all back.</p>
     </div>
   </section>
 
-  <!-- Why not roll your own -->
-  <section class="slide" data-topic="Why not roll your own">
-    <div class="inner">
-      <p class="eyebrow">Why not roll your own?</p>
-      <h2 class="head">"Can't I just use subagents, or a tab per feature?"</h2>
-      <div class="vs">
-        <div class="vs-card pain">
-          <div class="vs-h">Subagents in one session &middot; or a terminal tab per feature</div>
-          <ul class="vs-list">
-            <li>You wire up <code>git worktree</code> by hand &mdash; and clean it up by hand</li>
-            <li>Ports are your problem: pick them, track them, dodge clashes</li>
-            <li>No lifecycle &mdash; nothing to archive, recover, or tear down cleanly</li>
-            <li>Every session starts cold; no memory shared between features</li>
-            <li>Tabs, folders, and branches pile into clutter you hold in your head</li>
-          </ul>
-        </div>
-        <div class="vs-card good">
-          <div class="vs-h">With mx &mdash; it's managed</div>
-          <ul class="vs-list">
-            <li>One command: the work, its worktrees, branches, and workspace</li>
-            <li>Ports allocated &amp; tracked, unique across the whole runtime</li>
-            <li><code>mx work archive</code> / <code>unarchive</code> &mdash; a recoverable lifecycle</li>
-            <li>A runtime <b>context registry</b> every agent reads from</li>
-            <li>Mission Control board &mdash; the whole fleet at a glance</li>
-          </ul>
-        </div>
-      </div>
-      <p class="note">Subagents and worktrees are the primitives. mx is the <b>manager</b> around them &mdash; works, ports, repos, lifecycle, and shared context &mdash; so parallelism stays organized instead of turning into clutter.</p>
-    </div>
-  </section>
-
-  <!-- 10 &mdash; Impact -->
+  <!-- 19 &mdash; Impact -->
   <section class="slide" data-topic="The payoff">
     <div class="inner">
       <p class="eyebrow">The payoff</p>
@@ -1336,9 +2102,9 @@
         <div class="gantt">
           <div class="glabel"><b>The old way</b><span>features one after another</span></div>
           <div class="track">
-            <div class="seg" style="left: 1%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">hummingbird</div>
-            <div class="seg" style="left: 25.5%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">grafana-alerts</div>
-            <div class="seg" style="left: 50%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">fast-spec</div>
+            <div class="seg" style="left: 1%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">checkout</div>
+            <div class="seg" style="left: 25.5%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">dark-mode</div>
+            <div class="seg" style="left: 50%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">search</div>
             <div class="seg" style="left: 74%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">e2e-tests</div>
           </div>
         </div>
@@ -1357,7 +2123,7 @@
     </div>
   </section>
 
-  <!-- 11 &mdash; Get started -->
+  <!-- 20 &mdash; Get started -->
   <section class="slide" data-topic="Try it">
     <div class="inner">
       <p class="eyebrow">Try it</p>
@@ -1370,13 +2136,13 @@
     </div>
   </section>
 
-  <!-- 12 &mdash; My setup (live) -->
+  <!-- 21 &mdash; My setup (live) -->
   <section class="slide" data-topic="Live &middot; my setup">
     <div class="inner demo">
       <span class="demo-badge"><span class="rec"></span>Live &middot; my setup</span>
       <h2 class="head">How I actually run mx</h2>
       <ul class="setup-list">
-        <li>One fullscreen macOS Space per feature &mdash; <b>terminal + Cursor split side by side</b>.</li>
+        <li>One fullscreen macOS Space per feature &mdash; <b>terminal + editor split side by side</b>.</li>
         <li>Coding agent in the terminal (auto mode); dev server &amp; git in another tab.</li>
         <li>Three-finger swipe between features; Mission Control for the whole board.</li>
         <li>Grouped by stage with <code class="inline">mx divider</code> &mdash; in progress, in review, shipped.</li>
@@ -1385,7 +2151,7 @@
     </div>
   </section>
 
-  <!-- 13 &mdash; Thanks -->
+  <!-- 22 &mdash; Thanks -->
   <section class="slide" data-topic="Thanks">
     <div class="inner title-wrap">
       <svg class="title-mark" viewBox="0 0 33 28" fill="none" aria-hidden="true">
@@ -1433,7 +2199,7 @@
 <div class="chrome bottom">
   <span class="topic" id="topicLabel">mx</span>
   <span class="hint">&larr; &rarr; or space &middot; <span class="kbd">F</span> fullscreen &middot; <span class="kbd">T</span> theme</span>
-  <span class="count" id="counter">1 / 19</span>
+  <span class="count" id="counter">1 / 22</span>
 </div>
 
 <div class="progress" id="progress"></div>
@@ -1477,6 +2243,27 @@
         }
       }
     });
+
+    // Build the confetti burst for the reveal slide (random spread + color + delay).
+    var cc = document.getElementById('confetti');
+    if (cc) {
+      var cols = ['var(--p-teal)', 'var(--p-amber)', 'var(--p-rose)', 'var(--p-violet)', 'var(--accent)'];
+      for (var c = 0; c < 42; c++) {
+        var p = document.createElement('i');
+        var ang = Math.random() * Math.PI * 2;
+        var dist = 130 + Math.random() * 440;
+        var dx = Math.cos(ang) * dist;
+        var dy = Math.sin(ang) * dist * 0.7 + Math.random() * 170;
+        p.style.setProperty('--dx', dx.toFixed(0) + 'px');
+        p.style.setProperty('--dy', dy.toFixed(0) + 'px');
+        p.style.setProperty('--rot', (Math.random() * 720 - 360).toFixed(0) + 'deg');
+        p.style.background = cols[c % cols.length];
+        p.style.animationDelay = (Math.random() * 0.28).toFixed(2) + 's';
+        p.style.width = (6 + Math.random() * 6).toFixed(0) + 'px';
+        p.style.height = (9 + Math.random() * 8).toFixed(0) + 'px';
+        cc.appendChild(p);
+      }
+    }
 
     function show(n) {
       i = Math.max(0, Math.min(total - 1, n));
