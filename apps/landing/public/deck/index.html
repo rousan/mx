@@ -1165,68 +1165,232 @@
     color: var(--pain);
   }
 
-  /* ---- Architecture overview (the whole system in one graph) ---- */
-  .arch {
-    margin-top: 1.4rem;
+  /* ---- Architecture overview: large box-and-line diagram ---- */
+  .arch2 {
+    margin-top: 1.3rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
   }
-  .arch-band {
-    border: 1px solid var(--line-strong);
+  .arch2-top {
+    display: flex;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  .arch2-node {
+    border-radius: 16px;
+    padding: 1.1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 122px;
+  }
+  .arch2-node.repos {
+    flex: 1.7;
+    border: 2px solid var(--line-strong);
     background: var(--bg-2);
-    border-radius: 12px;
-    padding: 0.7rem 0.9rem;
     text-align: center;
   }
-  .arch-tag {
-    display: block;
+  .arch2-node.ctx {
+    flex: 1;
+    border: 2px solid var(--accent);
+    background: var(--accent-soft);
+    text-align: center;
+  }
+  .a2-tag {
     font-family: ui-monospace, monospace;
-    font-size: 0.62rem;
+    font-size: 0.64rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--muted);
-    margin-bottom: 0.55rem;
+    margin-bottom: 0.8rem;
   }
-  .arch-repos {
+  .arch2-node.ctx .a2-tag {
+    color: var(--accent-ink);
+  }
+  .a2-repos {
     display: flex;
-    gap: 0.6rem;
+    gap: 0.7rem;
     justify-content: center;
     flex-wrap: wrap;
   }
-  .arch-repo {
+  .a2-repo {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
+    gap: 0.5rem;
     background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 9px;
-    padding: 0.4rem 0.85rem;
+    border: 1.5px solid var(--line-strong);
+    border-radius: 11px;
+    padding: 0.5rem 1rem;
     font-family: ui-monospace, monospace;
-    font-size: 0.82rem;
+    font-size: 0.9rem;
     color: var(--ink-soft);
   }
-  .arch-link {
-    text-align: center;
+  .a2-ctx-body {
+    font-family: ui-monospace, monospace;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--accent-ink);
+  }
+  .a2-ctx-body .sub {
+    display: block;
+    font-weight: 400;
+    font-size: 0.66rem;
+    color: var(--muted);
+    margin-top: 0.35rem;
+    line-height: 1.5;
+  }
+  .arch2-mid {
+    position: relative;
+    height: 66px;
+  }
+  .arch2-lines {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .arch2-lines path {
+    fill: none;
+    stroke: var(--line-strong);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+  }
+  .arch2-lines path.ctxline {
+    stroke: var(--accent);
+    stroke-dasharray: 4 4;
+  }
+  .a2-lbl {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--bg);
+    padding: 0 0.6rem;
     font-family: ui-monospace, monospace;
     font-size: 0.64rem;
-    color: var(--faint);
-    letter-spacing: 0.03em;
+    color: var(--muted);
+    white-space: nowrap;
   }
-  .arch-works {
+  .arch2-works {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 0.7rem;
   }
-  .awork {
-    border: 1.5px solid var(--accent);
-    background: var(--accent-soft);
-    border-radius: 12px;
-    padding: 0.7rem 0.75rem 0.8rem;
+  .w5 {
+    border: 2px solid var(--accent);
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 0.75rem 0.75rem 0.55rem;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    min-height: 150px;
   }
-  .awork-head {
+  .w5-head {
+    font-family: ui-monospace, monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--accent-ink);
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 0.3rem;
+    margin-bottom: 0.55rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px dashed var(--line);
+  }
+  .w5-agent {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    font-weight: 400;
+    font-size: 0.58rem;
+    color: var(--muted);
+  }
+  .w5-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: ui-monospace, monospace;
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+    padding: 0.34rem 0.1rem;
+  }
+  .w5-row .pt {
+    color: var(--accent);
+  }
+  .w5-row + .w5-row {
+    border-top: 1px solid var(--line);
+  }
+
+  /* ---- Mission control board (kanban by stage) ---- */
+  .mc {
+    margin-top: 1.5rem;
+    border: 2px solid var(--line-strong);
+    border-radius: 16px;
+    background: var(--bg-2);
+    overflow: hidden;
+  }
+  .mc-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.1rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+    font-family: ui-monospace, monospace;
+    font-size: 0.74rem;
+    color: var(--muted);
+  }
+  .mc-bar .dots {
+    display: flex;
+    gap: 4px;
+    margin-right: 0.4rem;
+  }
+  .mc-bar .dots i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--line-strong);
+  }
+  .mc-bar .live {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--accent-ink);
+  }
+  .mc-cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    padding: 1.1rem;
+  }
+  .mc-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .mc-colhead {
+    font-family: ui-monospace, monospace;
+    font-size: 0.64rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-bottom: 0.45rem;
+    border-bottom: 2px solid var(--line-strong);
+  }
+  .mc-card {
+    border: 2px solid var(--accent);
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 0.75rem 0.8rem;
+    box-shadow: var(--shadow);
+  }
+  .mc-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     gap: 0.4rem;
     font-family: ui-monospace, monospace;
     font-size: 0.82rem;
@@ -1234,53 +1398,25 @@
     color: var(--accent-ink);
     margin-bottom: 0.5rem;
   }
-  .awork-head .role {
-    margin-left: auto;
+  .mc-card-head .st {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
     font-weight: 400;
-    font-size: 0.62rem;
+    font-size: 0.6rem;
     color: var(--muted);
   }
-  .awt {
+  .mc-svc {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    padding: 0.38rem 0.55rem;
-    margin-top: 0.4rem;
+    justify-content: space-between;
     font-family: ui-monospace, monospace;
-    font-size: 0.7rem;
+    font-size: 0.74rem;
     color: var(--ink-soft);
+    padding: 0.24rem 0;
   }
-  .awt .wn {
-    font-weight: 700;
-  }
-  .awt .br {
-    color: var(--muted);
-  }
-  .awt .pt {
-    margin-left: auto;
+  .mc-svc .pt {
     color: var(--accent);
-  }
-  .arch-context {
-    border: 1px solid var(--accent);
-    background: var(--accent-soft);
-    border-radius: 12px;
-    padding: 0.7rem 0.9rem;
-    text-align: center;
-    font-family: ui-monospace, monospace;
-    font-size: 0.8rem;
-    color: var(--accent-ink);
-  }
-  .arch-context .sub {
-    display: block;
-    color: var(--muted);
-    font-size: 0.66rem;
-    margin-top: 0.28rem;
   }
 
   /* ---- One work, many repos ---- */
@@ -1638,9 +1774,18 @@
     }
     .juggle,
     .cracks,
-    .wrap-adds,
     .instances {
       grid-template-columns: 1fr;
+    }
+    .arch2-top {
+      flex-direction: column;
+    }
+    .arch2-mid {
+      display: none;
+    }
+    .arch2-works,
+    .mc-cols {
+      grid-template-columns: repeat(2, 1fr);
     }
     .multi {
       grid-template-columns: 1fr;
@@ -1845,44 +1990,116 @@
     </div>
   </section>
 
-  <!-- 6 &mdash; What is mx: the whole system in one graph -->
+  <!-- 6 &mdash; What is mx: the whole system in one diagram -->
   <section class="slide" data-topic="What is mx">
-    <div class="inner">
+    <div class="inner" style="max-width: 1200px">
       <p class="eyebrow">What is mx</p>
       <h2 class="head">The whole system in one picture</h2>
-      <div class="arch">
-        <div class="arch-band">
-          <span class="arch-tag">pristine repos &middot; cloned once, read-only</span>
-          <div class="arch-repos">
-            <span class="arch-repo"><span class="dot" style="background: var(--p-teal)"></span>repo-a</span>
-            <span class="arch-repo"><span class="dot" style="background: var(--p-violet)"></span>repo-b</span>
-            <span class="arch-repo"><span class="dot" style="background: var(--p-amber)"></span>repo-c</span>
-          </div>
-        </div>
-        <div class="arch-link">&darr;&nbsp; worktrees fork from the repos &nbsp;&darr;</div>
-        <div>
-          <span class="arch-tag" style="text-align: center">works &middot; one per feature &mdash; agent + worktrees + branches + ports</span>
-          <div class="arch-works">
-            <div class="awork">
-              <div class="awork-head">feature-a<span class="role"><span class="pulse"></span>1 agent</span></div>
-              <div class="awt"><span class="wn">wt/repo-a</span><span class="br">feature-a</span><span class="pt">:3001</span></div>
-              <div class="awt"><span class="wn">wt/repo-b</span><span class="br">feature-a</span><span class="pt">:3002</span></div>
-            </div>
-            <div class="awork">
-              <div class="awork-head">feature-b<span class="role"><span class="pulse"></span>1 agent</span></div>
-              <div class="awt"><span class="wn">wt/repo-b</span><span class="br">feature-b</span><span class="pt">:3003</span></div>
-            </div>
-            <div class="awork">
-              <div class="awork-head">feature-c<span class="role"><span class="pulse"></span>1 agent</span></div>
-              <div class="awt"><span class="wn">wt/repo-a</span><span class="br">feature-c</span><span class="pt">:3007</span></div>
-              <div class="awt"><span class="wn">wt/repo-c</span><span class="br">feature-c</span><span class="pt">:3008</span></div>
+      <div class="arch2">
+        <div class="arch2-top">
+          <div class="arch2-node repos">
+            <div class="a2-tag">pristine repos &middot; cloned once, read-only</div>
+            <div class="a2-repos">
+              <span class="a2-repo"><span class="dot" style="background: var(--p-teal)"></span>repo-a</span>
+              <span class="a2-repo"><span class="dot" style="background: var(--p-violet)"></span>repo-b</span>
+              <span class="a2-repo"><span class="dot" style="background: var(--p-amber)"></span>repo-c</span>
             </div>
           </div>
+          <div class="arch2-node ctx">
+            <div class="a2-tag">context registry</div>
+            <div class="a2-ctx-body">shared memory<span class="sub">findings &middot; conventions &middot; runbooks<br />read by every agent</span></div>
+          </div>
         </div>
-        <div class="arch-link">&darr;&nbsp; every agent shares one memory &nbsp;&darr;</div>
-        <div class="arch-context"><b>central context</b> &mdash; shared across every feature<span class="sub">findings &middot; conventions &middot; runbooks &mdash; read by every agent</span></div>
+        <div class="arch2-mid">
+          <svg class="arch2-lines" viewBox="0 0 1000 66" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M320 0 V33" />
+            <path class="ctxline" d="M820 0 V33" />
+            <path d="M100 33 H900" />
+            <path d="M100 33 V66" />
+            <path d="M300 33 V66" />
+            <path d="M500 33 V66" />
+            <path d="M700 33 V66" />
+            <path d="M900 33 V66" />
+          </svg>
+          <span class="a2-lbl">worktrees fork from repos &middot; every agent shares the context</span>
+        </div>
+        <div class="arch2-works">
+          <div class="w5">
+            <div class="w5-head">feature-a<span class="w5-agent"><span class="pulse"></span>1 agent</span></div>
+            <div class="w5-row"><span>repo-a</span><span class="pt">:3001</span></div>
+            <div class="w5-row"><span>repo-b</span><span class="pt">:3002</span></div>
+          </div>
+          <div class="w5">
+            <div class="w5-head">feature-b<span class="w5-agent"><span class="pulse"></span>1 agent</span></div>
+            <div class="w5-row"><span>repo-b</span><span class="pt">:3003</span></div>
+          </div>
+          <div class="w5">
+            <div class="w5-head">feature-c<span class="w5-agent"><span class="pulse"></span>1 agent</span></div>
+            <div class="w5-row"><span>repo-a</span><span class="pt">:3007</span></div>
+            <div class="w5-row"><span>repo-c</span><span class="pt">:3008</span></div>
+          </div>
+          <div class="w5">
+            <div class="w5-head">feature-d<span class="w5-agent"><span class="pulse"></span>1 agent</span></div>
+            <div class="w5-row"><span>repo-c</span><span class="pt">:3009</span></div>
+          </div>
+          <div class="w5">
+            <div class="w5-head">feature-e<span class="w5-agent"><span class="pulse"></span>1 agent</span></div>
+            <div class="w5-row"><span>repo-a</span><span class="pt">:3011</span></div>
+            <div class="w5-row"><span>repo-b</span><span class="pt">:3012</span></div>
+          </div>
+        </div>
       </div>
-      <p class="note">One graph, the whole system: <b>repos</b> up top (cloned once, read-only), <b>works</b> in the middle (one per feature &mdash; each with its own agent session and a worktree + branch + port per repo it touches), and one <b>central context</b> every agent reads from.</p>
+      <p class="note"><b>Repos</b> up top (cloned once, read-only), a <b>context registry</b> in the corner (shared memory every agent reads), and one <b>work</b> per feature &mdash; each with its own agent and a worktree + port per repo it touches.</p>
+    </div>
+  </section>
+
+  <!-- 7 &mdash; Mission control (board by stage) -->
+  <section class="slide" data-topic="Mission control">
+    <div class="inner" style="max-width: 1200px">
+      <p class="eyebrow">Mission control</p>
+      <h2 class="head">One view of the whole fleet</h2>
+      <div class="mc">
+        <div class="mc-bar">
+          <span class="dots"><i></i><i></i><i></i></span>
+          <span>mx mission-control &middot; localhost:7777</span>
+          <span class="live"><span class="pulse"></span>live</span>
+        </div>
+        <div class="mc-cols">
+          <div class="mc-col">
+            <div class="mc-colhead">In progress</div>
+            <div class="mc-card">
+              <div class="mc-card-head">feature-a<span class="st"><span class="dot" style="background: var(--p-teal)"></span>active</span></div>
+              <div class="mc-svc"><span>repo-a</span><span class="pt">:3001</span></div>
+              <div class="mc-svc"><span>repo-b</span><span class="pt">:3002</span></div>
+            </div>
+            <div class="mc-card">
+              <div class="mc-card-head">feature-c<span class="st"><span class="dot" style="background: var(--p-teal)"></span>active</span></div>
+              <div class="mc-svc"><span>repo-a</span><span class="pt">:3007</span></div>
+              <div class="mc-svc"><span>repo-c</span><span class="pt">:3008</span></div>
+            </div>
+          </div>
+          <div class="mc-col">
+            <div class="mc-colhead">In review</div>
+            <div class="mc-card">
+              <div class="mc-card-head">feature-b<span class="st"><span class="dot" style="background: var(--p-amber)"></span>review</span></div>
+              <div class="mc-svc"><span>repo-b</span><span class="pt">:3003</span></div>
+            </div>
+          </div>
+          <div class="mc-col">
+            <div class="mc-colhead">PR review</div>
+            <div class="mc-card">
+              <div class="mc-card-head">feature-d<span class="st"><span class="dot" style="background: var(--p-violet)"></span>waiting</span></div>
+              <div class="mc-svc"><span>repo-c</span><span class="pt">:3009</span></div>
+            </div>
+            <div class="mc-card">
+              <div class="mc-card-head">feature-e<span class="st"><span class="dot" style="background: var(--p-violet)"></span>waiting</span></div>
+              <div class="mc-svc"><span>repo-a</span><span class="pt">:3011</span></div>
+              <div class="mc-svc"><span>repo-b</span><span class="pt">:3012</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note">Every feature and its ports, grouped by stage &mdash; one place to see the whole fleet: what's <b>in progress</b>, <b>in review</b>, and up for <b>PR</b>. Nothing lost in a forgotten tab.</p>
     </div>
   </section>
 
@@ -2260,7 +2477,7 @@
 <div class="chrome bottom">
   <span class="topic" id="topicLabel">mx</span>
   <span class="hint">&larr; &rarr; or space &middot; <span class="kbd">F</span> fullscreen &middot; <span class="kbd">T</span> theme</span>
-  <span class="count" id="counter">1 / 22</span>
+  <span class="count" id="counter">1 / 23</span>
 </div>
 
 <div class="progress" id="progress"></div>
