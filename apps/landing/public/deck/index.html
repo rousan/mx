@@ -1,0 +1,2613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>mx &mdash; demo deck</title>
+<meta name="description" content="A story-driven deck for mx: the multi-feature juggle, why a tab-per-feature breaks, and how mx manages worktrees, ports, hooks, and shared context for a fleet of coding agents." />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+</head>
+<body>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-2: #f4f7f6;
+    --surface: #ffffff;
+    --surface-2: #f4f7f6;
+    --line: #e3e9e8;
+    --line-strong: #ccd5d3;
+    --ink: #13181a;
+    --ink-soft: #39433f;
+    --muted: #647170;
+    --faint: #98a2a0;
+    --accent: #0d9488;
+    --accent-ink: #0f766e;
+    --accent-soft: rgba(13, 148, 136, 0.1);
+    --pain: #d9633c;
+    --pain-soft: rgba(217, 99, 60, 0.1);
+    --p-teal: #14b8a6;
+    --p-amber: #f0a92a;
+    --p-rose: #f4667f;
+    --p-violet: #8b7ff0;
+    --code-bg: #f1f5f4;
+    --shadow: 0 1px 2px rgba(16, 24, 22, 0.05), 0 8px 30px rgba(16, 24, 22, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0a0f0e;
+      --bg-2: #0e1413;
+      --surface: #111817;
+      --surface-2: #151d1b;
+      --line: #222b29;
+      --line-strong: #35413f;
+      --ink: #e9eeec;
+      --ink-soft: #c3ccca;
+      --muted: #899492;
+      --faint: #58635f;
+      --accent: #2dd4bf;
+      --accent-ink: #5eead4;
+      --accent-soft: rgba(45, 212, 191, 0.14);
+      --pain: #f0855c;
+      --pain-soft: rgba(240, 133, 92, 0.14);
+      --p-teal: #2dd4bf;
+      --p-amber: #fbbf24;
+      --p-rose: #fb7185;
+      --p-violet: #a78bfa;
+      --code-bg: #0c1211;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 40px rgba(0, 0, 0, 0.35);
+    }
+  }
+  :root[data-theme='dark'] {
+    --bg: #0a0f0e;
+    --bg-2: #0e1413;
+    --surface: #111817;
+    --surface-2: #151d1b;
+    --line: #222b29;
+    --line-strong: #35413f;
+    --ink: #e9eeec;
+    --ink-soft: #c3ccca;
+    --muted: #899492;
+    --faint: #58635f;
+    --accent: #2dd4bf;
+    --accent-ink: #5eead4;
+    --accent-soft: rgba(45, 212, 191, 0.14);
+    --pain: #f0855c;
+    --pain-soft: rgba(240, 133, 92, 0.14);
+    --p-teal: #2dd4bf;
+    --p-amber: #fbbf24;
+    --p-rose: #fb7185;
+    --p-violet: #a78bfa;
+    --code-bg: #0c1211;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 10px 40px rgba(0, 0, 0, 0.35);
+  }
+  :root[data-theme='light'] {
+    --bg: #ffffff;
+    --bg-2: #f4f7f6;
+    --surface: #ffffff;
+    --surface-2: #f4f7f6;
+    --line: #e3e9e8;
+    --line-strong: #ccd5d3;
+    --ink: #13181a;
+    --ink-soft: #39433f;
+    --muted: #647170;
+    --faint: #98a2a0;
+    --accent: #0d9488;
+    --accent-ink: #0f766e;
+    --accent-soft: rgba(13, 148, 136, 0.1);
+    --pain: #d9633c;
+    --pain-soft: rgba(217, 99, 60, 0.1);
+    --p-teal: #14b8a6;
+    --p-amber: #f0a92a;
+    --p-rose: #f4667f;
+    --p-violet: #8b7ff0;
+    --code-bg: #f1f5f4;
+    --shadow: 0 1px 2px rgba(16, 24, 22, 0.05), 0 8px 30px rgba(16, 24, 22, 0.06);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+  html,
+  body {
+    margin: 0;
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  .mono {
+    font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  }
+
+  /* ---- Deck frame ---- */
+  .deck {
+    position: fixed;
+    inset: 0;
+  }
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(3.4rem, 9vh, 5.5rem) clamp(1.5rem, 7vw, 7rem);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s ease;
+    overflow: hidden;
+  }
+  .slide.active {
+    opacity: 1;
+    visibility: visible;
+  }
+  .inner {
+    width: 100%;
+    max-width: 1060px;
+  }
+  .slide.active .inner > * {
+    animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
+  }
+  .slide.active .inner > *:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+  .slide.active .inner > *:nth-child(3) {
+    animation-delay: 0.12s;
+  }
+  .slide.active .inner > *:nth-child(4) {
+    animation-delay: 0.18s;
+  }
+  .slide.active .inner > *:nth-child(5) {
+    animation-delay: 0.24s;
+  }
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* ---- Chrome ---- */
+  .chrome {
+    position: fixed;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.1rem clamp(1.5rem, 4vw, 3rem);
+    z-index: 20;
+    pointer-events: none;
+  }
+  .chrome.top {
+    top: 0;
+  }
+  .chrome.bottom {
+    bottom: 0;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: -0.01em;
+  }
+  .brand svg {
+    height: 20px;
+    width: auto;
+  }
+  .topic {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+  }
+  .count {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .hint {
+    font-size: 0.72rem;
+    color: var(--faint);
+  }
+  .tbtn {
+    pointer-events: auto;
+    cursor: pointer;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--muted);
+    border-radius: 8px;
+    width: 34px;
+    height: 34px;
+    display: inline-grid;
+    place-items: center;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tbtn:hover,
+  .tbtn:focus-visible {
+    color: var(--ink);
+    border-color: var(--line-strong);
+    outline: none;
+  }
+  .tbtn svg {
+    width: 17px;
+    height: 17px;
+  }
+  .progress {
+    position: fixed;
+    left: 0;
+    bottom: 0;
+    height: 3px;
+    background: var(--accent);
+    z-index: 30;
+    transition: width 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .navzone {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    width: 20%;
+    z-index: 10;
+    cursor: pointer;
+  }
+  .navzone.left {
+    left: 0;
+  }
+  .navzone.right {
+    right: 0;
+  }
+
+  /* ---- Typography ---- */
+  .eyebrow {
+    font-family: ui-monospace, monospace;
+    font-size: clamp(0.72rem, 1.1vw, 0.85rem);
+    text-transform: uppercase;
+    letter-spacing: 0.24em;
+    color: var(--accent-ink);
+    margin: 0 0 1.3rem;
+  }
+  .eyebrow.pain {
+    color: var(--pain);
+  }
+  h1.display {
+    font-size: clamp(2.4rem, 6.2vw, 4.8rem);
+    line-height: 1.03;
+    letter-spacing: -0.03em;
+    font-weight: 800;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h2.head {
+    font-size: clamp(1.85rem, 4.4vw, 3.2rem);
+    line-height: 1.06;
+    letter-spacing: -0.025em;
+    font-weight: 800;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .lead {
+    font-size: clamp(1.05rem, 2vw, 1.45rem);
+    line-height: 1.5;
+    color: var(--muted);
+    margin: 1.4rem 0 0;
+    max-width: 48ch;
+  }
+  .accent {
+    color: var(--accent);
+  }
+  .paint {
+    color: var(--pain);
+  }
+  .note {
+    font-size: clamp(0.9rem, 1.4vw, 1.05rem);
+    color: var(--muted);
+    margin: 1.6rem 0 0;
+    max-width: 64ch;
+  }
+  .note b,
+  .lead b {
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+  .note .cb {
+    color: var(--accent-ink);
+    font-weight: 700;
+  }
+  code.inline {
+    font-family: ui-monospace, monospace;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 0.1em 0.45em;
+    font-size: 0.85em;
+    color: var(--ink-soft);
+  }
+  .kbd {
+    font-family: ui-monospace, monospace;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 0.05em 0.4em;
+    font-size: 0.9em;
+  }
+
+  /* ---- Title / centered slide ---- */
+  .title-wrap {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .title-mark {
+    height: clamp(56px, 9vh, 84px);
+    width: auto;
+    margin-bottom: 1.5rem;
+  }
+  .title-wrap .lead {
+    margin-inline: auto;
+    text-align: center;
+  }
+  .metaline {
+    margin-top: 2.2rem;
+    display: flex;
+    gap: 0.75rem 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    color: var(--faint);
+  }
+  .metaline b {
+    color: var(--accent-ink);
+    font-weight: 600;
+  }
+
+  /* ---- Reveal (celebration) ---- */
+  .reveal .inner {
+    position: relative;
+    z-index: 3;
+  }
+  .pop-mark {
+    height: clamp(66px, 11vh, 100px);
+    width: auto;
+    margin-bottom: 1.4rem;
+  }
+  .slide.active .pop-mark {
+    animation: popIn 0.62s cubic-bezier(0.2, 1.5, 0.35, 1) both;
+  }
+  @keyframes popIn {
+    0% {
+      opacity: 0;
+      transform: scale(0.2) rotate(-8deg);
+    }
+    60% {
+      transform: scale(1.12) rotate(3deg);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1) rotate(0);
+    }
+  }
+  .confetti {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .confetti i {
+    position: absolute;
+    top: 44%;
+    left: 50%;
+    width: 9px;
+    height: 13px;
+    border-radius: 2px;
+    opacity: 0;
+  }
+  .slide.active .confetti i {
+    animation: burst 1.2s ease-out forwards;
+  }
+  @keyframes burst {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) rotate(0) scale(0.6);
+    }
+    8% {
+      opacity: 1;
+    }
+    70% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(1);
+    }
+  }
+  .balloon {
+    position: absolute;
+    bottom: -170px;
+    width: 44px;
+    height: 56px;
+    border-radius: 50% 50% 47% 47%;
+    opacity: 0;
+    z-index: 1;
+  }
+  .balloon::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -28px;
+    width: 1px;
+    height: 28px;
+    background: var(--line-strong);
+    transform: translateX(-50%);
+  }
+  .balloon.b1 {
+    left: 16%;
+    background: var(--p-teal);
+  }
+  .balloon.b2 {
+    left: 33%;
+    width: 38px;
+    height: 48px;
+    background: var(--p-amber);
+  }
+  .balloon.b3 {
+    left: 64%;
+    background: var(--p-rose);
+  }
+  .balloon.b4 {
+    left: 83%;
+    width: 40px;
+    height: 50px;
+    background: var(--p-violet);
+  }
+  .slide.active .balloon {
+    animation: floatUp 3.8s ease-in forwards;
+  }
+  .slide.active .balloon.b2 {
+    animation-delay: 0.25s;
+  }
+  .slide.active .balloon.b3 {
+    animation-delay: 0.12s;
+  }
+  .slide.active .balloon.b4 {
+    animation-delay: 0.35s;
+  }
+  @keyframes floatUp {
+    0% {
+      opacity: 0;
+      bottom: -170px;
+      transform: translateX(0);
+    }
+    12% {
+      opacity: 0.9;
+    }
+    50% {
+      transform: translateX(14px);
+    }
+    100% {
+      opacity: 0;
+      bottom: 120%;
+      transform: translateX(-6px);
+    }
+  }
+
+  /* ---- Command chip ---- */
+  .cmd {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 0.85rem 1.2rem;
+    font-family: ui-monospace, monospace;
+    font-size: clamp(0.95rem, 1.8vw, 1.2rem);
+    color: var(--ink-soft);
+  }
+  .cmd .dol {
+    color: var(--accent);
+    user-select: none;
+  }
+
+  /* ---- Mental model ---- */
+  .model {
+    margin-top: 2.1rem;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2);
+    border-radius: 18px;
+    padding: clamp(1rem, 2.5vw, 1.6rem);
+  }
+  .rt-label {
+    display: flex;
+    align-items: baseline;
+    gap: 0.7rem;
+    margin-bottom: 1rem;
+  }
+  .rt-label b {
+    font-size: 1.05rem;
+  }
+  .rt-label .mono {
+    color: var(--faint);
+    font-size: 0.8rem;
+  }
+  .rowlabel {
+    font-family: ui-monospace, monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+  .repos {
+    display: flex;
+    gap: 0.7rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.3rem;
+  }
+  .repo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.5rem 0.9rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.92rem;
+    color: var(--ink-soft);
+  }
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 3px;
+  }
+  .works {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.8rem;
+  }
+  .work {
+    border: 1px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 12px;
+    padding: 0.8rem;
+  }
+  .work .wname {
+    font-family: ui-monospace, monospace;
+    font-weight: 700;
+    color: var(--accent-ink);
+    font-size: 0.92rem;
+    margin-bottom: 0.5rem;
+  }
+  .wt {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.4rem 0.7rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    margin-top: 0.4rem;
+  }
+  .wt .port {
+    color: var(--accent);
+  }
+  .wt .br {
+    color: var(--muted);
+  }
+
+  /* ---- Fan diagram (source -> branches) ---- */
+  .fan {
+    margin-top: 2rem;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: clamp(1rem, 4vw, 3rem);
+  }
+  .fan-node {
+    width: 96px;
+    height: 96px;
+    border-radius: 20px;
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--accent);
+    text-align: center;
+    line-height: 1.2;
+  }
+  .fan-box {
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 0.9rem 1.1rem;
+    text-align: center;
+    box-shadow: var(--shadow);
+    max-width: 190px;
+  }
+  .fan-box b {
+    display: block;
+    font-family: ui-monospace, monospace;
+    font-size: 0.9rem;
+    color: var(--ink);
+  }
+  .fan-box .sub {
+    color: var(--faint);
+    font-size: 0.72rem;
+    margin-top: 0.3rem;
+  }
+  .fan-box .idx {
+    margin-top: 0.6rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-align: left;
+    line-height: 1.7;
+    border-top: 1px dashed var(--line);
+    padding-top: 0.5rem;
+  }
+  .fan-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .fan-branch {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+  }
+  .fan-connector {
+    height: 2px;
+    width: clamp(20px, 5vw, 60px);
+    flex-shrink: 0;
+    border-radius: 2px;
+  }
+  .fan-card {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 0.7rem 1rem;
+    box-shadow: var(--shadow);
+  }
+  .fan-card .fname {
+    font-weight: 700;
+    font-size: 0.98rem;
+  }
+  .fan-card .ftag {
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+  }
+  .pulse {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
+  }
+
+  /* ---- Board ---- */
+  .board {
+    margin-top: 2rem;
+    border: 1px solid var(--line);
+    background: var(--bg-2);
+    border-radius: 16px;
+    padding: 1.1rem;
+  }
+  .board-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    justify-content: center;
+  }
+  .divider {
+    height: 60px;
+    display: grid;
+    place-items: center;
+    padding: 0 0.9rem;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    border-radius: 9px;
+    font-family: ui-monospace, monospace;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+  }
+  .thumb {
+    width: 76px;
+    height: 60px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 9px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .thumb .bar {
+    display: flex;
+    gap: 3px;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .thumb .bar i {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--line-strong);
+  }
+  .thumb .panes {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .thumb .panes div {
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .thumb .panes div:first-child {
+    border-right: 1px solid var(--line);
+  }
+  .thumb .panes span {
+    height: 2px;
+    border-radius: 2px;
+    background: var(--line);
+  }
+  .thumb .panes span.s {
+    background: var(--line-strong);
+    width: 70%;
+  }
+
+  /* ---- Impact chart ---- */
+  .chart {
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.4rem;
+  }
+  .gantt {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .gantt .glabel {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .gantt .glabel b {
+    color: var(--ink);
+    font-size: 0.95rem;
+  }
+  .track {
+    position: relative;
+    height: 40px;
+    border-radius: 8px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .seg {
+    position: absolute;
+    top: 6px;
+    height: 28px;
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-family: ui-monospace, monospace;
+    font-size: 0.68rem;
+    color: var(--ink);
+    border: 1px solid transparent;
+  }
+  .axis {
+    display: flex;
+    justify-content: space-between;
+    font-family: ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: var(--faint);
+    margin-top: 0.2rem;
+  }
+
+  /* ---- Juggle (the reality) ---- */
+  .juggle {
+    margin-top: 1.9rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.9rem;
+  }
+  .tkt {
+    position: relative;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 0.95rem 1.05rem;
+    box-shadow: var(--shadow);
+  }
+  .tkt.on {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .tkt .th {
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .tkt .ts {
+    margin-top: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+  }
+  .tkt .ts.act {
+    color: var(--accent-ink);
+  }
+  .tkt .ts.wait {
+    color: var(--pain);
+  }
+  .tkt .ts .pulse {
+    background: var(--accent);
+  }
+  .tkt .ts .stall {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: var(--pain);
+  }
+  .swtax {
+    margin-top: 1.5rem;
+  }
+  .swtax .cap {
+    font-family: ui-monospace, monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.55rem;
+  }
+
+  /* ---- DIY temptation ---- */
+  .diy {
+    margin-top: 1.9rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .diy-card {
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 1.15rem 1.2rem 1.3rem;
+    box-shadow: var(--shadow);
+  }
+  .diy-card .dh {
+    font-weight: 700;
+    font-size: 0.92rem;
+    margin-bottom: 1.15rem;
+  }
+  .sa {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .node-chip {
+    font-family: ui-monospace, monospace;
+    font-size: 0.76rem;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2);
+    border-radius: 9px;
+    padding: 0.4rem 0.85rem;
+    color: var(--ink-soft);
+  }
+  .stem {
+    width: 2px;
+    height: 14px;
+    background: var(--line-strong);
+  }
+  .sa-kids {
+    display: flex;
+    gap: 0.5rem;
+  }
+  .sa-kids .k {
+    width: 40px;
+    height: 28px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-monospace, monospace;
+    font-size: 0.64rem;
+    color: var(--muted);
+  }
+  .sa-share {
+    margin-top: 0.2rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.7rem;
+    color: var(--pain);
+    border: 1px dashed var(--pain);
+    background: var(--pain-soft);
+    border-radius: 8px;
+    padding: 0.4rem 0.7rem;
+  }
+  .tabs {
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg-2);
+  }
+  .tabs .strip {
+    display: flex;
+    gap: 3px;
+    padding: 6px 6px 0;
+    background: var(--surface-2);
+    overflow: hidden;
+  }
+  .tabs .tb {
+    font-family: ui-monospace, monospace;
+    font-size: 0.66rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid var(--line);
+    border-bottom: none;
+    border-radius: 7px 7px 0 0;
+    background: var(--surface);
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .tabs .tb.act {
+    color: var(--ink);
+    background: var(--bg-2);
+  }
+  .tabs .tb.plus {
+    color: var(--faint);
+  }
+  .tabs .body {
+    height: 74px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+  }
+  .tabs .body span {
+    height: 3px;
+    border-radius: 3px;
+    background: var(--line);
+  }
+  .tabs .body span.s {
+    background: var(--line-strong);
+    width: 55%;
+  }
+  .diy-cap {
+    margin-top: 1.15rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+    text-align: center;
+  }
+  .diy-cap b {
+    color: var(--ink-soft);
+  }
+
+  /* ---- The cracks ---- */
+  .cracks {
+    margin-top: 1.7rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  .crack {
+    border: 1px solid var(--pain);
+    background: var(--pain-soft);
+    border-radius: 14px;
+    padding: 1.05rem 1.1rem 1.15rem;
+    display: flex;
+    flex-direction: column;
+  }
+  .crack .cn {
+    font-family: ui-monospace, monospace;
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--pain);
+    margin-bottom: 0.9rem;
+  }
+  .crack .fig {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 104px;
+    margin-bottom: 0.95rem;
+  }
+  .crack .cl {
+    font-size: 0.86rem;
+    line-height: 1.42;
+    color: var(--ink-soft);
+  }
+  .crack .cl b {
+    color: var(--pain);
+    font-weight: 700;
+  }
+  .pc {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .pchip {
+    font-family: ui-monospace, monospace;
+    font-size: 0.74rem;
+    background: var(--surface);
+    border: 1px solid var(--pain);
+    border-radius: 8px;
+    padding: 0.4rem 0.55rem;
+    color: var(--ink-soft);
+    text-align: center;
+    line-height: 1.3;
+  }
+  .pchip b {
+    color: var(--pain);
+  }
+  .clash {
+    width: 26px;
+    height: 26px;
+    color: var(--pain);
+    flex-shrink: 0;
+  }
+  .folder {
+    width: 100%;
+    max-width: 200px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .folder .ftab {
+    font-family: ui-monospace, monospace;
+    font-size: 0.68rem;
+    padding: 0.35rem 0.6rem;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-soft);
+    background: var(--bg-2);
+  }
+  .folder .frow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: ui-monospace, monospace;
+    font-size: 0.68rem;
+    padding: 0.32rem 0.6rem;
+    color: var(--faint);
+    border-top: 1px dashed var(--line);
+  }
+  .folder .frow em {
+    font-style: normal;
+    color: var(--pain);
+    font-size: 0.62rem;
+  }
+  .mrep {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .mrep .two {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+  }
+  .repo2 {
+    font-family: ui-monospace, monospace;
+    font-size: 0.68rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 7px;
+    padding: 0.32rem 0.55rem;
+    background: var(--surface);
+    color: var(--ink-soft);
+  }
+  .repo2.off {
+    opacity: 0.5;
+    border-style: dashed;
+    border-color: var(--pain);
+    color: var(--pain);
+  }
+  .mrep .link {
+    font-size: 1rem;
+    color: var(--line-strong);
+  }
+  .mrep .link.cut {
+    color: var(--pain);
+  }
+  .mrep .lk {
+    font-family: ui-monospace, monospace;
+    font-size: 0.64rem;
+    color: var(--pain);
+  }
+
+  /* ---- Architecture overview: large box-and-line diagram ---- */
+  .arch2 {
+    margin-top: 1.3rem;
+    display: flex;
+    flex-direction: column;
+  }
+  .arch2-top {
+    display: flex;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  .arch2-node {
+    border-radius: 16px;
+    padding: 1.1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 122px;
+  }
+  .arch2-node.repos {
+    flex: 1.7;
+    border: 2px solid var(--line-strong);
+    background: var(--bg-2);
+    text-align: center;
+  }
+  .arch2-node.ctx {
+    flex: 1;
+    border: 2px solid var(--accent);
+    background: var(--accent-soft);
+    text-align: center;
+  }
+  .a2-tag {
+    font-family: ui-monospace, monospace;
+    font-size: 0.64rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.8rem;
+  }
+  .arch2-node.ctx .a2-tag {
+    color: var(--accent-ink);
+  }
+  .a2-repos {
+    display: flex;
+    gap: 0.7rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .a2-repo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--surface);
+    border: 1.5px solid var(--line-strong);
+    border-radius: 11px;
+    padding: 0.5rem 1rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.9rem;
+    color: var(--ink-soft);
+  }
+  .a2-ctx-body {
+    font-family: ui-monospace, monospace;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--accent-ink);
+  }
+  .a2-ctx-body .sub {
+    display: block;
+    font-weight: 400;
+    font-size: 0.66rem;
+    color: var(--muted);
+    margin-top: 0.35rem;
+    line-height: 1.5;
+  }
+  .arch2-mid {
+    position: relative;
+    height: 66px;
+  }
+  .arch2-lines {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .arch2-lines path {
+    fill: none;
+    stroke: var(--line-strong);
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
+  }
+  .arch2-lines path.ctxline {
+    stroke: var(--accent);
+    stroke-dasharray: 4 4;
+  }
+  .a2-lbl {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--bg);
+    padding: 0 0.6rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.64rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .arch2-works {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.7rem;
+  }
+  .w5 {
+    border: 2px solid var(--accent);
+    background: var(--surface);
+    border-radius: 14px;
+    padding: 0.75rem 0.75rem 0.55rem;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    min-height: 150px;
+  }
+  .w5-head {
+    font-family: ui-monospace, monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--accent-ink);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.3rem;
+    margin-bottom: 0.55rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px dashed var(--line);
+  }
+  .w5-agent {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    font-weight: 400;
+    font-size: 0.58rem;
+    color: var(--muted);
+  }
+  .w5-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: ui-monospace, monospace;
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+    padding: 0.34rem 0.1rem;
+  }
+  .w5-row .pt {
+    color: var(--accent);
+  }
+  .w5-row + .w5-row {
+    border-top: 1px solid var(--line);
+  }
+
+  /* ---- Mission control board (kanban by stage) ---- */
+  .mc {
+    margin-top: 1.5rem;
+    border: 2px solid var(--line-strong);
+    border-radius: 16px;
+    background: var(--bg-2);
+    overflow: hidden;
+  }
+  .mc-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.1rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+    font-family: ui-monospace, monospace;
+    font-size: 0.74rem;
+    color: var(--muted);
+  }
+  .mc-bar .dots {
+    display: flex;
+    gap: 4px;
+    margin-right: 0.4rem;
+  }
+  .mc-bar .dots i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--line-strong);
+  }
+  .mc-bar .live {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    color: var(--accent-ink);
+  }
+  .mc-cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    padding: 1.1rem;
+  }
+  .mc-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .mc-colhead {
+    font-family: ui-monospace, monospace;
+    font-size: 0.64rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-bottom: 0.45rem;
+    border-bottom: 2px solid var(--line-strong);
+  }
+  .mc-card {
+    border: 2px solid var(--accent);
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 0.75rem 0.8rem;
+    box-shadow: var(--shadow);
+  }
+  .mc-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--accent-ink);
+    margin-bottom: 0.5rem;
+  }
+  .mc-card-head .st {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-weight: 400;
+    font-size: 0.6rem;
+    color: var(--muted);
+  }
+  .mc-svc {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: ui-monospace, monospace;
+    font-size: 0.74rem;
+    color: var(--ink-soft);
+    padding: 0.24rem 0;
+  }
+  .mc-svc .pt {
+    color: var(--accent);
+  }
+
+  /* ---- One work, many repos ---- */
+  .multi {
+    margin-top: 2rem;
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: center;
+    gap: clamp(0.7rem, 3vw, 2rem);
+  }
+  .agent-cap {
+    font-family: ui-monospace, monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 0.55rem;
+    max-width: 96px;
+    line-height: 1.4;
+  }
+  .multi .arrow {
+    font-size: 1.7rem;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .workbox {
+    border: 1.5px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 16px;
+    padding: 1.15rem 1.15rem 1rem;
+    position: relative;
+  }
+  .workbox .wl {
+    position: absolute;
+    top: -0.72rem;
+    left: 1rem;
+    background: var(--accent);
+    color: #fff;
+    font-family: ui-monospace, monospace;
+    font-size: 0.64rem;
+    font-weight: 700;
+    padding: 0.17rem 0.6rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .workbox .wt2 {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 0.6rem 0.85rem;
+    margin-top: 0.55rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+  }
+  .workbox .wt2:first-of-type {
+    margin-top: 0.35rem;
+  }
+  .workbox .wt2 .rn {
+    font-weight: 700;
+  }
+  .workbox .wt2 .br {
+    color: var(--muted);
+    font-size: 0.7rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-left: auto;
+  }
+
+  /* ---- Ports: multiple app instances ---- */
+  .instances {
+    margin-top: 2rem;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  .inst {
+    border: 1px solid var(--line-strong);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .inst .ibar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.7rem;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-2);
+  }
+  .inst .idots {
+    display: flex;
+    gap: 3px;
+  }
+  .inst .idots i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--line-strong);
+  }
+  .inst .url {
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    color: var(--accent);
+  }
+  .inst .live {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.62rem;
+    color: var(--accent-ink);
+  }
+  .inst .ibody {
+    padding: 0.85rem 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    height: 78px;
+  }
+  .inst .ibody span {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--line);
+  }
+  .inst .ibody span.s {
+    width: 60%;
+    background: var(--line-strong);
+  }
+  .inst .feat {
+    font-family: ui-monospace, monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    padding: 0 0.9rem 0.75rem;
+  }
+  .inst .feat b {
+    color: var(--ink-soft);
+    font-weight: 600;
+  }
+
+  /* ---- Demo / live cue ---- */
+  .demo {
+    text-align: center;
+  }
+  .demo-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: ui-monospace, monospace;
+    font-size: 0.8rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #fff;
+    background: var(--accent);
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    margin-bottom: 1.8rem;
+  }
+  .demo-badge .rec {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #fff;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  .demo .lead,
+  .demo .note {
+    margin-inline: auto;
+    text-align: center;
+  }
+  .setup-list {
+    margin: 1.8rem auto 0;
+    max-width: 620px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    text-align: left;
+  }
+  .setup-list li {
+    list-style: none;
+    display: flex;
+    gap: 0.7rem;
+    align-items: flex-start;
+    font-size: 0.98rem;
+    color: var(--ink-soft);
+  }
+  .setup-list li::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: var(--accent);
+    margin-top: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  /* ---- Get started ---- */
+  .starts {
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+    max-width: 560px;
+  }
+  .startrow {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .startnum {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+  }
+  .startrow .cmd {
+    flex: 1;
+    font-size: 1.05rem;
+  }
+
+  /* ---- Two-line worktree row ---- */
+  .wtl {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.45rem 0.7rem;
+    margin-top: 0.4rem;
+    font-family: ui-monospace, monospace;
+  }
+  .wtl .top {
+    color: var(--ink-soft);
+    font-weight: 600;
+    font-size: 0.82rem;
+  }
+  .wtl .meta {
+    color: var(--muted);
+    font-size: 0.72rem;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .wtl .meta .port {
+    color: var(--accent);
+  }
+
+  /* ---- Real screenshot ---- */
+  .shot {
+    margin: 1.6rem auto 0;
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    background: var(--surface);
+    width: fit-content;
+    max-width: 100%;
+  }
+  .shot img {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    max-height: 56vh;
+  }
+
+  /* ---- Lifecycle flow (pause & resume) ---- */
+  .flow {
+    margin-top: 2rem;
+    display: flex;
+    align-items: stretch;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .flow-step {
+    flex: 1;
+    min-width: 210px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 1rem 1.1rem;
+  }
+  .flow-step.good {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  .flow-step .st-h {
+    font-weight: 700;
+    font-size: 0.98rem;
+    margin-bottom: 0.4rem;
+  }
+  .flow-step .st-b {
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+  .flow-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0 0.1rem;
+  }
+  .flow-arrow .a {
+    font-size: 1.3rem;
+    line-height: 1;
+    color: var(--accent);
+  }
+  .flow-arrow code {
+    font-family: ui-monospace, monospace;
+    font-size: 0.66rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  /* ---- Runtime folder tree ---- */
+  .tree {
+    margin-top: 1.7rem;
+    border: 1px solid var(--line-strong);
+    background: var(--bg-2);
+    border-radius: 14px;
+    padding: 1.2rem 1.5rem;
+    font-family: ui-monospace, monospace;
+    font-size: clamp(0.66rem, 1.15vw, 0.86rem);
+    line-height: 1.55;
+    color: var(--ink-soft);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .tree .d {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .tree .c {
+    color: var(--faint);
+  }
+  .tree .k {
+    color: var(--accent);
+  }
+
+  @media (max-width: 760px) {
+    .works,
+    .diy {
+      grid-template-columns: 1fr;
+    }
+    .juggle,
+    .cracks,
+    .instances {
+      grid-template-columns: 1fr;
+    }
+    .arch2-top {
+      flex-direction: column;
+    }
+    .arch2-mid {
+      display: none;
+    }
+    .arch2-works,
+    .mc-cols {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .multi {
+      grid-template-columns: 1fr;
+      justify-items: center;
+    }
+    .multi .arrow {
+      transform: rotate(90deg);
+    }
+    .navzone {
+      width: 15%;
+    }
+    .fan {
+      grid-template-columns: 1fr;
+      justify-items: center;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .slide,
+    .slide.active .inner > *,
+    .progress {
+      transition: none;
+      animation: none;
+    }
+    .pulse,
+    .rec,
+    .pop-mark,
+    .confetti i,
+    .balloon {
+      animation: none;
+    }
+    .confetti,
+    .balloon {
+      display: none;
+    }
+  }
+</style>
+
+<div class="deck" id="deck">
+  <!-- 1 &mdash; Title -->
+  <section class="slide" data-topic="mx">
+    <div class="inner title-wrap">
+      <svg class="title-mark" viewBox="0 0 33 28" fill="none" aria-hidden="true">
+        <g stroke-width="2.6" stroke-linecap="round">
+          <path d="M9 14 L26 6" stroke="#2dd4bf" />
+          <path d="M9 14 H26" stroke="#f0a92a" />
+          <path d="M9 14 L26 22" stroke="#f4667f" />
+        </g>
+        <circle cx="7" cy="14" r="3.6" fill="#8b7ff0" />
+        <circle cx="26" cy="6" r="3.2" fill="#2dd4bf" />
+        <circle cx="26" cy="14" r="3.2" fill="#f0a92a" />
+        <circle cx="26" cy="22" r="3.2" fill="#f4667f" />
+      </svg>
+      <p class="eyebrow">Engineering demo</p>
+      <h1 class="display">Work on parallel features<br />using <span class="accent">coding agents</span></h1>
+      <p class="lead">One engineer. A fleet of agents. Every feature in its own isolated world &mdash; folder, branch, and ports.</p>
+      <div class="metaline">
+        <span><b>npm i -g @rousan/mx</b></span>
+        <span>mx.rousanali.com</span>
+        <span>open source &middot; MIT</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 &mdash; The reality (juggle) -->
+  <section class="slide" data-topic="The reality">
+    <div class="inner">
+      <p class="eyebrow pain">The reality</p>
+      <h2 class="head">You're never working on just <span class="paint">one thing</span></h2>
+      <div class="juggle">
+        <div class="tkt on">
+          <div class="th">feature-a</div>
+          <div class="ts act"><span class="pulse"></span>agent working</div>
+        </div>
+        <div class="tkt">
+          <div class="th">feature-b</div>
+          <div class="ts wait"><span class="stall"></span>waiting on you</div>
+        </div>
+        <div class="tkt">
+          <div class="th">feature-c &middot; urgent</div>
+          <div class="ts wait"><span class="stall"></span>waiting on you</div>
+        </div>
+      </div>
+      <div class="swtax">
+        <div class="cap">and every switch runs the meter</div>
+        <div class="track" style="height: 44px; background: var(--pain-soft); border-color: var(--pain)">
+          <div class="seg" style="left: 1%; width: 17%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">git stash</div>
+          <div class="seg" style="left: 19.5%; width: 20%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">checkout + branch</div>
+          <div class="seg" style="left: 41%; width: 19.5%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">reinstall deps</div>
+          <div class="seg" style="left: 62%; width: 16%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">port clash</div>
+          <div class="seg" style="left: 79.5%; width: 19.5%; background: var(--pain-soft); color: var(--pain); border-color: var(--pain)">rebuild context</div>
+        </div>
+      </div>
+      <p class="note">Three things in flight, but you can only stand in <b>one checkout at a time</b> &mdash; so two of them sit idle, and each hop back costs you ~20 minutes.</p>
+    </div>
+  </section>
+
+  <!-- 3 &mdash; The obvious answer (DIY) -->
+  <section class="slide" data-topic="Roll your own?">
+    <div class="inner">
+      <p class="eyebrow">The obvious answer</p>
+      <h2 class="head">&ldquo;Can't I just use subagents, or a tab per feature?&rdquo;</h2>
+      <div class="diy">
+        <div class="diy-card">
+          <div class="dh">One session, many subagents</div>
+          <div class="sa">
+            <span class="node-chip">agent session</span>
+            <span class="stem"></span>
+            <div class="sa-kids"><span class="k">sub</span><span class="k">sub</span><span class="k">sub</span></div>
+            <span class="stem"></span>
+            <span class="sa-share">all share one checkout</span>
+          </div>
+        </div>
+        <div class="diy-card">
+          <div class="dh">A terminal tab per feature</div>
+          <div class="tabs">
+            <div class="strip">
+              <span class="tb act">feature-a</span>
+              <span class="tb">feature-b</span>
+              <span class="tb">feature-c</span>
+              <span class="tb plus">+</span>
+            </div>
+            <div class="body"><span class="s"></span><span></span><span class="s"></span><span></span></div>
+          </div>
+        </div>
+      </div>
+      <p class="diy-cap">A reasonable instinct. It even works &mdash; <b>for about a day.</b></p>
+    </div>
+  </section>
+
+  <!-- 4 &mdash; Where it cracks -->
+  <section class="slide" data-topic="The cracks">
+    <div class="inner">
+      <p class="eyebrow pain">Where it cracks</p>
+      <h2 class="head">Three cracks show up fast</h2>
+      <div class="cracks">
+        <div class="crack">
+          <div class="cn">01 &middot; Ports</div>
+          <div class="fig">
+            <div class="pc">
+              <span class="pchip">repo-a<br /><b>:3000</b></span>
+              <svg class="clash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 L4 13 h6 l-1 9 L20 10 h-6 z" /></svg>
+              <span class="pchip">repo-a<br /><b>:3000</b></span>
+            </div>
+          </div>
+          <div class="cl">Two dev servers, one port. <b>Address already in use</b> &mdash; you juggle port numbers by hand.</div>
+        </div>
+        <div class="crack">
+          <div class="cn">02 &middot; Hydration</div>
+          <div class="fig">
+            <div class="folder">
+              <div class="ftab">wt/repo-a (fresh)</div>
+              <div class="frow">.env <em>missing</em></div>
+              <div class="frow">node_modules/ <em>missing</em></div>
+              <div class="frow">db seed <em>missing</em></div>
+            </div>
+          </div>
+          <div class="cl">A raw worktree is empty. <b>Copy env, install, seed</b> &mdash; by hand, every single time.</div>
+        </div>
+        <div class="crack">
+          <div class="cn">03 &middot; Multi-repo</div>
+          <div class="fig">
+            <div class="mrep">
+              <span class="node-chip">one feature</span>
+              <span class="link cut">&#8595;</span>
+              <div class="two">
+                <span class="repo2">repo-a</span>
+                <span class="link cut">&#8942;</span>
+                <span class="repo2 off">repo-b</span>
+              </div>
+              <span class="lk">session = one repo</span>
+            </div>
+          </div>
+          <div class="cl">A feature spans two repos, but a session lives in <b>one checkout</b> &mdash; the second repo is out of reach.</div>
+        </div>
+      </div>
+      <p class="note">And it gets worse over time: <b>no lifecycle</b> to archive or recover a feature, <b>no shared memory</b> between them, and a pile of tabs, folders, and branches you track <b>in your head</b>.</p>
+    </div>
+  </section>
+
+  <!-- 5 &mdash; The reveal (celebration) -->
+  <section class="slide reveal" data-topic="The answer">
+    <div class="balloon b1"></div>
+    <div class="balloon b2"></div>
+    <div class="balloon b3"></div>
+    <div class="balloon b4"></div>
+    <div class="confetti" id="confetti"></div>
+    <div class="inner title-wrap">
+      <svg class="pop-mark" viewBox="0 0 33 28" fill="none" aria-hidden="true">
+        <g stroke-width="2.6" stroke-linecap="round">
+          <path d="M9 14 L26 6" stroke="#2dd4bf" />
+          <path d="M9 14 H26" stroke="#f0a92a" />
+          <path d="M9 14 L26 22" stroke="#f4667f" />
+        </g>
+        <circle cx="7" cy="14" r="3.6" fill="#8b7ff0" />
+        <circle cx="26" cy="6" r="3.2" fill="#2dd4bf" />
+        <circle cx="26" cy="14" r="3.2" fill="#f0a92a" />
+        <circle cx="26" cy="22" r="3.2" fill="#f4667f" />
+      </svg>
+      <p class="eyebrow">The answer</p>
+      <h1 class="display">Meet <span class="accent">mx</span></h1>
+      <p class="lead">The one tool that makes all three cracks disappear.</p>
+    </div>
+  </section>
+
+  <!-- 6 &mdash; What is mx: the whole system in one diagram -->
+  <section class="slide" data-topic="What is mx">
+    <div class="inner" style="max-width: 1200px">
+      <p class="eyebrow">What is mx</p>
+      <h2 class="head">The whole system in one picture</h2>
+      <div class="arch2">
+        <div class="arch2-top">
+          <div class="arch2-node repos">
+            <div class="a2-tag">pristine repos &middot; cloned once, read-only</div>
+            <div class="a2-repos">
+              <span class="a2-repo"><span class="dot" style="background: var(--p-teal)"></span>repo-a</span>
+              <span class="a2-repo"><span class="dot" style="background: var(--p-violet)"></span>repo-b</span>
+              <span class="a2-repo"><span class="dot" style="background: var(--p-amber)"></span>repo-c</span>
+            </div>
+          </div>
+          <div class="arch2-node ctx">
+            <div class="a2-tag">context registry</div>
+            <div class="a2-ctx-body">shared memory<span class="sub">findings &middot; conventions &middot; runbooks<br />read by every agent</span></div>
+          </div>
+        </div>
+        <div class="arch2-mid">
+          <svg class="arch2-lines" viewBox="0 0 1000 66" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M320 0 V33" />
+            <path class="ctxline" d="M820 0 V33" />
+            <path d="M100 33 H900" />
+            <path d="M100 33 V66" />
+            <path d="M300 33 V66" />
+            <path d="M500 33 V66" />
+            <path d="M700 33 V66" />
+            <path d="M900 33 V66" />
+          </svg>
+          <span class="a2-lbl">worktrees fork from repos &middot; every agent shares the context</span>
+        </div>
+        <div class="arch2-works">
+          <div class="w5">
+            <div class="w5-head">feature-a<span class="w5-agent"><span class="pulse"></span>1 agent</span></div>
+            <div class="w5-row"><span>repo-a</span><span class="pt">:3001</span></div>
+            <div class="w5-row"><span>repo-b</span><span class="pt">:3002</span></div>
+          </div>
+          <div class="w5">
+            <div class="w5-head">feature-b<span class="w5-agent"><span class="pulse"></span>1 agent</span></div>
+            <div class="w5-row"><span>repo-b</span><span class="pt">:3003</span></div>
+          </div>
+          <div class="w5">
+            <div class="w5-head">feature-c<span class="w5-agent"><span class="pulse"></span>1 agent</span></div>
+            <div class="w5-row"><span>repo-a</span><span class="pt">:3007</span></div>
+            <div class="w5-row"><span>repo-c</span><span class="pt">:3008</span></div>
+          </div>
+          <div class="w5">
+            <div class="w5-head">feature-d<span class="w5-agent"><span class="pulse"></span>1 agent</span></div>
+            <div class="w5-row"><span>repo-c</span><span class="pt">:3009</span></div>
+          </div>
+          <div class="w5">
+            <div class="w5-head">feature-e<span class="w5-agent"><span class="pulse"></span>1 agent</span></div>
+            <div class="w5-row"><span>repo-a</span><span class="pt">:3011</span></div>
+            <div class="w5-row"><span>repo-b</span><span class="pt">:3012</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>Repos</b> up top (cloned once, read-only), a <b>context registry</b> in the corner (shared memory every agent reads), and one <b>work</b> per feature &mdash; each with its own agent and a worktree + port per repo it touches.</p>
+    </div>
+  </section>
+
+  <!-- 7 &mdash; Mission control (board by stage) -->
+  <section class="slide" data-topic="Mission control">
+    <div class="inner" style="max-width: 1200px">
+      <p class="eyebrow">Mission control</p>
+      <h2 class="head">One view of the whole fleet</h2>
+      <div class="mc">
+        <div class="mc-bar">
+          <span class="dots"><i></i><i></i><i></i></span>
+          <span>mx mission-control &middot; localhost:7777</span>
+          <span class="live"><span class="pulse"></span>live</span>
+        </div>
+        <div class="mc-cols">
+          <div class="mc-col">
+            <div class="mc-colhead">In progress</div>
+            <div class="mc-card">
+              <div class="mc-card-head">feature-a<span class="st"><span class="dot" style="background: var(--p-teal)"></span>active</span></div>
+              <div class="mc-svc"><span>repo-a</span><span class="pt">:3001</span></div>
+              <div class="mc-svc"><span>repo-b</span><span class="pt">:3002</span></div>
+            </div>
+            <div class="mc-card">
+              <div class="mc-card-head">feature-c<span class="st"><span class="dot" style="background: var(--p-teal)"></span>active</span></div>
+              <div class="mc-svc"><span>repo-a</span><span class="pt">:3007</span></div>
+              <div class="mc-svc"><span>repo-c</span><span class="pt">:3008</span></div>
+            </div>
+          </div>
+          <div class="mc-col">
+            <div class="mc-colhead">In review</div>
+            <div class="mc-card">
+              <div class="mc-card-head">feature-b<span class="st"><span class="dot" style="background: var(--p-amber)"></span>review</span></div>
+              <div class="mc-svc"><span>repo-b</span><span class="pt">:3003</span></div>
+            </div>
+          </div>
+          <div class="mc-col">
+            <div class="mc-colhead">PR review</div>
+            <div class="mc-card">
+              <div class="mc-card-head">feature-d<span class="st"><span class="dot" style="background: var(--p-violet)"></span>waiting</span></div>
+              <div class="mc-svc"><span>repo-c</span><span class="pt">:3009</span></div>
+            </div>
+            <div class="mc-card">
+              <div class="mc-card-head">feature-e<span class="st"><span class="dot" style="background: var(--p-violet)"></span>waiting</span></div>
+              <div class="mc-svc"><span>repo-a</span><span class="pt">:3011</span></div>
+              <div class="mc-svc"><span>repo-b</span><span class="pt">:3012</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="note">Every feature and its ports, grouped by stage &mdash; one place to see the whole fleet: what's <b>in progress</b>, <b>in review</b>, and up for <b>PR</b>. Nothing lost in a forgotten tab.</p>
+    </div>
+  </section>
+
+  <!-- 8 &mdash; Live dashboard (the real thing) -->
+  <section class="slide" data-topic="Live dashboard">
+    <div class="inner" style="max-width: 1220px; text-align: center">
+      <p class="eyebrow">mx mission-control</p>
+      <h2 class="head">See the whole runtime, live</h2>
+      <div class="shot"><img src="/deck/dashboard-shot.jpg" alt="mx mission-control dashboard: each work with its services, ports, and live localhost URLs" /></div>
+      <p class="note" style="margin-inline: auto"><code class="inline">mx mission-control</code> starts a local, read-only web dashboard &mdash; every work with its services, <b>allocated ports</b>, and live <code class="inline">localhost</code> URLs, plus repo and work <b>health</b>, streamed live.</p>
+    </div>
+  </section>
+
+  <!-- 9 &mdash; My setup (live, hands-on first) -->
+  <section class="slide" data-topic="Live &middot; my setup">
+    <div class="inner demo">
+      <span class="demo-badge"><span class="rec"></span>Live &middot; my setup</span>
+      <h2 class="head">How I actually run mx</h2>
+      <ul class="setup-list">
+        <li>One fullscreen macOS Space per feature &mdash; <b>terminal + editor split side by side</b>.</li>
+        <li>Coding agent in the terminal (auto mode); dev server &amp; git in another tab.</li>
+        <li>Three-finger swipe between features; Mission Control for the whole board.</li>
+        <li>Grouped by stage with <code class="inline">mx divider</code> &mdash; in progress, in review, shipped.</li>
+      </ul>
+      <p class="note">Let me switch over and show you my real setup &mdash; then we'll break down each piece.</p>
+    </div>
+  </section>
+
+  <!-- 10 &mdash; Mental model -->
+  <section class="slide" data-topic="How it's organized">
+    <div class="inner">
+      <p class="eyebrow">How it's organized</p>
+      <h2 class="head">Four words, and you've got it</h2>
+      <div class="model">
+        <div class="rt-label"><b>Runtime</b><span class="mono">~/mx &mdash; one folder for everything</span></div>
+        <div class="rowlabel">Repos &middot; cloned once, read-only</div>
+        <div class="repos">
+          <span class="repo"><span class="dot" style="background: var(--p-teal)"></span>repo-a</span>
+          <span class="repo"><span class="dot" style="background: var(--p-violet)"></span>repo-b</span>
+          <span class="repo"><span class="dot" style="background: var(--p-amber)"></span>repo-c</span>
+          <span class="repo"><span class="dot" style="background: var(--p-rose)"></span>repo-d</span>
+        </div>
+        <div class="rowlabel">Works &middot; one per feature &mdash; each can span several repos</div>
+        <div class="works">
+          <div class="work">
+            <div class="wname">feature-a</div>
+            <div class="wtl"><div class="top">wt/repo-a</div><div class="meta">feature-a &middot; <span class="port">:3001</span></div></div>
+            <div class="wtl"><div class="top">wt/repo-b</div><div class="meta">feature-a &middot; <span class="port">:3002</span></div></div>
+          </div>
+          <div class="work">
+            <div class="wname">feature-b</div>
+            <div class="wtl"><div class="top">wt/repo-b</div><div class="meta">feature-b &middot; <span class="port">:3003</span></div></div>
+            <div class="wtl"><div class="top">wt/repo-c</div><div class="meta">feature-b &middot; <span class="port">:3004</span></div></div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><b>Runtime</b> holds it all &middot; <b>Repo</b> is a clone &middot; <b>Work</b> is a feature &middot; <b>Worktree</b> (<code class="inline">wt/&lt;repo&gt;</code>) is a checkout you code in &mdash; a work can have <b>one per repo</b>.</p>
+    </div>
+  </section>
+
+  <!-- 8 &mdash; Runtime folder structure -->
+  <section class="slide" data-topic="On disk">
+    <div class="inner">
+      <p class="eyebrow">On disk</p>
+      <h2 class="head">The whole runtime is one folder</h2>
+      <div class="tree"><span class="d">~/mx/</span>                       <span class="c">the runtime &mdash; one folder</span>
+&#9500;&#9472;&#9472; <span class="d">repos/</span>                  <span class="c">pristine clones (read-only)</span>
+&#9474;   &#9492;&#9472;&#9472; repo-a/git &middot; repo-b/git &middot; repo-c/git &middot; repo-d/git
+&#9500;&#9472;&#9472; <span class="d">works/</span>                  <span class="c">one folder per feature</span>
+&#9474;   &#9500;&#9472;&#9472; <span class="d">feature-a/</span>
+&#9474;   &#9474;   &#9500;&#9472;&#9472; wt/repo-a &middot; wt/repo-b  <span class="c">a worktree per repo</span>
+&#9474;   &#9474;   &#9500;&#9472;&#9472; sessions/          <span class="c">session summaries</span>
+&#9474;   &#9474;   &#9492;&#9472;&#9472; <span class="k">work.json</span>          <span class="c">manifest (mx-owned)</span>
+&#9474;   &#9492;&#9472;&#9472; <span class="d">feature-b/</span> &middot; feature-c/ &middot; feature-d/  <span class="c">&hellip;more</span>
+&#9500;&#9472;&#9472; <span class="d">context/</span>                <span class="c">shared memory &middot; institutional knowledge</span>
+&#9474;   &#9500;&#9472;&#9472; <span class="k">INDEX.json</span>          <span class="c">the searchable index</span>
+&#9474;   &#9500;&#9472;&#9472; auth/tokens.md      <span class="c">how the system works</span>
+&#9474;   &#9500;&#9472;&#9472; conventions/style.md  <span class="c">team rules &amp; conventions</span>
+&#9474;   &#9492;&#9472;&#9472; runbooks/deploy.md  <span class="c">step-by-step runbooks</span>
+&#9500;&#9472;&#9472; <span class="d">hooks/</span>                  <span class="c">lifecycle hooks</span>
+&#9474;   &#9500;&#9472;&#9472; post-worktree-create  <span class="c">hydrate: cp .env, install, seed</span>
+&#9474;   &#9492;&#9472;&#9472; session-prompt &middot; work-health &middot; repo-fetch  <span class="c">&hellip;</span>
+&#9500;&#9472;&#9472; <span class="d">bin/</span>   dcs &middot; lcs        <span class="c">runtime-wide CLI helpers</span>
+&#9492;&#9472;&#9472; <span class="d">files/</span> creds.env &middot; clusters.json  <span class="c">shared operational values</span></div>
+      <p class="note"><b>mx owns the structure</b> &mdash; <code class="inline">work.json</code>, the editor workspace, and ports are written only through mx commands. <code class="inline">repos/</code> stay read-only; everything you build lives in <code class="inline">works/&lt;feature&gt;/wt/</code>.</p>
+    </div>
+  </section>
+
+  <!-- 9 &mdash; The unlock -->
+  <section class="slide" data-topic="Parallel agents">
+    <div class="inner">
+      <p class="eyebrow">Parallel agents</p>
+      <h2 class="head">One agent per checkout &rarr; a fleet in parallel</h2>
+      <div class="fan">
+        <div class="fan-node">you</div>
+        <div class="fan-lines">
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-teal)"></span>
+            <div class="fan-card"><span class="fname">feature-a</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-amber)"></span>
+            <div class="fan-card"><span class="fname">feature-b</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-rose)"></span>
+            <div class="fan-card"><span class="fname">feature-c</span><span class="ftag"><span class="pulse"></span>agent &middot; working</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="note">Each agent lives in its own worktree, branch, and ports &mdash; so a fleet works at once, and none of them step on each other.</p>
+    </div>
+  </section>
+
+  <!-- 10 &mdash; Worktrees -->
+  <section class="slide" data-topic="Feature &middot; worktrees">
+    <div class="inner">
+      <p class="eyebrow">Feature &middot; worktrees</p>
+      <h2 class="head">Many working copies, one clone</h2>
+      <div class="fan">
+        <div class="fan-box">
+          <b>repos/repo-a/git</b>
+          <div class="sub">pristine clone &middot; read-only</div>
+        </div>
+        <div class="fan-lines">
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-teal)"></span>
+            <div class="fan-card"><span class="fname mono">wt/repo-a</span><span class="ftag">feature-a</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-amber)"></span>
+            <div class="fan-card"><span class="fname mono">wt/repo-a</span><span class="ftag">feature-b</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-rose)"></span>
+            <div class="fan-card"><span class="fname mono">wt/repo-a</span><span class="ftag">feature-c</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="note">git worktrees let many branches be checked out at once, in separate folders, <b>sharing one <code class="inline">.git</code> object store</b> &mdash; full isolation with no duplicated repo on disk. mx creates and tracks them for you (<code class="inline">mx work new</code> / <code class="inline">worktree add</code>).</p>
+    </div>
+  </section>
+
+  <!-- 11 &mdash; One work, many repos (rebuts crack #3) -->
+  <section class="slide" data-topic="Feature &middot; repos">
+    <div class="inner">
+      <p class="eyebrow">Feature &middot; repos</p>
+      <h2 class="head">One feature, many repos &mdash; one agent covers all</h2>
+      <div class="multi">
+        <div>
+          <div class="fan-node">one<br />agent</div>
+          <div class="agent-cap">works across both repos</div>
+        </div>
+        <span class="arrow">&rarr;</span>
+        <div class="workbox">
+          <span class="wl">1 work &middot; feature-a</span>
+          <div class="wt2"><span class="rn">wt/repo-a</span><span class="br">branch: feature-a</span></div>
+          <div class="wt2"><span class="rn">wt/repo-b</span><span class="br">branch: feature-a</span></div>
+        </div>
+      </div>
+      <p class="note"><span class="cb">The one-session-one-repo wall, gone.</span> A work groups a worktree <b>per repo</b> under one feature, so a single agent session edits across all of them &mdash; the change spanning <b>repo-a + repo-b</b> that a per-repo tab simply can't make together.</p>
+    </div>
+  </section>
+
+  <!-- 12 &mdash; Ports (rebuts crack #1) -->
+  <section class="slide" data-topic="Feature &middot; ports">
+    <div class="inner">
+      <p class="eyebrow">Feature &middot; ports</p>
+      <h2 class="head">Run the same app many times, side by side</h2>
+      <div class="instances">
+        <div class="inst">
+          <div class="ibar"><span class="idots"><i></i><i></i><i></i></span><span class="url">localhost:3002</span><span class="live"><span class="pulse"></span>up</span></div>
+          <div class="ibody"><span class="s"></span><span></span><span></span><span class="s"></span></div>
+          <div class="feat">repo-a &middot; <b>feature-a</b></div>
+        </div>
+        <div class="inst">
+          <div class="ibar"><span class="idots"><i></i><i></i><i></i></span><span class="url">localhost:3004</span><span class="live"><span class="pulse"></span>up</span></div>
+          <div class="ibody"><span></span><span class="s"></span><span></span><span></span></div>
+          <div class="feat">repo-a &middot; <b>feature-b</b></div>
+        </div>
+        <div class="inst">
+          <div class="ibar"><span class="idots"><i></i><i></i><i></i></span><span class="url">localhost:3006</span><span class="live"><span class="pulse"></span>up</span></div>
+          <div class="ibody"><span class="s"></span><span></span><span class="s"></span><span></span></div>
+          <div class="feat">repo-a &middot; <b>feature-c</b></div>
+        </div>
+      </div>
+      <p class="note"><span class="cb">The port clash, gone.</span> mx allocates each feature its own ports, <b>unique across the whole runtime</b> &mdash; so the very same app (<b>repo-a</b>) runs <b>three times at once</b>, one per feature, each with its own live URL. <code class="inline">mx work port set</code> hands out a free one; the ports board shows who owns what.</p>
+    </div>
+  </section>
+
+  <!-- 13 &mdash; Hooks / hydrate (rebuts crack #2) -->
+  <section class="slide" data-topic="Feature &middot; hooks">
+    <div class="inner">
+      <p class="eyebrow">Feature &middot; hooks</p>
+      <h2 class="head">A fresh worktree, ready to run</h2>
+      <div class="fan">
+        <div class="fan-box">
+          <b>new worktree</b>
+          <div class="sub">mx work new / worktree add</div>
+        </div>
+        <div class="fan-lines">
+          <div class="fan-branch"><span class="fan-connector" style="background: var(--p-teal)"></span><div class="fan-card"><span class="fname mono">cp .env</span><span class="ftag">config in place</span></div></div>
+          <div class="fan-branch"><span class="fan-connector" style="background: var(--p-amber)"></span><div class="fan-card"><span class="fname mono">pnpm install</span><span class="ftag">deps ready</span></div></div>
+          <div class="fan-branch"><span class="fan-connector" style="background: var(--p-rose)"></span><div class="fan-card"><span class="fname mono">seed the db</span><span class="ftag">data ready</span></div></div>
+          <div class="fan-branch"><span class="fan-connector" style="background: var(--p-violet)"></span><div class="fan-card"><span class="fname mono">allocate ports</span><span class="ftag">no clashes</span></div></div>
+        </div>
+      </div>
+      <p class="note"><span class="cb">The hand-hydration, automated.</span> The moment a worktree exists, mx fires the <code class="inline">post-worktree-create</code> hook &mdash; you decide what &ldquo;ready&rdquo; means (copy env, install, seed, &hellip;), in any language. It's one hub of lifecycle hooks: worktree create/remove, work archive/unarchive, repo fetch, health, and session-prompt.</p>
+    </div>
+  </section>
+
+  <!-- 14 &mdash; Context -->
+  <section class="slide" data-topic="Feature &middot; context">
+    <div class="inner">
+      <p class="eyebrow">Feature &middot; context</p>
+      <h2 class="head">Shared memory across every feature</h2>
+      <div class="fan">
+        <div class="fan-box">
+          <b>context/</b>
+          <div class="sub">INDEX.json &middot; 40 entries</div>
+          <div class="idx">auth/tokens<br />conventions/code-style<br />runbooks/deploy<br />&hellip;</div>
+        </div>
+        <div class="fan-lines">
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-teal)"></span>
+            <div class="fan-card"><span class="fname">feature-a</span><span class="ftag">agent reads context</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-amber)"></span>
+            <div class="fan-card"><span class="fname">feature-b</span><span class="ftag">agent reads context</span></div>
+          </div>
+          <div class="fan-branch">
+            <span class="fan-connector" style="background: var(--p-rose)"></span>
+            <div class="fan-card"><span class="fname">feature-c</span><span class="ftag">agent reads context</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="note"><span class="cb">The shared memory you didn't have.</span> A runtime-wide registry of findings, decisions, conventions, and runbooks &mdash; indexed in <code class="inline">INDEX.json</code>. Every feature's agent reads the <b>same institutional memory</b>, so a hard-won discovery in one feature isn't re-learned in the next.</p>
+    </div>
+  </section>
+
+  <!-- 15 &mdash; Real screenshot -->
+  <section class="slide" data-topic="What it looks like">
+    <div class="inner" style="max-width: 1220px; text-align: center">
+      <p class="eyebrow">What one feature looks like</p>
+      <h2 class="head">One feature, one Space</h2>
+      <div class="shot"><img src="/deck/setup-shot.jpg" alt="A feature Space: a coding agent in auto mode on the left, the editor on the right" /></div>
+      <p class="note" style="margin-inline: auto">A real feature Space: the coding agent in <b>auto mode</b> (left) working one feature across two repos, the editor beside it. Terminal left, editor right &mdash; one fullscreen macOS Space per feature.</p>
+    </div>
+  </section>
+
+  <!-- 16 &mdash; Mission control board -->
+  <section class="slide" data-topic="Your board">
+    <div class="inner">
+      <p class="eyebrow">Your board</p>
+      <h2 class="head">One Space per feature, grouped by stage</h2>
+      <div class="board"><div class="board-row" id="boardRow"></div></div>
+      <p class="note"><span class="cb">The clutter, organized.</span> Every feature is its own macOS Space, grouped by stage with <code class="inline">mx divider</code> &mdash; so you always know what's in progress, in review, and shipped. Swipe to switch; nothing is ever torn down.</p>
+    </div>
+  </section>
+
+  <!-- Pause & resume -->
+  <section class="slide" data-topic="Pause &amp; resume">
+    <div class="inner">
+      <p class="eyebrow">Memory &amp; lifecycle</p>
+      <h2 class="head">Pause a feature, pick it up later</h2>
+      <div class="flow">
+        <div class="flow-step good">
+          <div class="st-h">Active</div>
+          <div class="st-b">Worktrees, ports, an agent session &mdash; and <code class="inline">sessions/*.md</code> notes as you go.</div>
+        </div>
+        <div class="flow-arrow"><span class="a">&rarr;</span><code>mx work archive</code></div>
+        <div class="flow-step">
+          <div class="st-h">Archived</div>
+          <div class="st-b">Worktrees &amp; ports freed. Branches and session summaries kept &mdash; recoverable.</div>
+        </div>
+        <div class="flow-arrow"><span class="a">&rarr;</span><code>mx work unarchive</code></div>
+        <div class="flow-step good">
+          <div class="st-h">Back to work</div>
+          <div class="st-b">Worktrees re-created; continue right where you left off.</div>
+        </div>
+      </div>
+      <p class="note"><span class="cb">The lifecycle you were missing.</span> Every work keeps <b>session summaries</b> (<code class="inline">sessions/*.md</code>) &mdash; a distilled record of each session, so you or a fresh agent can resume cold. <code class="inline">mx work archive</code> frees the ports and worktrees but keeps the branches and notes; <code class="inline">mx work unarchive</code> brings it all back.</p>
+    </div>
+  </section>
+
+  <!-- 19 &mdash; Impact -->
+  <section class="slide" data-topic="The payoff">
+    <div class="inner">
+      <p class="eyebrow">The payoff</p>
+      <h2 class="head">Serial &rarr; parallel</h2>
+      <div class="chart">
+        <div class="gantt">
+          <div class="glabel"><b>The old way</b><span>features one after another</span></div>
+          <div class="track">
+            <div class="seg" style="left: 1%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">feature-a</div>
+            <div class="seg" style="left: 25.5%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">feature-b</div>
+            <div class="seg" style="left: 50%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">feature-c</div>
+            <div class="seg" style="left: 74%; width: 23.5%; background: var(--pain-soft); border-color: var(--pain)">feature-d</div>
+          </div>
+        </div>
+        <div class="gantt">
+          <div class="glabel"><b>With mx</b><span>agents in parallel</span></div>
+          <div class="track" style="height: 54px">
+            <div class="seg" style="left: 1%; width: 23.5%; top: 6px; height: 8px; background: var(--accent-soft); border-color: var(--accent)"></div>
+            <div class="seg" style="left: 1%; width: 23.5%; top: 17px; height: 8px; background: var(--accent-soft); border-color: var(--accent)"></div>
+            <div class="seg" style="left: 1%; width: 23.5%; top: 28px; height: 8px; background: var(--accent-soft); border-color: var(--accent)"></div>
+            <div class="seg" style="left: 1%; width: 23.5%; top: 39px; height: 8px; background: var(--accent-soft); border-color: var(--accent)"></div>
+          </div>
+          <div class="axis"><span>start</span><span class="accent">done in ~1/4 the wall-clock</span></div>
+        </div>
+      </div>
+      <p class="note">More shipped per engineer &mdash; parallel instead of serial, and it compounds as agents do more of the typing.</p>
+    </div>
+  </section>
+
+  <!-- 20 &mdash; Get started -->
+  <section class="slide" data-topic="Try it">
+    <div class="inner">
+      <p class="eyebrow">Try it</p>
+      <h2 class="head">Two commands in</h2>
+      <div class="starts">
+        <div class="startrow"><span class="startnum">1</span><div class="cmd"><span class="dol">$</span>npm i -g @rousan/mx</div></div>
+        <div class="startrow"><span class="startnum">2</span><div class="cmd"><span class="dol">$</span>mx init</div></div>
+      </div>
+      <p class="note">Then <code class="inline">mx repo add</code> your repos and <code class="inline">mx work new</code> your first feature. Full guide, mental model, and command reference: <b class="accent">mx.rousanali.com</b></p>
+    </div>
+  </section>
+
+  <!-- Thanks -->
+  <section class="slide" data-topic="Thanks">
+    <div class="inner title-wrap">
+      <svg class="title-mark" viewBox="0 0 33 28" fill="none" aria-hidden="true">
+        <g stroke-width="2.6" stroke-linecap="round">
+          <path d="M9 14 L26 6" stroke="#2dd4bf" />
+          <path d="M9 14 H26" stroke="#f0a92a" />
+          <path d="M9 14 L26 22" stroke="#f4667f" />
+        </g>
+        <circle cx="7" cy="14" r="3.6" fill="#8b7ff0" />
+        <circle cx="26" cy="6" r="3.2" fill="#2dd4bf" />
+        <circle cx="26" cy="14" r="3.2" fill="#f0a92a" />
+        <circle cx="26" cy="22" r="3.2" fill="#f4667f" />
+      </svg>
+      <h2 class="head">Give every feature its own desk.</h2>
+      <p class="lead">Questions? Let's run one live.</p>
+      <div class="metaline">
+        <span><b>npm i -g @rousan/mx</b></span>
+        <span>mx.rousanali.com</span>
+        <span>github.com/rousan/mx</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="chrome top">
+  <div class="brand">
+    <svg viewBox="0 0 33 28" fill="none" aria-hidden="true">
+      <g stroke-width="2.6" stroke-linecap="round">
+        <path d="M9 14 L26 6" stroke="#2dd4bf" />
+        <path d="M9 14 H26" stroke="#f0a92a" />
+        <path d="M9 14 L26 22" stroke="#f4667f" />
+      </g>
+      <circle cx="7" cy="14" r="3.6" fill="#8b7ff0" />
+      <circle cx="26" cy="6" r="3.2" fill="#2dd4bf" />
+      <circle cx="26" cy="14" r="3.2" fill="#f0a92a" />
+      <circle cx="26" cy="22" r="3.2" fill="#f4667f" />
+    </svg>
+    <span>mx</span>
+  </div>
+  <button class="tbtn" id="themeBtn" aria-label="Toggle theme" title="Toggle theme (t)">
+    <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></svg>
+  </button>
+</div>
+
+<div class="chrome bottom">
+  <span class="topic" id="topicLabel">mx</span>
+  <span class="hint">&larr; &rarr; or space &middot; <span class="kbd">F</span> fullscreen &middot; <span class="kbd">T</span> theme</span>
+  <span class="count" id="counter">1 / 23</span>
+</div>
+
+<div class="progress" id="progress"></div>
+<div class="navzone left" id="navLeft" aria-hidden="true"></div>
+<div class="navzone right" id="navRight" aria-hidden="true"></div>
+
+<script>
+  (function () {
+    var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+    var total = slides.length;
+    var i = 0;
+    var counter = document.getElementById('counter');
+    var topicLabel = document.getElementById('topicLabel');
+    var progress = document.getElementById('progress');
+
+    // Build the Mission Control board (dividers + feature-Space thumbnails).
+    var board = [
+      { d: 'IN PROGRESS' },
+      { s: 4 },
+      { d: 'IN REVIEWS' },
+      { s: 2 },
+      { d: 'PR REVIEWS' },
+      { s: 2 },
+    ];
+    var row = document.getElementById('boardRow');
+    board.forEach(function (item) {
+      if (item.d) {
+        var el = document.createElement('div');
+        el.className = 'divider';
+        el.textContent = item.d;
+        row.appendChild(el);
+      } else {
+        for (var k = 0; k < item.s; k++) {
+          var t = document.createElement('div');
+          t.className = 'thumb';
+          t.innerHTML =
+            '<div class="bar"><i></i><i></i></div>' +
+            '<div class="panes"><div><span class="s"></span><span></span><span></span></div>' +
+            '<div><span></span><span class="s"></span><span></span></div></div>';
+          row.appendChild(t);
+        }
+      }
+    });
+
+    // Build the confetti burst for the reveal slide (random spread + color + delay).
+    var cc = document.getElementById('confetti');
+    if (cc) {
+      var cols = ['var(--p-teal)', 'var(--p-amber)', 'var(--p-rose)', 'var(--p-violet)', 'var(--accent)'];
+      for (var c = 0; c < 42; c++) {
+        var p = document.createElement('i');
+        var ang = Math.random() * Math.PI * 2;
+        var dist = 130 + Math.random() * 440;
+        var dx = Math.cos(ang) * dist;
+        var dy = Math.sin(ang) * dist * 0.7 + Math.random() * 170;
+        p.style.setProperty('--dx', dx.toFixed(0) + 'px');
+        p.style.setProperty('--dy', dy.toFixed(0) + 'px');
+        p.style.setProperty('--rot', (Math.random() * 720 - 360).toFixed(0) + 'deg');
+        p.style.background = cols[c % cols.length];
+        p.style.animationDelay = (Math.random() * 0.28).toFixed(2) + 's';
+        p.style.width = (6 + Math.random() * 6).toFixed(0) + 'px';
+        p.style.height = (9 + Math.random() * 8).toFixed(0) + 'px';
+        cc.appendChild(p);
+      }
+    }
+
+    function show(n) {
+      i = Math.max(0, Math.min(total - 1, n));
+      slides.forEach(function (s, idx) {
+        s.classList.toggle('active', idx === i);
+      });
+      counter.textContent = i + 1 + ' / ' + total;
+      topicLabel.textContent = slides[i].getAttribute('data-topic') || 'mx';
+      progress.style.width = ((i + 1) / total) * 100 + '%';
+      history.replaceState(null, '', '#' + (i + 1));
+    }
+    function next() {
+      show(i + 1);
+    }
+    function prev() {
+      show(i - 1);
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        e.preventDefault();
+        next();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        prev();
+      } else if (e.key === 'Home') {
+        show(0);
+      } else if (e.key === 'End') {
+        show(total - 1);
+      } else if (e.key === 'f' || e.key === 'F') {
+        if (!document.fullscreenElement) {
+          if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+        } else if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      } else if (e.key === 't' || e.key === 'T') {
+        toggleTheme();
+      }
+    });
+    document.getElementById('navRight').addEventListener('click', next);
+    document.getElementById('navLeft').addEventListener('click', prev);
+
+    var sun =
+      '<circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />';
+    var moon = '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5Z" />';
+    var themeIcon = document.getElementById('themeIcon');
+    function currentDark() {
+      var attr = document.documentElement.getAttribute('data-theme');
+      if (attr) return attr === 'dark';
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    function paintIcon() {
+      themeIcon.innerHTML = currentDark() ? sun : moon;
+    }
+    function toggleTheme() {
+      var dark = currentDark();
+      document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+      paintIcon();
+    }
+    document.getElementById('themeBtn').addEventListener('click', toggleTheme);
+    paintIcon();
+
+    var start = parseInt((location.hash || '').replace('#', ''), 10);
+    show(isNaN(start) ? 0 : start - 1);
+  })();
+</script>
+
+</body>
+</html>

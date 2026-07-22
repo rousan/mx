@@ -68,6 +68,9 @@ export function Footer() {
             >
               Docs
             </a>
+            <a href="/deck" className="text-muted transition-colors hover:text-ink">
+              Deck
+            </a>
           </div>
         </div>
 
