@@ -1,0 +1,15 @@
+{
+  "name": "@mx/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "mx public user documentation — the VitePress docs site served at https://mx.rousanali.com/docs. Built to apps/docs/.vitepress/dist and copied into the landing's GitHub Pages artifact under /docs. Distinct from the repo's docs/ folder, which is the internal contributor reference.",
+  "scripts": {
+    "dev": "vitepress dev .",
+    "build": "vitepress build .",
+    "preview": "vitepress preview ."
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}

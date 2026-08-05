@@ -14,9 +14,12 @@ npm/LICENSE
 # dependencies
 node_modules/
 
-# VitePress docs-site build output + cache
+# VitePress build output + cache — internal reference site (docs/) and the
+# public user-docs site (apps/docs/).
 docs/.vitepress/dist/
 docs/.vitepress/cache/
+apps/docs/.vitepress/dist/
+apps/docs/.vitepress/cache/
 
 # landing + docs site build output
 apps/landing/dist/

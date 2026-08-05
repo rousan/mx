@@ -1,0 +1,53 @@
+/*
+ * Repaint VitePress's default theme to match the mx landing site: a calm,
+ * mostly-monochrome base with a single teal accent (teal-600 on light, teal-400
+ * on dark) drawn from the Tailwind palette, matching apps/landing/src/index.css.
+ * Only brand + a few surface tokens are overridden; the rest of the default
+ * theme's structure and spacing is kept.
+ */
+
+:root {
+  /* Teal brand ramp (light). brand-1 = readable link, brand-3 = solid button. */
+  --vp-c-brand-1: #0f766e; /* teal-700 */
+  --vp-c-brand-2: #0d9488; /* teal-600 */
+  --vp-c-brand-3: #0d9488; /* teal-600 (buttons, active) */
+  --vp-c-brand-soft: rgba(20, 184, 166, 0.12);
+  --vp-c-brand-softer: rgba(20, 184, 166, 0.08);
+
+  /* Slightly warmer-neutral surfaces to echo the landing. */
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #f7f7f8;
+  --vp-c-bg-soft: #f4f4f5;
+
+  /* Home hero: ink wordmark, teal highlight on the tagline actions. */
+  --vp-home-hero-name-color: #0d9488;
+  --vp-button-brand-bg: #0d9488;
+  --vp-button-brand-hover-bg: #0f766e;
+  --vp-button-brand-active-bg: #0f766e;
+
+  /* Match the landing's monospace stack for inline code and code blocks. */
+  --vp-font-family-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Fira Code', Menlo, Consolas,
+    monospace;
+}
+
+.dark {
+  --vp-c-brand-1: #5eead4; /* teal-300 */
+  --vp-c-brand-2: #2dd4bf; /* teal-400 */
+  --vp-c-brand-3: #0d9488; /* teal-600 button keeps white text */
+  --vp-c-brand-soft: rgba(45, 212, 191, 0.16);
+  --vp-c-brand-softer: rgba(45, 212, 191, 0.1);
+
+  --vp-c-bg: #09090b;
+  --vp-c-bg-alt: #0c0c0f;
+  --vp-c-bg-soft: #18181b;
+
+  --vp-home-hero-name-color: #2dd4bf;
+}
+
+/*
+ * The default hero can show a large brand gradient blur behind the logo image;
+ * we have no hero image, so nothing to tune there. Keep the wordmark tight.
+ */
+.VPHero .name {
+  letter-spacing: -0.02em;
+}

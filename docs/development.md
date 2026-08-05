@@ -100,8 +100,11 @@ pnpm landing:dev      # landing app dev server with hot reload
 pnpm landing:build    # production build -> apps/landing/dist
 pnpm landing:preview  # preview the production build
 
-pnpm docs:dev         # (optional) VitePress reference site from docs/*.md
-pnpm docs:build       # -> docs/.vitepress/dist
+pnpm docs:dev         # public user-docs site (apps/docs) — served at /docs
+pnpm docs:build       # -> apps/docs/.vitepress/dist (folded into /docs on deploy)
+
+pnpm refdocs:dev      # (optional) VitePress preview of this docs/ reference — not published
+pnpm refdocs:build    # -> docs/.vitepress/dist
 ```
 
 The landing app lives in `apps/landing/src/`: content (features, concepts, quickstart steps, commands, FAQ) is data in `content.ts`; each page section is a component under `sections/`; `theme.ts` drives the light/dark toggle. To change copy, edit `content.ts`; to change layout, edit the relevant section.

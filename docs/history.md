@@ -6,7 +6,7 @@ What each release brought. Reverse-chronological. Dates reflect when the corresp
 
 **Open-sourced and renamed.** The project moved to `github.com/rousan/mx` and the npm package was renamed from `@roulabs/mx` to **`@rousan/mx`** (a *new* package — the old one is deprecated with a pointer). No behavior change: the CLI, runtime layout (still v3), and every command are identical; this release only re-brands the identity and repo. Existing installs won't auto-migrate — reinstall with `npm rm -g @roulabs/mx && npm i -g @rousan/mx`, then `mx sync` to re-stamp the runtime with the new name/URLs. (Older entries below reference `@roulabs/mx`; that history is left as-is.)
 
-**Public site.** Introduces a beginner-first landing + docs site at **mx.rousanali.com** — a standalone React/Vite/Tailwind app under `apps/landing` (`pnpm landing:dev` / `landing:build`) that teaches mx from zero, deployed to GitHub Pages on push to `main`. The deeper reference stays in `docs/*.md` (optionally buildable as a VitePress site via `pnpm docs:build`). See [development](development.md#documentation-site-mx-rousanali-com).
+**Public site.** Introduces a beginner-first landing + docs site at **mx.rousanali.com** — a standalone React/Vite/Tailwind app under `apps/landing` (`pnpm landing:dev` / `landing:build`) that teaches mx from zero, deployed to GitHub Pages on push to `main`. The deeper contributor reference stays in `docs/*.md` (optionally previewable via `pnpm refdocs:build`), while the public user-facing docs live in `apps/docs` (`pnpm docs:dev` / `docs:build`) and ship at `/docs`. See [development](development.md#documentation-site-mx-rousanali-com).
 
 ## 3.6.2 — 2026-07-09
 
