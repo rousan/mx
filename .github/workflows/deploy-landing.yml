@@ -10,6 +10,10 @@ name: Deploy site
 # The custom domain is carried by apps/landing/public/CNAME, which Vite copies
 # into dist/ so the Pages artifact always declares mx.rousanali.com.
 # Only runs when the site or its build inputs actually change.
+#
+# Note: the deploy job uses actions/deploy-pages; if GitHub's Pages backend is
+# transiently degraded it may report "Deployment cancelled" — re-run the
+# workflow (the build is deterministic) until the deploy step succeeds.
 
 on:
   push:
