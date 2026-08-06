@@ -59,6 +59,7 @@ export default defineConfig({
       {
         text: 'Introduction',
         items: [
+          { text: 'What is mx?', link: '/' },
           { text: 'Why mx', link: '/why-mx' },
           { text: 'Getting started', link: '/getting-started' },
           { text: 'Core concepts', link: '/concepts' },

@@ -1,0 +1,36 @@
+# mx
+
+> mx ("multiplexer") runs several software features in parallel across shared repos using git worktrees and coding agents. Each feature is a "work" with its own worktrees, branches, ports, and coding-agent session — fully isolated, so you switch between features instantly and run a fleet of agents at once without anything colliding.
+
+mx is an open-source CLI: install with `npm i -g @rousan/mx`, then `mx init`. It is built for developers juggling more than one feature at a time, especially those running coding agents (Claude Code, Cursor, and friends) on several features in parallel. This file indexes the user documentation; every link points to a self-contained page.
+
+## Introduction
+
+- [What is mx?](https://mx.rousanali.com/docs/): Overview of mx and how it works at a glance.
+- [Why mx](https://mx.rousanali.com/docs/why-mx): The problem mx solves and why a tab-per-feature or hand-rolled worktree setup breaks down.
+- [Getting started](https://mx.rousanali.com/docs/getting-started): Install mx, create a runtime, add a repo, and create your first parallel feature.
+- [Core concepts](https://mx.rousanali.com/docs/concepts): The four words the tool is built on — runtime, repo, work, worktree — and the rule that mx owns all runtime state.
+- [Tutorial](https://mx.rousanali.com/docs/tutorial): End-to-end walkthrough running two features in parallel across two repos, with ports, mission control, and archive/resume.
+
+## Guides
+
+- [Repos](https://mx.rousanali.com/docs/guides/repos): Add, list, fetch, and remove repositories; the pristine read-only clone model.
+- [Works & worktrees](https://mx.rousanali.com/docs/guides/works-and-worktrees): Create works, add worktrees (one per repo, or several of one repo), switch branches, and tear down.
+- [Ports](https://mx.rousanali.com/docs/guides/ports): Allocate per-feature ports unique across the runtime and run the same app many times side by side.
+- [Hooks & hydration](https://mx.rousanali.com/docs/guides/hooks): Make a fresh worktree ready to run automatically; the full set of lifecycle hooks and their environment variables.
+- [Context registry](https://mx.rousanali.com/docs/guides/context): The runtime-wide shared memory (INDEX.json + body files) that every feature's agent reads from.
+- [Mission control](https://mx.rousanali.com/docs/guides/mission-control): The live read-only dashboard, health commands, and terminal dividers for organizing macOS Spaces.
+- [Archive & resume](https://mx.rousanali.com/docs/guides/lifecycle): The active → archived → resumed lifecycle, session summaries, and archive vs destroy.
+- [Coding agents](https://mx.rousanali.com/docs/guides/coding-agents): Run one agent per feature, seed sessions with the session-prompt hook, and a workflow that fits the tool.
+
+## Reference
+
+- [CLI reference](https://mx.rousanali.com/docs/reference/cli): Every command by area — global, repos, works, bin — with common flags.
+- [Configuration](https://mx.rousanali.com/docs/reference/configuration): Runtime discovery ($MX_RUNTIME), versioning, sync vs update vs migrate, and the files store.
+- [FAQ](https://mx.rousanali.com/docs/faq): Common questions about worktrees, agents, multi-repo features, ports, upgrades, and safety.
+
+## Optional
+
+- [Demo deck](https://mx.rousanali.com/deck): A visual, slide-by-slide tour of mx.
+- [GitHub repository](https://github.com/rousan/mx): Source code and issues (MIT licensed).
+- [npm package](https://www.npmjs.com/package/@rousan/mx): The published `@rousan/mx` CLI.

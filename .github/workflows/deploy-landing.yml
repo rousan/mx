@@ -66,6 +66,24 @@ jobs:
           mkdir -p apps/landing/dist/docs
           cp -R apps/docs/.vitepress/dist/. apps/landing/dist/docs/
 
+      # Generate llms-full.txt: the whole user docs concatenated into one file
+      # for LLM agents (companion to the hand-authored public/llms.txt index).
+      - name: Generate llms-full.txt
+        run: |
+          cd apps/docs
+          {
+            echo "# mx — full documentation"
+            echo
+            echo "> Concatenated source of the mx user documentation (https://mx.rousanali.com/docs)."
+            for f in index.md why-mx.md getting-started.md concepts.md tutorial.md \
+                     guides/repos.md guides/works-and-worktrees.md guides/ports.md \
+                     guides/hooks.md guides/context.md guides/mission-control.md \
+                     guides/lifecycle.md guides/coding-agents.md \
+                     reference/cli.md reference/configuration.md faq.md; do
+              echo; echo "---"; echo; cat "$f"; echo
+            done
+          } > ../landing/dist/llms-full.txt
+
       # Package dist/ as the Pages artifact for the deploy job to consume.
       - uses: actions/upload-pages-artifact@v3
         with:
