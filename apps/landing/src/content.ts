@@ -363,4 +363,5 @@ export const NAV_LINKS: { label: string; href: string }[] = [
   { label: 'Agents', href: '#agents' },
   { label: 'Concepts', href: '#concepts' },
   { label: 'Commands', href: '#commands' },
+  { label: 'Docs', href: '/docs/' },
 ];
