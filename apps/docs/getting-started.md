@@ -111,7 +111,6 @@ mx work -n add-search unarchive
 
 ## Next steps
 
+- **[Tutorial](/tutorial)** — the full end-to-end story: two features in parallel across two repos, then archive and resume.
 - **[Core concepts](/concepts)** — the four words (runtime, repo, work, worktree) the whole tool is built on, and the one rule that governs everything.
-- **[Why mx](/why-mx)** — the problems this design solves.
-
-More in-depth guides — hooks and hydration, the context registry, multi-repo features, running mx alongside coding agents — are on the way.
+- **Guides** — go deep on any feature: [ports](/guides/ports), [hooks & hydration](/guides/hooks), the [context registry](/guides/context), [mission control](/guides/mission-control), the [archive/resume lifecycle](/guides/lifecycle), and [coding agents](/guides/coding-agents).

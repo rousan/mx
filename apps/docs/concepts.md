@@ -61,6 +61,5 @@ This is what keeps the manifest from ever drifting out of sync with what's actua
 ## Where to go next
 
 - **[Getting started](/getting-started)** — install mx and create your first work.
-- **[Why mx](/why-mx)** — the problems this model solves.
-
-Deeper guides — hooks and hydration, the context registry, mission control, and the archive/resume lifecycle — are coming in the next content pass.
+- **[Tutorial](/tutorial)** — run two features in parallel, end to end.
+- **Guides** — [works & worktrees](/guides/works-and-worktrees), [ports](/guides/ports), [hooks & hydration](/guides/hooks), the [context registry](/guides/context), [mission control](/guides/mission-control), and the [archive/resume lifecycle](/guides/lifecycle).

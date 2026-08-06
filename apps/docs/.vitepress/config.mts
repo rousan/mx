@@ -50,8 +50,9 @@ export default defineConfig({
     siteTitle: 'mx',
     nav: [
       { text: 'Guide', link: '/getting-started' },
-      { text: 'Concepts', link: '/concepts' },
-      { text: 'Why mx', link: '/why-mx' },
+      { text: 'Tutorial', link: '/tutorial' },
+      { text: 'Guides', link: '/guides/repos' },
+      { text: 'Reference', link: '/reference/cli' },
       { text: 'mx.rousanali.com', link: 'https://mx.rousanali.com' },
     ],
     sidebar: [
@@ -61,6 +62,31 @@ export default defineConfig({
           { text: 'Why mx', link: '/why-mx' },
           { text: 'Getting started', link: '/getting-started' },
           { text: 'Core concepts', link: '/concepts' },
+        ],
+      },
+      {
+        text: 'Tutorial',
+        items: [{ text: 'Your first parallel features', link: '/tutorial' }],
+      },
+      {
+        text: 'Guides',
+        items: [
+          { text: 'Repos', link: '/guides/repos' },
+          { text: 'Works & worktrees', link: '/guides/works-and-worktrees' },
+          { text: 'Ports', link: '/guides/ports' },
+          { text: 'Hooks & hydration', link: '/guides/hooks' },
+          { text: 'Context registry', link: '/guides/context' },
+          { text: 'Mission control', link: '/guides/mission-control' },
+          { text: 'Archive & resume', link: '/guides/lifecycle' },
+          { text: 'Coding agents', link: '/guides/coding-agents' },
+        ],
+      },
+      {
+        text: 'Reference',
+        items: [
+          { text: 'CLI reference', link: '/reference/cli' },
+          { text: 'Configuration', link: '/reference/configuration' },
+          { text: 'FAQ', link: '/faq' },
         ],
       },
     ],

@@ -35,8 +35,6 @@ On top of that: no lifecycle to archive and later recover a feature, no memory s
 
 The result: instead of one feature at a time, you run **a fleet of features in parallel**, each fully isolated, each with its own agent — and switching between them is instant.
 
-<div class="tip custom-block" style="padding-top: 8px">
-
-Ready to try it? Head to **[Getting started](/getting-started)**.
-
-</div>
+::: tip Ready to try it?
+Head to **[Getting started](/getting-started)** to install mx and create your first parallel feature.
+:::

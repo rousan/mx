@@ -31,8 +31,6 @@ features:
     details: One agent per worktree means a whole fleet of Claude Code / Cursor sessions working in parallel — each isolated, none stepping on another.
 ---
 
-<div style="max-width: 960px; margin: 3rem auto 0; padding: 0 1.5rem;">
-
 ## New here?
 
 Start with **[Why mx](/why-mx)** for the problem it solves, then **[Getting started](/getting-started)** to install it and create your first parallel feature in a couple of minutes. **[Core concepts](/concepts)** explains the four words — runtime, repo, work, worktree — that the whole tool is built on.
@@ -43,5 +41,3 @@ Prefer a visual tour? Watch the **[demo deck](https://mx.rousanali.com/deck)**.
 npm i -g @rousan/mx
 mx init
 ```
-
-</div>
