@@ -7,20 +7,25 @@ name: Release
 # because a merge to main with package changes but no version bump is a mistake
 # under this contract.
 #
-# The `paths-ignore` below exempts non-package changes (the landing site, docs,
-# repo tooling, markdown) — those ship to main without an npm release, so a
-# docs/site iteration doesn't force a version bump. If a push touches ONLY
-# ignored paths, this workflow doesn't run; touch any non-ignored file and it
-# does (and then demands a bump).
+# The `paths-ignore` below exempts non-package changes (the landing site, the
+# public docs site, docs, repo tooling, markdown, lockfile) — those ship to main
+# without an npm release, so a docs/site iteration doesn't force a version bump.
+# A real release always bumps npm/package.json (which is NOT ignored), so it
+# still triggers. If a push touches ONLY ignored paths, this workflow doesn't
+# run; touch any non-ignored file and it does (and then demands a bump).
 
 on:
   push:
     branches: [main]
     paths-ignore:
       - 'apps/landing/**'
+      - 'apps/docs/**'
       - 'docs/**'
       - 'assets/**'
       - '.npmrc'
+      - '.gitignore'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
       - '**/*.md'
       - '.github/workflows/deploy-landing.yml'
       - '.github/workflows/release.yml'
