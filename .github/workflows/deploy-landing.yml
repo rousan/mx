@@ -1,6 +1,10 @@
-name: Deploy landing
+name: Deploy site
 
-# Publishes the landing + docs site (apps/landing) to GitHub Pages.
+# Publishes the whole public site to GitHub Pages as ONE artifact:
+#   /       -> the landing app        (apps/landing)
+#   /deck   -> the demo deck          (apps/landing/public/deck)
+#   /docs   -> the user docs (VitePress, apps/docs), built into dist/docs
+# Triggers:
 #   - push to main   -> build + deploy the live site (mx.rousanali.com)
 #   - pull_request   -> build only (a check that the site still compiles)
 # The custom domain is carried by apps/landing/public/CNAME, which Vite copies
@@ -12,12 +16,14 @@ on:
     branches: [main]
     paths:
       - 'apps/landing/**'
+      - 'apps/docs/**'
       - '.github/workflows/deploy-landing.yml'
       - 'pnpm-lock.yaml'
       - 'package.json'
   pull_request:
     paths:
       - 'apps/landing/**'
+      - 'apps/docs/**'
       - '.github/workflows/deploy-landing.yml'
       - 'pnpm-lock.yaml'
       - 'package.json'
@@ -49,8 +55,16 @@ jobs:
 
       - run: pnpm install
 
-      # Produces the static site (incl. the CNAME) at apps/landing/dist.
+      # Produces the static landing site (incl. the CNAME and /deck) at
+      # apps/landing/dist.
       - run: pnpm landing:build
+
+      # Build the VitePress user docs (base: /docs/) and fold them into the
+      # landing dist under /docs, so the whole site ships as one Pages artifact.
+      - run: pnpm docs:build
+      - run: |
+          mkdir -p apps/landing/dist/docs
+          cp -R apps/docs/.vitepress/dist/. apps/landing/dist/docs/
 
       # Package dist/ as the Pages artifact for the deploy job to consume.
       - uses: actions/upload-pages-artifact@v3

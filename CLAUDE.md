@@ -33,7 +33,7 @@ This CLAUDE.md is the entry point. For deeper material on any topic, see `/docs/
 
 When working on a specific area (release flow, command behaviour, etc.), open the matching doc — they have detail that didn't fit in this CLAUDE.md.
 
-These `docs/*.md` files are **also the source of the public docs site** at [mx.rousanali.com](https://mx.rousanali.com) — a VitePress site built directly from this folder (config in `docs/.vitepress/config.mts`, landing in `docs/index.md`). Run it with `pnpm docs:dev` / build with `pnpm docs:build`; it deploys on Cloudflare Pages (prod on `main`, preview per PR). Editing a doc updates both the repo and the site, so keep them accurate. See [docs/development.md § Documentation site](docs/development.md#documentation-site-mx-rousanali-com).
+These `docs/*.md` files are the **internal contributor reference** (deep material for people working on mx). They can optionally be previewed as a VitePress site via `pnpm refdocs:dev` / `pnpm refdocs:build` (config in `docs/.vitepress/config.mts`), but that reference site is **not published**. The **public, user-facing documentation** — the "how to use mx" guide at [mx.rousanali.com/docs](https://mx.rousanali.com/docs) — is a separate VitePress app under `apps/docs/` (`pnpm docs:dev` / `pnpm docs:build`), which the `Deploy site` workflow folds into the landing's GitHub Pages artifact under `/docs`. Keep the two straight: contributor detail goes in `docs/`, end-user guidance goes in `apps/docs/`.
 
 ## Running the CLI (dev vs global)
 

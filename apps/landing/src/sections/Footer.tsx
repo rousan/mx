@@ -60,12 +60,7 @@ export function Footer() {
               <Icon name="npm" className="h-4 w-4" />
               npm
             </a>
-            <a
-              href={`${REPO_URL}/tree/main/docs`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-muted transition-colors hover:text-ink"
-            >
+            <a href="/docs" className="text-muted transition-colors hover:text-ink">
               Docs
             </a>
             <a href="/deck" className="text-muted transition-colors hover:text-ink">
