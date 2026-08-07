@@ -52,7 +52,7 @@ export function Hero() {
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <a
-            href="#quickstart"
+            href="/docs/"
             className="mx-cta inline-flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold shadow-sm transition-transform hover:-translate-y-0.5"
           >
             Get started
