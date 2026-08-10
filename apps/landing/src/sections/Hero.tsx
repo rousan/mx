@@ -58,12 +58,6 @@ export function Hero() {
             Get started
             <Icon name="arrow" className="h-4 w-4" />
           </a>
-          <a
-            href="#why"
-            className="inline-flex items-center gap-2 rounded-lg border border-line-strong px-5 py-2.5 text-sm font-semibold text-ink-soft transition-colors hover:bg-surface-2"
-          >
-            Why mx?
-          </a>
         </div>
 
         {/* The Mission Control board: every feature is its own Space, grouped by
