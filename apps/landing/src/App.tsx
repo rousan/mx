@@ -8,6 +8,7 @@ import { Quickstart } from './sections/Quickstart';
 import { Workflow } from './sections/Workflow';
 import { Features } from './sections/Features';
 import { Commands } from './sections/Commands';
+import { Menubar } from './sections/Menubar';
 import { Faq } from './sections/Faq';
 import { Footer } from './sections/Footer';
 
@@ -34,6 +35,7 @@ export function App() {
         <Quickstart />
         <Features />
         <Commands />
+        <Menubar />
         <Faq />
       </main>
       <Footer />

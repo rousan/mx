@@ -78,6 +78,7 @@ export default defineConfig({
           { text: 'Hooks & hydration', link: '/guides/hooks' },
           { text: 'Context registry', link: '/guides/context' },
           { text: 'Mission control', link: '/guides/mission-control' },
+          { text: 'Menubar app', link: '/guides/menubar' },
           { text: 'Archive & resume', link: '/guides/lifecycle' },
           { text: 'Coding agents', link: '/guides/coding-agents' },
         ],

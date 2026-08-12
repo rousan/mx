@@ -30,6 +30,7 @@ on:
       - '**/*.md'
       - '.github/workflows/deploy-landing.yml'
       - '.github/workflows/release.yml'
+      - '.github/workflows/release-menubar.yml'
 
 # Never run two releases at once; let an in-flight one finish.
 concurrency:

@@ -1,55 +1,55 @@
-# mxbar — mx menubar app
+# mxbar — mx menubar / tray app
 
-A tiny macOS menubar app that lists your **active mx works**. Click the menubar
-glyph and a small popover shows each active work with its **name** and **path**;
-hover a row to **reveal it in Finder** or **copy its path**.
+A tiny **cross-platform** (macOS, Windows, Linux) menubar/tray app that lists
+your **active mx works**. Click the tray icon and a small popover shows the
+**count** of active works and each one's **name** and **path**; hover a row to
+**reveal it in your file manager** or **copy its path**.
 
 It's a read-only viewer: it reads the runtime's `works/*/work.json` files
 directly (no dependency on the `mx` binary or your shell `PATH`) and refreshes
-live as works are created or removed.
+each time the popover opens.
 
-## Requirements
+Built with **Tauri v2** (Rust shell) and a **React + Vite + Tailwind** popover,
+so it ships as a small native app on all three desktops.
 
-- macOS 13 (Ventura) or later
-- The Swift toolchain — Xcode, or the Command Line Tools: `xcode-select --install`
+## Install (prebuilt)
 
-## Build & run
+Each mx release attaches desktop installers — grab yours from the
+[latest release](https://github.com/rousan/mx/releases/latest):
+
+- **macOS** — `mxbar_*_universal.dmg` (Apple Silicon + Intel)
+- **Windows** — `mxbar_*_x64-setup.exe` / `.msi`
+- **Linux** — `.AppImage`, `.deb`, or `.rpm`
+
+macOS builds are currently unsigned, so on first launch: right-click the app ▸
+**Open**, then confirm. Add it as a login item to keep it around.
+
+## Build from source
+
+Requirements: **Node 18+**, **pnpm**, and the **Rust toolchain**
+([rustup](https://rustup.rs)). On Linux also install the Tauri system deps
+(`libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, …).
 
 ```bash
+pnpm install
 cd apps/menubar
-./build.sh
-open build/mxbar.app
-```
-
-To keep it around, copy it to Applications and add it as a login item:
-
-```bash
-cp -R build/mxbar.app /Applications/
-open /Applications/mxbar.app
-```
-
-Then: **System Settings ▸ General ▸ Login Items ▸ +** and add `mxbar.app`.
-
-During development you can also run it straight from the package:
-
-```bash
-swift run
+pnpm tauri build      # produces installers under src-tauri/target/release/bundle
+# or run it live during development:
+pnpm tauri dev
 ```
 
 ## Which runtime it reads
 
 It resolves the runtime the same way the CLI does, minus the `--runtime` flag:
+the `MX_RUNTIME` environment variable if set (usually not visible to a GUI app),
+otherwise the default `~/mx`. If no runtime is found, the popover says so and
+points you at `mx init`.
 
-1. the `MXRuntimePath` user default, if set
-   (`defaults write com.rousanali.mxbar MXRuntimePath ~/path/to/mx`)
-2. the `MX_RUNTIME` environment variable (usually not visible to a GUI app)
-3. the default `~/mx`
+## Notes & next steps
 
-If no runtime is found, the popover says so and points you at `mx init`.
-
-## Scope
-
-This is v1 — intentionally minimal (active works, name + path). Natural next
-steps: per-work worktrees/branches, clickable `localhost` ports, open-in-editor
-and Mission Control actions, a runtime picker, and a proper login-item toggle
-via `SMAppService`.
+- The popover arrow is tuned for the macOS menubar (top). On Windows/Linux the
+  tray usually sits at the bottom; the app still works, the arrow alignment is a
+  future refinement.
+- v1 is intentionally minimal (count + name + path). Natural next steps:
+  per-work worktrees/branches, clickable `localhost` ports, open-in-editor and
+  Mission Control actions, a runtime picker, and a login-item toggle.

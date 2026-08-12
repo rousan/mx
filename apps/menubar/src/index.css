@@ -1,0 +1,68 @@
+@import 'tailwindcss';
+
+/*
+ * The popover follows the OS appearance (prefers-color-scheme) — there's no
+ * manual toggle in a menubar popover. Tokens mirror the mx landing site: a calm
+ * monochrome base with a single teal accent.
+ */
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --line: #e4e4e7;
+  --line-strong: #d4d4d8;
+  --ink: #18181b;
+  --ink-soft: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --accent: #0d9488;
+  --accent-soft: rgba(20, 184, 166, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0c0c0f;
+    --surface: #141417;
+    --surface-2: #1c1c20;
+    --line: #2a2a30;
+    --line-strong: #3a3a42;
+    --ink: #e7e7ea;
+    --ink-soft: #c8c8ce;
+    --muted: #9a9aa4;
+    --faint: #63636d;
+    --accent: #2dd4bf;
+    --accent-soft: rgba(45, 212, 191, 0.16);
+  }
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  /* The Tauri window is transparent; the card provides the visible surface. */
+  background: transparent;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* Don't let the popover be text-selected or drag-scrolled like a document. */
+  user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
