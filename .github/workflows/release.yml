@@ -20,6 +20,7 @@ on:
     paths-ignore:
       - 'apps/landing/**'
       - 'apps/docs/**'
+      - 'apps/menubar/**'
       - 'docs/**'
       - 'assets/**'
       - '.npmrc'

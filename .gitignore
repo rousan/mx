@@ -21,6 +21,10 @@ docs/.vitepress/cache/
 apps/docs/.vitepress/dist/
 apps/docs/.vitepress/cache/
 
+# Swift menubar app (apps/menubar) build output.
+apps/menubar/.build/
+apps/menubar/build/
+
 # landing + docs site build output
 apps/landing/dist/
 
