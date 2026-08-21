@@ -265,9 +265,26 @@ Example entry:
 
 ### Reading
 
+The full index is **auto-loaded into every session**. This runtime `CLAUDE.md`
+imports it with Claude Code's `@import` mechanism, so `INDEX.json`'s entire
+contents are already in your context before you do anything — no manual read, no
+truncation:
+
+@context/INDEX.json
+
+(The `@context/INDEX.json` line above resolves relative to this `CLAUDE.md`'s
+directory — i.e. `<runtime>/context/INDEX.json` — and loads the whole file. The
+first time Claude Code sees it in a new project it asks you to approve the
+import once, because the path is outside the worktree you launched from. This
+replaces the old `SessionStart` hook, which capped the index.)
+
 Primary path:
 
-1. **Read `<runtime>/context/INDEX.json` on every task** — trivial or not, small or large. Skimming a metadata index is cheap; the cost of missing a relevant entry is high. This is a hard rule, not a heuristic. Read the **whole** file (it is small); never read a truncated head of it. When the user says something like "load the mx ctx index as whole", read the entire `INDEX.json` uncapped before doing anything else. (There is no `SessionStart` hook doing this for you — mx stopped stamping one because it capped the index; loading it is on you.)
+1. **The `INDEX.json` above is already loaded — consult it first for every
+   task**, trivial or not. Skimming the metadata index is free (it's in
+   context); the cost of missing a relevant entry is high. In the unlikely event
+   it isn't present (import declined, or you're outside a runtime), read the
+   entire `<runtime>/context/INDEX.json` uncapped — never a truncated head.
 2. Open files at `<runtime>/context/<path>.md` for entries whose metadata matches the current task.
 
 When INDEX descriptions don't surface what you need — and often they won't — fall back to anything that works:
