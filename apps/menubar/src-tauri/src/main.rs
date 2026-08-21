@@ -124,6 +124,31 @@ fn quit(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// Make the popover float above everything, including fullscreen Spaces.
+///
+/// A normal macOS window stays behind a fullscreen app's Space. Setting the
+/// NSWindow's collection behavior to `CanJoinAllSpaces | FullScreenAuxiliary`
+/// (and raising it to the status-window level) lets the popover appear over a
+/// fullscreen app, the way system menubar popovers do.
+#[cfg(target_os = "macos")]
+#[allow(deprecated)]
+fn make_panel_over_fullscreen(win: &tauri::WebviewWindow) {
+    use cocoa::appkit::{NSWindow, NSWindowCollectionBehavior};
+    use cocoa::base::id;
+
+    if let Ok(ns_window) = win.ns_window() {
+        let ns_window = ns_window as id;
+        unsafe {
+            ns_window.setCollectionBehavior_(
+                NSWindowCollectionBehavior::NSWindowCollectionBehaviorCanJoinAllSpaces
+                    | NSWindowCollectionBehavior::NSWindowCollectionBehaviorFullScreenAuxiliary,
+            );
+            // NSStatusWindowLevel (25) — above normal and fullscreen content.
+            ns_window.setLevel_(25);
+        }
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_positioner::init())
@@ -178,6 +203,14 @@ fn main() {
 
             // Dismiss the popover when it loses focus (a click elsewhere).
             if let Some(win) = app.get_webview_window("main") {
+                // Let the popover appear over other Spaces, including fullscreen
+                // apps — a normal window otherwise stays behind a fullscreen Space.
+                #[cfg(target_os = "macos")]
+                {
+                    let _ = win.set_visible_on_all_workspaces(true);
+                    make_panel_over_fullscreen(&win);
+                }
+
                 let dismiss = win.clone();
                 win.on_window_event(move |event| {
                     if let WindowEvent::Focused(false) = event {
