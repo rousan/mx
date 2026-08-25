@@ -9,7 +9,6 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WindowEvent,
 };
-use tauri_plugin_positioner::{Position, WindowExt};
 
 /// One active work shown in the popover.
 #[derive(Serialize)]
@@ -124,6 +123,23 @@ fn quit(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// Center the popover window horizontally under the tray icon, with its top at
+/// the icon's bottom edge — so the window's centered arrow points right at the
+/// icon. `rect` is the tray icon's screen rect from the click event.
+fn position_under_icon(win: &tauri::WebviewWindow, rect: &tauri::Rect) {
+    let scale = win.scale_factor().unwrap_or(1.0);
+    let icon_pos = rect.position.to_physical::<f64>(scale);
+    let icon_size = rect.size.to_physical::<f64>(scale);
+    let icon_center_x = icon_pos.x + icon_size.width / 2.0;
+    let icon_bottom_y = icon_pos.y + icon_size.height;
+
+    let win_w = win.outer_size().map(|s| s.width as f64).unwrap_or(320.0 * scale);
+    let x = icon_center_x - win_w / 2.0;
+    let y = icon_bottom_y;
+
+    let _ = win.set_position(tauri::PhysicalPosition::new(x.max(0.0), y.max(0.0)));
+}
+
 /// Make the popover float above everything, including fullscreen Spaces.
 ///
 /// A normal macOS window stays behind a fullscreen app's Space. Setting the
@@ -151,7 +167,6 @@ fn make_panel_over_fullscreen(win: &tauri::WebviewWindow) {
 
 fn main() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_positioner::init())
         .invoke_handler(tauri::generate_handler![list_works, reveal_path, quit])
         .setup(|app| {
             // Menubar-only: no Dock icon on macOS.
@@ -179,12 +194,10 @@ fn main() {
                 })
                 .on_tray_icon_event(|tray, event| {
                     let app = tray.app_handle();
-                    // Feed the event to the positioner so TrayCenter knows where the icon is.
-                    tauri_plugin_positioner::on_tray_event(app, &event);
-
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
+                        rect,
                         ..
                     } = event
                     {
@@ -192,7 +205,9 @@ fn main() {
                             if win.is_visible().unwrap_or(false) {
                                 let _ = win.hide();
                             } else {
-                                let _ = win.move_window(Position::TrayCenter);
+                                // Center the popover under the tray icon so the
+                                // arrow points at the icon's bottom edge.
+                                position_under_icon(&win, &rect);
                                 let _ = win.show();
                                 let _ = win.set_focus();
                             }
