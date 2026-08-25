@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+#
+# mx hook: work-session
+#
+# Runs right after mx BUILDS a work's tmux session — the one-work-one-session
+# that `mx work attach` / `mx work open` create on first use. It does NOT run
+# when an existing session is re-attached (mx only builds a session once; after
+# that it just attaches).
+#
+# By the time this hook fires, mx has already laid out the default session:
+#   window "main" — left pane: the work's `claude` session, right pane: `nvim .`
+#   window "run"  — a 2x2 grid of shells for dev servers / ad-hoc commands
+# and set the session environment (see below). Use this hook to RESHAPE that
+# default: add a window per repo, start a dev server, rename panes, swap nvim for
+# a different editor, etc. You have the full `tmux` CLI — target the session via
+# $MX_TMUX_SESSION.
+#
+# This is a shared, runtime-wide hook — it fires for EVERY work, so branch on the
+# context below to vary the layout (per-repo, per-work, only for some works).
+# Write it in any language: just set the shebang and keep the file executable
+# (e.g. #!/usr/bin/env node or #!/usr/bin/env python3).
+#
+# Working directory: the work folder.
+# Context (environment variables):
+#     $MX_WORK — work name
+#     $MX_WORK_PATH — the work folder (every pane's cwd)
+#     $MX_TMUX_SESSION — the tmux session name (e.g. mx/feature-a) — your target
+#     $MX_CLAUDE_SESSION_ID — the work's pinned Claude session id (a UUID)
+#     $MX_EVENT (this event name), $MX_RUNTIME (runtime root)
+#   Plus, exported INTO the session (visible to every pane, not to this hook):
+#     $MX_WORK, $MX_WORK_PATH, $MX_RUNTIME, $MX_TMUX=1, $MX_CLAUDE_SESSION_ID,
+#     and one $MX_PORT_<worktree>_<service> per allocated port.
+#
+# No-op by default (keeps the layout mx built). Delete this file to disable the
+# hook entirely.
+set -euo pipefail
+
+# Example — add a dedicated window per repo worktree, each cd'd into it:
+#   for wt in "$MX_WORK_PATH"/wt/*/; do
+#     [ -d "$wt" ] || continue
+#     name="$(basename "$wt")"
+#     tmux new-window -t "$MX_TMUX_SESSION" -n "$name" -c "$wt"
+#   done
+#   tmux select-window -t "$MX_TMUX_SESSION:main"
+#
+# Example — start a dev server in the first pane of the "run" window:
+#   tmux send-keys -t "$MX_TMUX_SESSION:run.0" 'pnpm dev' Enter
+#
+# Example — swap the editor pane (nvim) for something else, only for some works:
+#   case "$MX_WORK" in
+#     docs-*) tmux send-keys -t "$MX_TMUX_SESSION:main.1" C-c 'nvim README.md' Enter ;;
+#   esac
+
+exit 0

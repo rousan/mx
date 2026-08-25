@@ -25,6 +25,8 @@ export interface Flags {
   dryRun: boolean;
   /** Quick-start a work + worktree (currently: `mx repo new <name> --quick`). */
   quick: boolean;
+  /** Run the install step rather than just reporting (currently: `mx doctor --install`). */
+  install: boolean;
   /** Explicit runtime path from `--runtime`. */
   runtime?: string;
   /** Target name from `-n`/`--name`. */
@@ -87,6 +89,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     open: false,
     dryRun: false,
     quick: false,
+    install: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -110,6 +113,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       flags.dryRun = true;
     } else if (a === '--quick') {
       flags.quick = true;
+    } else if (a === '--install') {
+      flags.install = true;
     } else if (a === '--port' || a.startsWith('--port=')) {
       const v = a.startsWith('--port=') ? a.slice('--port='.length) : argv[++i];
       const n = Number(v);

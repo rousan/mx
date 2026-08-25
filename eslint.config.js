@@ -26,6 +26,9 @@ export default tseslint.config(
       'apps/landing/**',
       // VitePress docs-site config + build output; not part of the CLI/core.
       'docs/.vitepress/**',
+      // The public docs site (VitePress) — its own app; the cache/dist it leaves
+      // behind after a local preview must never be linted as source.
+      'apps/docs/**',
     ],
   },
   js.configs.recommended,

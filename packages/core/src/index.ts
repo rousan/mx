@@ -54,6 +54,16 @@ export type { InitResult, SyncResult, MxConfig, HookEvent, RuntimeBin, RepoConfi
 export { claudeProjectDirName, readSessionTitle, findSessionsByName } from './claudeSessions';
 export type { ClaudeSession } from './claudeSessions';
 
+export {
+  MX_SESSION_PREFIX,
+  MX_CLAUDE_NAMESPACE,
+  sanitizeTmuxName,
+  mxSessionName,
+  isMxSessionName,
+  uuidv5,
+  claudeSessionId,
+} from './tmux';
+
 export { renderBanner } from './banner';
 
 export { compareVersions, maxVersion } from './semver';

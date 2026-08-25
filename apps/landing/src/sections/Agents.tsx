@@ -19,14 +19,14 @@ export function Agents() {
 
       <div className="mt-10 grid items-start gap-6 lg:grid-cols-2">
         <Terminal title="one command per feature">
-          <Line comment>start (or resume) this feature’s agent session</Line>
-          <Line prompt>mx work open -n checkout-redesign</Line>
-          <Line>→ fullscreen terminal, Claude Code session “checkout-redesign”</Line>
-          <Line>→ seeded by the session-prompt hook</Line>
+          <Line comment>attach to this feature’s agent session</Line>
+          <Line prompt>mx work attach -n checkout-redesign</Line>
+          <Line>→ tmux session mx/checkout-redesign — Claude, editor, servers</Line>
+          <Line>→ Claude Code resumes right where you left off</Line>
           <Line>&nbsp;</Line>
-          <Line comment>meanwhile, other agents run in their own worktrees</Line>
-          <Line prompt>mx work open -n search-filters</Line>
-          <Line prompt>mx work open -n api-rate-limits</Line>
+          <Line comment>meanwhile, other agents run in their own sessions</Line>
+          <Line prompt>mx work attach -n search-filters</Line>
+          <Line prompt>mx work attach -n api-rate-limits</Line>
           <Line>three agents, three features, zero collisions</Line>
         </Terminal>
 

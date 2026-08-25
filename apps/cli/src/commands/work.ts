@@ -22,7 +22,8 @@ import {
   portList,
   workHealth,
   listWorkHealth,
-  findSessionsByName,
+  claudeSessionId,
+  claudeProjectDirName,
   MxError,
 } from '@mx/core';
 import type { WorkHealth, WorktreeAddResult } from '@mx/core';
@@ -30,7 +31,16 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { emit, dim, bold, check, warn, confirmYesNo, tildify } from '../output';
-import { openWorkLayout, shq } from '../open';
+import { spawnWorkTerminal, shq } from '../open';
+import {
+  requireTmux,
+  hasSession,
+  buildSession,
+  attachOrSwitch,
+  killSession,
+  busyPanes,
+  sessionFor,
+} from '../tmux';
 import { runPreHook, runPostHook, runHookCapture } from '../hooks';
 import type { Flags } from '../args';
 
@@ -112,75 +122,163 @@ function resolveInitialPrompt(root: string, name: string, workFolder: string, fl
 }
 
 /**
- * What `mx work open` should launch in the work's Terminal.
+ * The resolved `claude` command a work's main pane runs, plus whether it
+ * resumes an existing conversation or creates a fresh one.
  */
-interface SessionLaunch {
-  /** Shell command to run after cd-ing into the work folder (a `claude` invocation). */
+interface ClaudeLaunch {
+  /** Shell command the main pane runs (a `claude` invocation). */
   command: string;
-  /** Whether an existing session is resumed or a fresh one is created. */
+  /** Whether the pinned session is resumed or created fresh. */
   action: 'resume' | 'create';
-  /** The resumed session's id (only when `action === 'resume'`). */
-  sessionId?: string;
+  /** The work's pinned Claude session id (a deterministic UUID). */
+  sessionId: string;
 }
 
 /**
- * Decide how to open a work's Claude session, following the per-work naming
- * convention (one session named exactly after the work):
+ * Resolve the `claude` command for a work's session, keyed to a **pinned,
+ * deterministic session id** (`uuidv5(work name)`), so re-attaching always
+ * resumes the same conversation:
  *
- * - 0 sessions named `<work>` → **create** a new session named `<work>`, seeded
- *   with the resolved initial prompt (from `--prompt` or the `session-prompt`
- *   hook) when there is one.
- * - exactly 1 → **resume** it (`claude --resume <id>`).
- * - 2+ → throw `MULTIPLE_SESSIONS`; the user resumes manually (numbered
- *   variants like `<work>-2` are excluded by the exact-name match, so this only
- *   happens with genuine duplicates).
+ * - transcript for the pinned id already exists → **resume** it
+ *   (`claude --resume <id>`; the display name persists from the transcript).
+ * - no transcript yet → **create** it with the pinned id and the work name as
+ *   the display name (`claude --session-id <id> -n <work>`), seeded with the
+ *   resolved initial prompt (from `--prompt` or the `session-prompt` hook) when
+ *   there is one.
  *
  * When creating with a prompt, the prompt is written to a throwaway file under
- * the work's `tmp/` and the launched shell reads-then-removes it — this keeps
- * arbitrary multi-line prompt text out of the command line (and out of the
- * nested AppleScript quoting) entirely.
+ * the work's `tmp/` and the launched shell reads-then-removes it — keeping
+ * arbitrary multi-line prompt text out of the command line entirely.
  *
  * @param root - Runtime root.
- * @param name - Work name (= the session name).
- * @param workFolder - Absolute work folder path.
- * @param flags - Parsed flags.
- * @returns The command to run plus whether it resumes or creates.
+ * @param name - Work name (also the session's display name).
+ * @param workFolder - Absolute work folder path (the pane's cwd).
+ * @param flags - Parsed flags (provides `--prompt` / `--porcelain`).
+ * @returns The command to run plus whether it resumes or creates, and the pinned id.
  */
-function resolveSessionLaunch(
+function resolveClaudeCommand(
   root: string,
   name: string,
   workFolder: string,
   flags: Flags,
-): SessionLaunch {
+): ClaudeLaunch {
+  const sid = claudeSessionId(name);
   // Claude keys its project dir off the realpath'd cwd (macOS /tmp -> /private/tmp).
   let realWork = workFolder;
   try {
     realWork = fs.realpathSync(workFolder);
   } catch {
-    // Fall back to the given path; findSessionsByName just won't match if it's wrong.
+    // Fall back to the given path; the transcript check just won't match if wrong.
   }
-  const sessions = findSessionsByName(claudeProjectsRoot(), realWork, name);
-  if (sessions.length > 1) {
-    throw new MxError(
-      `work "${name}" has ${sessions.length} Claude sessions named "${name}" — resume one manually ` +
-        `(list them with \`lcs ${name}\`, then \`claude --resume <id>\`)`,
-      'MULTIPLE_SESSIONS',
-    );
+  const transcript = path.join(
+    claudeProjectsRoot(),
+    claudeProjectDirName(realWork),
+    `${sid}.jsonl`,
+  );
+  if (fs.existsSync(transcript)) {
+    // Resume the pinned conversation; the name is already baked into the transcript.
+    return { command: `claude --resume ${shq(sid)}`, action: 'resume', sessionId: sid };
   }
-  if (sessions.length === 1) {
-    return { command: `claude --resume ${shq(sessions[0].id)}`, action: 'resume', sessionId: sessions[0].id };
-  }
-  // No existing session — create one named after the work, optionally seeded.
+  // No transcript yet — create with the pinned id + the work name as display name.
+  const create = `claude --session-id ${shq(sid)} -n ${shq(name)}`;
   const prompt = resolveInitialPrompt(root, name, workFolder, flags);
-  if (!prompt) return { command: `claude -n ${shq(name)}`, action: 'create' };
+  if (!prompt) return { command: create, action: 'create', sessionId: sid };
   const promptFile = path.join(workFolder, 'tmp', `.mx-session-prompt-${process.pid}`);
   fs.mkdirSync(path.dirname(promptFile), { recursive: true });
   fs.writeFileSync(promptFile, prompt);
-  // The Terminal shell reads the prompt from the file, deletes it, then hands it
-  // to claude as the first message — preserving newlines/quotes with no inline
+  // The pane's shell reads the prompt from the file, deletes it, then hands it to
+  // claude as the first message — preserving newlines/quotes with no inline
   // escaping. `"$(...)"` keeps the whole file content as one argument.
-  const command = `claude -n ${shq(name)} "$(cat ${shq(promptFile)}; rm -f ${shq(promptFile)})"`;
-  return { command, action: 'create' };
+  const command = `${create} "$(cat ${shq(promptFile)}; rm -f ${shq(promptFile)})"`;
+  return { command, action: 'create', sessionId: sid };
+}
+
+/**
+ * Outcome of ensuring a work's tmux session exists.
+ */
+interface EnsureResult {
+  /** The tmux session name (`mx/<work>`). */
+  session: string;
+  /** Whether this call built the session (true) or it already existed (false). */
+  created: boolean;
+  /** How the Claude pane was launched when the session was built (undefined when it already existed). */
+  claudeAction?: 'resume' | 'create';
+}
+
+/**
+ * Ensure a work's tmux session exists, building it (and firing the
+ * `work-session` hook) when missing. Idempotent and self-healing: after a reboot
+ * or a manual `tmux kill-session`, the next call simply rebuilds the layout. Does
+ * **not** attach — the caller attaches (in-place) or opens a terminal that does.
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ * @param workFolder - Absolute work folder path.
+ * @param flags - Parsed flags.
+ * @returns The session name and whether it was freshly built.
+ */
+function ensureWorkSession(root: string, name: string, workFolder: string, flags: Flags): EnsureResult {
+  requireTmux();
+  const session = sessionFor(name);
+  if (hasSession(session)) return { session, created: false };
+  const launch = resolveClaudeCommand(root, name, workFolder, flags);
+  // Flatten every worktree's allocated ports into MX_PORT_* handles for the panes.
+  const ports: { worktree: string; service: string; port: number }[] = [];
+  for (const wt of workInfo(root, name).worktrees ?? []) {
+    const wtName = wt.name ?? wt.repo;
+    for (const [service, port] of Object.entries(wt.ports ?? {})) {
+      ports.push({ worktree: wtName, service, port });
+    }
+  }
+  buildSession(session, {
+    root,
+    work: name,
+    workPath: workFolder,
+    claudeCmd: launch.command,
+    claudeSessionId: launch.sessionId,
+    ports,
+  });
+  // work-session hook (best-effort): the user can rearrange/extend the layout.
+  runPostHook(
+    root,
+    'work-session',
+    {
+      cwd: workFolder,
+      env: {
+        MX_WORK: name,
+        MX_WORK_PATH: workFolder,
+        MX_TMUX_SESSION: session,
+        MX_CLAUDE_SESSION_ID: launch.sessionId,
+      },
+    },
+    flags.porcelain,
+  );
+  return { session, created: true, claudeAction: launch.action };
+}
+
+/**
+ * Open a work: ensure its tmux session exists, then hand a **new terminal
+ * window** to it (macOS fullscreen Terminal; a Linux emulator via
+ * `$MX_TERMINAL` or a built-in list). Best-effort on the window step — the
+ * session already exists, so a launch failure downgrades to a warning pointing
+ * at `mx work -n <name> attach`, which always works in-place.
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ * @param workFolder - Absolute work folder path.
+ * @param flags - Parsed flags.
+ * @returns The ensure result (session name, created/attach state).
+ */
+export function openWorkInTerminal(root: string, name: string, workFolder: string, flags: Flags): EnsureResult {
+  const res = ensureWorkSession(root, name, workFolder, flags);
+  // The new terminal re-invokes this CLI to attach. MX_RUNTIME is passed inline
+  // because macOS `do script` (and a detached Linux shell) start a fresh login
+  // shell that won't inherit our environment.
+  const attachCmd =
+    `MX_RUNTIME=${shq(root)} ${shq(process.execPath)} ${shq(process.argv[1])} ` +
+    `work -n ${shq(name)} attach`;
+  spawnWorkTerminal(attachCmd);
+  return res;
 }
 
 /**
@@ -238,15 +336,18 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       }
     }, { ...workInfo(root, name), path: res.path });
     if (flags.open) {
-      // Best-effort: the work is already created, so a window-management
-      // failure (or a non-macOS host) is a warning, never a hard error. A brand
-      // new work has no sessions yet, so this always creates one named after it.
+      // Best-effort window step: the work is already created, so failing to
+      // spawn a terminal (or a missing emulator) is a warning pointing at the
+      // always-works in-place `attach`. Ensuring the session itself surfaces a
+      // real tmux error (e.g. tmux not installed).
       try {
-        const launch = resolveSessionLaunch(root, res.name, res.path, flags);
-        openWorkLayout(res.path, { command: launch.command });
+        openWorkInTerminal(root, res.name, res.path, flags);
       } catch (e) {
         const msg = e instanceof MxError ? e.message : String(e);
-        process.stderr.write(`${warn()} ${dim(`could not open layout: ${msg}`)}\n`);
+        process.stderr.write(
+          `${warn()} ${dim(`could not open a terminal: ${msg}`)}\n` +
+            `${dim(`  run \`mx work -n ${res.name} attach\` in a terminal instead.`)}\n`,
+        );
       }
     }
     return;
@@ -380,27 +481,45 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       emit(() => console.log(res.path), res);
       return;
     }
-    case 'open': {
-      // Open an existing work in a fullscreen Terminal, resuming its Claude
-      // session (named after the work) or creating one if none exists.
+    case 'attach': {
+      // Ensure the work's tmux session (build it if missing — self-healing after
+      // a reboot / manual kill), then hand THIS terminal to it: switch-client
+      // when already inside tmux, otherwise a blocking attach.
       const res = workPath(root, name); // throws NO_WORK if it doesn't exist
-      // Session resolution runs OUTSIDE the best-effort try: an ambiguous
-      // `MULTIPLE_SESSIONS` is a real error the user must act on, not a warning.
-      const launch = resolveSessionLaunch(root, name, res.path, flags);
+      const ensured = ensureWorkSession(root, name, res.path, flags);
+      // In porcelain mode we can't hand the terminal to an interactive tmux, so
+      // just report what would happen and leave attaching to the caller.
+      if (flags.porcelain) {
+        emit(() => {}, { work: name, session: ensured.session, created: ensured.created, attach: false });
+        return;
+      }
+      attachOrSwitch(ensured.session);
+      return;
+    }
+    case 'open': {
+      // Ensure the work's session, then open it in a NEW terminal window
+      // (fullscreen where supported). A window-management failure downgrades to
+      // a warning — `attach` always works in-place.
+      const res = workPath(root, name); // throws NO_WORK if it doesn't exist
+      let ensured: EnsureResult;
       try {
-        openWorkLayout(res.path, { command: launch.command });
+        ensured = openWorkInTerminal(root, name, res.path, flags);
       } catch (e) {
         const msg = e instanceof MxError ? e.message : String(e);
-        process.stderr.write(`${warn()} ${dim(`could not open layout: ${msg}`)}\n`);
+        process.stderr.write(
+          `${warn()} ${dim(`could not open a terminal: ${msg}`)}\n` +
+            `${dim(`  run \`mx work -n ${name} attach\` in a terminal instead.`)}\n`,
+        );
         return;
       }
       emit(() => {
-        const how =
-          launch.action === 'resume'
-            ? `resumed session ${dim(launch.sessionId!.slice(0, 8))}`
-            : 'new session';
+        const how = ensured.created
+          ? ensured.claudeAction === 'resume'
+            ? 'built session, resumed claude'
+            : 'built session, new claude'
+          : 'attached to existing session';
         console.log(`${check()} opened ${bold(name)} ${dim(`(${how})`)}`);
-      }, { work: name, opened: true, action: launch.action, sessionId: launch.sessionId });
+      }, { work: name, opened: true, session: ensured.session, created: ensured.created });
       return;
     }
     case 'describe': {
@@ -421,15 +540,33 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
           `${warn()} ${dim(`permanently removing work "${name}" — folder and any session summaries will be deleted (branches kept). This cannot be undone.`)}\n`,
         );
       }
+      // Kill the work's tmux session before removing the folder — same
+      // one-work-one-session teardown as archive. Best-effort; a tmux error
+      // never blocks the destroy.
+      const destroySession = sessionFor(name);
+      let destroyKilled = false;
+      try {
+        destroyKilled = killSession(destroySession);
+      } catch (e) {
+        const msg = e instanceof MxError ? e.message : String(e);
+        if (!flags.porcelain) process.stderr.write(`${warn()} ${dim(`could not kill tmux session: ${msg}`)}\n`);
+      }
       const res = workDestroy(root, name, { force: flags.force });
       emit(() => {
         const removed = res.removedWorktrees.join(', ') || 'none';
         console.log(`${check()} destroyed work ${bold(name)}`);
         console.log(`  ${dim(`worktrees removed: ${removed}; branches kept`)}`);
-      }, res);
+        if (destroyKilled) console.log(`  ${dim(`tmux session ${destroySession} killed`)}`);
+      }, { ...res, sessionKilled: destroyKilled });
       return;
     }
     case 'archive': {
+      // The work's tmux session (if any) is killed as part of archiving —
+      // detect live foreground processes up front so the prompt can warn that
+      // dev servers / a running claude will be terminated.
+      const archiveSession = sessionFor(name);
+      const sessionLive = hasSession(archiveSession);
+      const busy = sessionLive ? busyPanes(archiveSession) : [];
       // Confirm first — before any real work. The user can pre-confirm with
       // --yes (required when stdin isn't a TTY or in --porcelain mode).
       if (!flags.yes) {
@@ -443,6 +580,16 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         process.stderr.write(
           `${dim(`  Worktrees will be removed; folder, work.json, branches, and sessions/ are preserved.`)}\n`,
         );
+        if (sessionLive) {
+          process.stderr.write(
+            `${dim(`  Its tmux session (${archiveSession}) will be killed.`)}\n`,
+          );
+          if (busy.length) {
+            process.stderr.write(
+              `${warn()} ${dim(`  live processes will be terminated: ${busy.join(', ')}`)}\n`,
+            );
+          }
+        }
         process.stderr.write(
           `${dim(`  Make sure any pending session summary is written into works/${name}/sessions/ first.`)}\n`,
         );
@@ -460,13 +607,24 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         runPreHook(root, 'pre-work-archive', { cwd: archiveHookEnv.MX_WORK_PATH, env: archiveHookEnv }, flags.porcelain);
       }
       const res = archiveWork(root, name);
+      // Tear down the work's tmux session (one work == one session). Safe no-op
+      // when none exists; guarded so a tmux hiccup never fails an archive that
+      // already mutated the manifest.
+      let sessionKilled = false;
+      try {
+        sessionKilled = killSession(archiveSession);
+      } catch (e) {
+        const msg = e instanceof MxError ? e.message : String(e);
+        if (!flags.porcelain) process.stderr.write(`${warn()} ${dim(`could not kill tmux session: ${msg}`)}\n`);
+      }
       runPostHook(root, 'post-work-archive', { cwd: archiveHookEnv.MX_WORK_PATH, env: archiveHookEnv }, flags.porcelain);
       emit(() => {
         const removed = res.removedWorktrees.join(', ') || 'none';
         console.log(`${check()} archived work ${bold(name)}`);
         console.log(`  ${dim(`at ${res.archived_at}`)}`);
         console.log(`  ${dim(`worktrees removed: ${removed}; branches kept`)}`);
-      }, res);
+        if (sessionKilled) console.log(`  ${dim(`tmux session ${archiveSession} killed`)}`);
+      }, { ...res, sessionKilled });
       return;
     }
     case 'unarchive': {

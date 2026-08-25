@@ -11,6 +11,7 @@ import { dispatchWork } from './commands/work';
 import { dispatchBin } from './commands/bin';
 import { dispatchHealth } from './commands/health';
 import { dispatchMissionControl } from './commands/missionControl';
+import { runDoctor } from './commands/doctor';
 import { runDivider } from './divider';
 import { openFullscreenTerminal, shq } from './open';
 
@@ -69,6 +70,8 @@ export function main(): void {
       case 'mission-control':
       case 'mc':
         return dispatchMissionControl(positionals, flags);
+      case 'doctor':
+        return runDoctor(positionals, flags);
       case 'divider': {
         // Fill a terminal with big block text as a visual separator for your
         // Spaces. Bare: takes over the current terminal and holds. With -o:

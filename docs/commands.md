@@ -117,6 +117,12 @@ The registered steps:
 
 **`--dry-run`** previews the migration without touching anything: it runs the same up-front validation (so an impossible migration still errors `NO_MIGRATION` / `CLI_TOO_OLD`), then prints every path it *would* move, stamp, or create and ends with "No changes were made." Nothing is moved and the runtime's `mx.json` version is left untouched, so you can review the plan before letting migrate run against an old runtime. In `--porcelain` mode the result object carries `"dryRun": true` and the planned paths in `changed`. Run it again without the flag to apply.
 
+### `mx doctor [--install [--yes]]`
+
+Environment check for the **tmux workflow** ([`mx work attach`/`open`](#mx-work--n-name-attach---prompt-text)). Verifies the **required** tools (tmux, neovim, claude, git) and a **recommended** editor toolbelt (ripgrep, fd, fzf, bat, lazygit, eza, zoxide), reporting each with its detected version, then prints the exact install command for anything missing — resolved to the detected package manager (Homebrew, then apt/dnf/pacman) with distro-specific package names (`fd` is `fd-find` on Debian, `bat` is `batcat`, and eza/lazygit may need an extra repo). It also reminds tmux-resurrect users to wire the shipped `mx-tmux-resurrect-filter` bin (which keeps `mx/*` sessions out of resurrect's global snapshot).
+
+`--install` runs the install command after a confirmation prompt (`--yes` skips it). Errors `NO_PACKAGE_MANAGER` when none of brew/apt/dnf/pacman is found, `INSTALL_FAILED` when the install command exits non-zero. Not version-gated and touches no runtime state — a pure environment check. `--porcelain` returns `{tools, packageManager, missing, installCommand}`.
+
 ### `mx help`, `mx version` (or `--help` / `-h`, `--version` / `-v`)
 
 Print help text or version (read from `<pkg>/package.json` at startup). Allowed even when the runtime version doesn't match.
@@ -149,7 +155,7 @@ Also writes `repo.json` (`{ "name": … }`) into the container.
 
 Create a brand-new **local** repo (no remote) at `<runtime>/repos/<name>/git/`: `git init` on `main`, a starter `README.md`, and an initial commit (so `main` exists and worktrees can fork from it). Writes `repo.json` like `add`. This is the counterpart to `add` for quick experiments and throwaway apps you don't want to push to a remote yet — no more manual `mkdir` + `git init` + commit dance. The initial commit uses your git identity, falling back to a neutral `mx <mx@localhost>` only if none is configured. Errors `EXISTS` if the repo already exists, `BAD_ARGS` on an invalid name (must be a single path segment).
 
-`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and fires the `post-worktree-create` hook. Pair with `-o`/`--open` to open the work in a fullscreen Terminal (macOS), and `--description <t>` to set the work description. So a fresh experiment is one line:
+`--quick` turns it into a one-shot quick-start: after creating the repo it also creates a **`dev-<name>`** work, adds a **worktree** of the repo on the **`develop`** branch, and fires the `post-worktree-create` hook. Pair with `-o`/`--open` to build the work's tmux session and open it in a new terminal, and `--description <t>` to set the work description. So a fresh experiment is one line:
 
 ```
 mx repo new exp --quick -o     # repo "exp", work "dev-exp", worktree on "develop", opened
@@ -241,7 +247,7 @@ Resolved **per repo**:
 
 An empty branch segment (`app::develop`) means "use the default branch". Repos are validated up front — an unknown repo or a repo listed twice fails before anything is created, so you never get a half-built work.
 
-**`--open` / `-o` (macOS only)**: after creating the work, opens a fullscreen Terminal `cd`'d into the work folder and launches a Claude Code session named after the work (a new work has none yet, so this always creates one — see [`mx work open`](#mx-work--n-name-open-or-mx-work--n-name--o) for the full resume-or-create behavior and `--prompt`). (Open your editor yourself — it no longer launches one.) On non-macOS platforms this is downgraded to a warning (internally `UNSUPPORTED`) — the work is still created.
+**`--open` / `-o`**: after creating the work, builds its tmux session and opens it in a **new terminal window** — see [`mx work open`](#mx-work--n-name-open-or-mx-work--n-name--o). Best-effort: if a terminal can't be launched (or the platform lacks one), it warns and points at `mx work -n <name> attach`, which always works in-place — the work is still created either way.
 
 ### `mx work ls [--all|--archived] [--porcelain]`
 
@@ -276,19 +282,27 @@ cd "$(mx work -n feat path)"
 
 Plain output, no decoration.
 
+### `mx work -n <name> attach [--prompt <text>]`
+
+Enter a work — the **primary** way in. Every active work maps to exactly **one tmux session** named `mx/<name>` (the `/` prefix groups mx sessions in `tmux ls`; mx also stamps a tmux `@mx_work` option on the session). `attach` builds that session if it doesn't exist yet, then hands **this** terminal to it: `tmux switch-client` when you're already inside tmux (a nested `attach` is refused by tmux), `tmux attach-session` otherwise.
+
+The default session mx builds:
+
+- window `main` — LEFT pane: the work's Claude Code session; RIGHT pane: `nvim .` at the work root (every worktree under `wt/` visible). Focus starts on the claude pane.
+- window `run` — a 2×2 tiled grid of shells for dev servers and ad-hoc commands.
+- session environment: `MX_WORK`, `MX_WORK_PATH`, `MX_RUNTIME`, `MX_TMUX=1`, `MX_CLAUDE_SESSION_ID`, plus one `MX_PORT_<worktree>_<service>` per allocated port.
+
+After building, the [`work-session` hook](#hooks) fires (cwd = the work folder) so you can rearrange or extend the layout.
+
+Building is **lazy and self-healing**: nothing is created until the first `attach`/`open`, and after a reboot or a manual `tmux kill-session` the next `attach` simply rebuilds it. `--porcelain` ensures the session **without** attaching (prints `{work, session, created, attach:false}`) — useful for scripts.
+
+**The Claude session.** mx pins a deterministic id for the work — `uuidv5(<name>)`, stable and unique because work names are unique, with nothing stored — and sets the session's display name to `<name>`. First time (no transcript for that id yet): `claude --session-id <uuid> -n <name>`, seeded with an initial prompt when one is resolved (see below). Re-attach (transcript exists): `claude --resume <uuid>`, continuing the same conversation (the name persists from the transcript). (mx deliberately does **not** use Claude Code's own `--tmux`/`--worktree` flags — mx owns worktrees and the session.)
+
+**Initial prompt (new session only).** Resolved as: an explicit `--prompt <text>` wins (pass `--prompt ''` for none); otherwise the [`session-prompt` hook](#hooks) is fired (cwd = the work folder) and its stdout is used. If neither yields text, the session opens clean. The resolved prompt is passed to Claude as the first message (routed through a throwaway file under the work's `tmp/` so multi-line prompts need no shell escaping).
+
 ### `mx work -n <name> open` (or `mx work -n <name> -o`)
 
-Open an **existing** work in a fullscreen Terminal `cd`'d into the work folder, and **resume-or-create its Claude Code session**. macOS only; on other platforms (or a window-management failure) it warns and is a no-op. `mx work -n <name> -o` is shorthand for `… open`.
-
-The session follows a per-work naming convention: one session named exactly `<name>`. mx scans the work's own Claude project directory (`~/.claude/projects/<work-path>/`, keyed off the work folder's realpath) for sessions whose name equals `<name>`:
-
-- **none** → create a new session named `<name>` (`claude -n <name>`), seeded with an initial prompt when one is resolved (see below);
-- **exactly one** → resume it (`claude --resume <id>`);
-- **two or more** → error `MULTIPLE_SESSIONS` and open nothing — resume one manually (`lcs <name>` to list, then `claude --resume <id>`).
-
-The match is **exact**, so your own numbered parallel sessions (`<name>-2`, `<name>-3`) are deliberately ignored — open those by hand. A session's name is the one it shows in the `/resume` picker (set by `claude -n` at creation or by `/rename` later), which mx reads from the transcript.
-
-**Initial prompt (new sessions only).** The prompt is resolved as: an explicit `--prompt <text>` wins (pass `--prompt ''` for none); otherwise the [`session-prompt` hook](#hooks) is fired (cwd = the work folder) and its stdout is used, letting the prompt be generated dynamically — a global default, or varied per repo/work. If neither yields text, the session opens clean. The resolved prompt is passed to Claude as the first message (mx routes it through a throwaway file under the work's `tmp/` so multi-line prompts need no shell escaping).
+Same as `attach`, but opens the work's session in a **new terminal window** rather than the current one. macOS: a fullscreen Terminal (via osascript). Linux: the `$MX_TERMINAL` template if set (a command string containing `{cmd}`), otherwise the first available of `x-terminal-emulator`, `kitty`, `wezterm`, `alacritty`, `gnome-terminal`, `konsole`, `xterm`. If no terminal can be launched it warns and prints the `mx work -n <name> attach` line to run by hand — the session is already built, so nothing is lost. `mx work -n <name> -o` is shorthand for `… open`.
 
 ### `mx work -n <name> describe <text>`
 
@@ -342,9 +356,9 @@ worker.billing-worker  →  3002
 
 ### `mx work -n <name> archive [--yes|-y]`
 
-Soft-delete a work. Removes the worktrees, frees the branches, but **keeps the folder, `work.json`, sessions/, and branches**. Recoverable via `unarchive`.
+Soft-delete a work. Removes the worktrees, frees the branches, **kills the work's tmux session** (`mx/<name>`), but **keeps the folder, `work.json`, sessions/, and branches**. Recoverable via `unarchive`.
 
-Sets `isArchived: true` and `archived_at: <ISO>` in `work.json`. Empties the `.code-workspace` `folders` array (settings preserved). **Frees the worktrees' ports** — they're cleared from `work.json`, so the numbers become reusable while archived (unarchive re-allocates, below). Refuses with `DIRTY` if any worktree is dirty; refuses with `ALREADY_ARCHIVED` if already archived.
+Sets `isArchived: true` and `archived_at: <ISO>` in `work.json`. Empties the `.code-workspace` `folders` array (settings preserved). **Frees the worktrees' ports** — they're cleared from `work.json`, so the numbers become reusable while archived (unarchive re-allocates, below). Refuses with `DIRTY` if any worktree is dirty; refuses with `ALREADY_ARCHIVED` if already archived. If the tmux session is live, the confirmation prompt names it — and **warns when a pane holds a live foreground process** (a dev server, a running `claude`) since killing the session terminates it.
 
 **Prompts for confirmation** before doing anything:
 
@@ -378,7 +392,7 @@ To override per-worktree: pass `<worktree-name>=<branch>` positional args (the w
 
 ### `mx work -n <name> destroy --force`
 
-**PERMANENT.** Deletes the work folder including `work.json`, `.code-workspace`, and `sessions/`. Branches are kept (same as archive). Refuses with `DIRTY` if any worktree has uncommitted changes.
+**PERMANENT.** Deletes the work folder including `work.json`, `.code-workspace`, and `sessions/`, and **kills the work's tmux session**. Branches are kept (same as archive). Refuses with `DIRTY` if any worktree has uncommitted changes.
 
 Requires `--force`. Without it, errors with `NEED_FORCE` pointing at archive:
 
@@ -459,9 +473,10 @@ All lifecycle hooks live in **one place** — `<runtime>/hooks/` — with **one 
 | `pre-repo-fetch` / `post-repo-fetch` | around `mx repo fetch` | pre **aborts**; post warns |
 | `repo-health` | during `mx repo health` (cwd = the pristine clone) | stdout captured into the report |
 | `work-health` | during `mx work health` / `mx health` (cwd = the work folder) | stdout captured into the report |
-| `session-prompt` | when `mx work open` creates a new Claude session (cwd = the work folder) | stdout becomes the session's initial prompt |
+| `session-prompt` | when `mx work attach`/`open` first CREATES a work's Claude session (cwd = the work folder) | stdout becomes the session's initial prompt |
+| `work-session` | after mx BUILDS a work's tmux session, before attaching (cwd = the work folder) | post-style: non-zero only warns; rearrange/extend the layout |
 
-Context arrives as `MX_*` environment variables — always `MX_EVENT` and `MX_RUNTIME`, plus event-specific ones: `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_GIT_DIR`, `MX_REPO_PATH`, `MX_SESSION_NAME`. Each shipped hook's header documents its own set and working directory. A `pre-*` non-zero exit **aborts** the operation (`HOOK_FAILED`, nothing mutated) — even in `--porcelain` mode (where hook stdio is suppressed, the abort still surfaces as a JSON `HOOK_FAILED` error); a `post-*` non-zero exit is only a warning.
+Context arrives as `MX_*` environment variables — always `MX_EVENT` and `MX_RUNTIME`, plus event-specific ones: `MX_WORK`, `MX_REPO`, `MX_BRANCH`, `MX_BASE`, `MX_WORKTREE_PATH`, `MX_WORK_PATH`, `MX_GIT_DIR`, `MX_REPO_PATH`, `MX_SESSION_NAME`, `MX_TMUX_SESSION`, `MX_CLAUDE_SESSION_ID`. Each shipped hook's header documents its own set and working directory. A `pre-*` non-zero exit **aborts** the operation (`HOOK_FAILED`, nothing mutated) — even in `--porcelain` mode (where hook stdio is suppressed, the abort still surfaces as a JSON `HOOK_FAILED` error); a `post-*` non-zero exit is only a warning.
 
 ## Output conventions
 
@@ -490,10 +505,14 @@ Context arrives as `MX_*` environment variables — always `MX_EVENT` and `MX_RU
 | `PORT_TAKEN` | requested port is already allocated to another work/service |
 | `NO_PORT` | `port unset` for a service that has no port set |
 | `GIT` | an underlying `git` command failed (message includes git's stderr) |
-| `OSASCRIPT` | an AppleScript step failed during `mx work new -o` (macOS) |
+| `OSASCRIPT` | an AppleScript step failed while opening a Terminal (macOS `-o`) |
+| `TMUX_MISSING` | `tmux` is not installed / not on PATH (needed by `mx work attach`/`open`) |
+| `TMUX_TOO_OLD` | `tmux` is older than the required 3.0 |
+| `TMUX` | an underlying `tmux` command failed |
+| `NO_PACKAGE_MANAGER` | `mx doctor --install` found no supported package manager (brew/apt/dnf/pacman) |
+| `INSTALL_FAILED` | `mx doctor --install` ran the install command and it exited non-zero |
 | `ALREADY_ARCHIVED` | archive called on an archived work |
 | `NOT_ARCHIVED` | unarchive called on a non-archived work |
-| `MULTIPLE_SESSIONS` | `mx work open` found more than one Claude session named after the work — resume one manually |
 | `NEED_FORCE` | mutating action gated behind `--force` |
 | `NEED_CONFIRMATION` | mutating action requires `--yes` (e.g. archive in `--porcelain` / non-TTY) |
 | `RUNTIME_VERSION_MISMATCH` | runtime `mx.json` differs from the version this CLI supports — run `mx migrate` (older) or `mx update` (newer) |

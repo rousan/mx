@@ -48,15 +48,16 @@ Inside a work folder or worktree you can drop `-n` — mx infers the work/repo f
 | `mx repo new <name> [--quick] [-o]` | create a fresh local repo with no remote (git init on main + README + initial commit); `--quick` also makes a `dev-<name>` work + a `develop` worktree (quick-experiment one-shot) |
 | `mx repo ls` / `mx repo -n <name> fetch\|info\|rm` | manage pristine repos |
 | `mx repo health` / `mx repo -n <name> health` | local-only health check (augmented by the central `repo-health` hook) |
-| `mx work new <name> [<repo>[:<branch>[:<base>]]]... [--branch <b>] [--base <ref>] [-o]` | create a work; extra args are repos to make initial worktrees for (per repo: branch = `:<branch>` → `--branch` → work name; base = `:<base>` → `--base` → pristine HEAD); `-o` opens a fullscreen Terminal + starts the work's Claude session (macOS) |
+| `mx work new <name> [<repo>[:<branch>[:<base>]]]... [--branch <b>] [--base <ref>] [-o]` | create a work; extra args are repos to make initial worktrees for (per repo: branch = `:<branch>` → `--branch` → work name; base = `:<base>` → `--base` → pristine HEAD); `-o` builds the work's tmux session and opens it in a new terminal |
 | `mx work ls [--all\|--archived]` / `mx work -n <name> info\|describe\|path` | manage works |
-| `mx work -n <name> open` (or `-o`) `[--prompt <text>]` | fullscreen Terminal (macOS) that resumes-or-creates the per-work Claude session named `<name>` (0 → create, seeded by the `session-prompt` hook / `--prompt`; 1 → resume; ≥2 → error, resume manually) |
+| `mx work -n <name> attach` (or `open` / `-o`) `[--prompt <text>]` | enter the work's tmux session (one work == one `mx/<name>` session: a `main` window with the work's Claude session + `nvim`, and a `run` window of shells). `attach` uses the current terminal; `open`/`-o` a new one. Built lazily and self-healing; the Claude session resumes by a pinned id. macOS + Linux |
 | `mx work -n <name> worktree add <repo> [<wt-name>] [--branch <b>] [--base <ref>]` | add a worktree (fires `pre/post-worktree-create`); `<wt-name>` defaults to the repo — pass a distinct one for multiple worktrees of the same repo |
 | `mx work -n <name> worktree ls\|rm <wt-name>` | list / remove a worktree (by name; defaults to the repo) |
 | `mx work -n <name> worktree set-branch <wt-name> [<branch>]` | re-record a worktree's branch in `work.json` after you switch branches inside it yourself (reads the live branch; mx never checks out); optional `<branch>` guards against a mismatch |
 | `mx work -n <name> port set\|unset\|ls <wt-name> <service> [<port>]` | allocate/release ports per worktree (omit `<port>` to auto-pick) |
-| `mx work -n <name> archive [--yes]` / `unarchive` | soft-delete / restore a work (keeps branches); fires the central `pre/post-work-archive` / `pre/post-work-unarchive` hooks (a `pre-*` non-zero exit aborts) |
-| `mx work -n <name> destroy --force` | permanently remove the work folder (keeps branches) |
+| `mx work -n <name> archive [--yes]` / `unarchive` | soft-delete / restore a work (keeps branches; archive also kills the work's tmux session); fires the central `pre/post-work-archive` / `pre/post-work-unarchive` hooks (a `pre-*` non-zero exit aborts) |
+| `mx work -n <name> destroy --force` | permanently remove the work folder + tmux session (keeps branches) |
+| `mx doctor [--install]` | check the tmux-workflow deps (tmux, neovim, claude) + recommended toolbelt; print the install command for anything missing (`--install` runs it) |
 | `mx work health` / `mx work -n <name> health` | local-only work-folder audit (stray files, worktree presence, cross-work port collisions, archive invariants); augmented by the central `work-health` hook (`--all` includes archived) |
 | `mx health [--all]` | whole-runtime overview: every repo's health + every active work's health |
 | `mx bin ls` / `mx bin path` (alias `mx bins`) | list the runtime's `bin/` utility executables (mx-shipped + your own); `path` prints the dir for `export PATH="$(mx bin path):$PATH"` |

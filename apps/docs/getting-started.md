@@ -6,6 +6,7 @@ This guide takes you from zero to a running parallel feature in a few minutes. Y
 
 - **Node.js 18+** and **git**.
 - A repo (or two) you want to work on. mx works with any git repo — local or remote.
+- For the tmux workflow (opening a work with its agent and editor), you'll also want **tmux**, **neovim**, and the **Claude Code CLI** — see **[Prerequisites](/prerequisites)** for the install commands and `mx doctor`. mx supports macOS and Linux.
 
 ## Install
 
@@ -71,6 +72,18 @@ mx work new add-search web api
 
 Each repo gets its own worktree under the one work, so a single agent session can edit across all of them.
 
+## Open your work
+
+Now step into the work. `mx work attach` builds the work's **tmux session** — the coding agent and `nvim` side by side, plus a window of shells — and attaches your terminal to it:
+
+```bash
+mx work -n add-search attach
+# or open it in a new terminal window:
+mx work -n add-search open      # alias: -o
+```
+
+The agent session is keyed to the work, so re-attaching later always resumes the same conversation. Detach (your tmux prefix + `d`) to leave everything running in the background. Prefer VS Code? mx also generates a `.code-workspace` file you can open directly. See **[The tmux workflow](/guides/tmux)** for the full picture.
+
 ## Allocate a port
 
 If your app runs a dev server, give it a port that's guaranteed unique across every work in the runtime:
@@ -113,4 +126,4 @@ mx work -n add-search unarchive
 
 - **[Tutorial](/tutorial)** — the full end-to-end story: two features in parallel across two repos, then archive and resume.
 - **[Core concepts](/concepts)** — the four words (runtime, repo, work, worktree) the whole tool is built on, and the one rule that governs everything.
-- **Guides** — go deep on any feature: [ports](/guides/ports), [hooks & hydration](/guides/hooks), the [context registry](/guides/context), [mission control](/guides/mission-control), the [archive/resume lifecycle](/guides/lifecycle), and [coding agents](/guides/coding-agents).
+- **Guides** — go deep on any feature: the [tmux workflow](/guides/tmux), [ports](/guides/ports), [hooks & hydration](/guides/hooks), the [context registry](/guides/context), [mission control](/guides/mission-control), the [archive/resume lifecycle](/guides/lifecycle), and [coding agents](/guides/coding-agents).

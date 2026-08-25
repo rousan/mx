@@ -16,7 +16,7 @@ import {
 } from '@mx/core';
 import type { RepoHealth } from '@mx/core';
 import { emit, dim, bold, check, warn, tildify } from '../output';
-import { openWorkLayout } from '../open';
+import { openWorkInTerminal } from './work';
 import { runPreHook, runPostHook } from '../hooks';
 import type { Flags } from '../args';
 
@@ -117,11 +117,17 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
       let opened = false;
       if (flags.open) {
         try {
-          openWorkLayout(workRes.path);
+          // Ensure the new work's tmux session and open it in a terminal — same
+          // path as `mx work new -o`. Best-effort: a window failure is a warning,
+          // `mx work -n <work> attach` still works in-place.
+          openWorkInTerminal(root, workRes.name, workRes.path, flags);
           opened = true;
         } catch (e) {
           const msg = e instanceof MxError ? e.message : String(e);
-          process.stderr.write(`${warn()} ${dim(`could not open layout: ${msg}`)}\n`);
+          process.stderr.write(
+            `${warn()} ${dim(`could not open a terminal: ${msg}`)}\n` +
+              `${dim(`  run \`mx work -n ${workRes.name} attach\` in a terminal instead.`)}\n`,
+          );
         }
       }
       emit(() => {

@@ -46,6 +46,8 @@ A work can hold **worktrees of several repos** — that's how a single feature s
 
 Each work owns its **ports**: `mx work port set` hands out a port that's unique across the entire runtime, so two features running the same app never collide.
 
+Each active work also maps to exactly **one tmux session**, named `mx/<work>` — your coding agent, editor, and dev-server shells all live inside it. `mx work attach` builds that session and drops you in; archiving or destroying the work tears it down. See **[The tmux workflow](/guides/tmux)**.
+
 ## Worktrees
 
 A worktree is a git worktree — a real checkout of a repo on a feature branch, living at `works/<feature>/wt/<repo>`. This is where you (and your coding agent) actually write code. Many worktrees can be checked out at once, in separate folders, all sharing one clone's history.
@@ -62,4 +64,4 @@ This is what keeps the manifest from ever drifting out of sync with what's actua
 
 - **[Getting started](/getting-started)** — install mx and create your first work.
 - **[Tutorial](/tutorial)** — run two features in parallel, end to end.
-- **Guides** — [works & worktrees](/guides/works-and-worktrees), [ports](/guides/ports), [hooks & hydration](/guides/hooks), the [context registry](/guides/context), [mission control](/guides/mission-control), and the [archive/resume lifecycle](/guides/lifecycle).
+- **Guides** — [works & worktrees](/guides/works-and-worktrees), the [tmux workflow](/guides/tmux), [ports](/guides/ports), [hooks & hydration](/guides/hooks), the [context registry](/guides/context), [mission control](/guides/mission-control), and the [archive/resume lifecycle](/guides/lifecycle).

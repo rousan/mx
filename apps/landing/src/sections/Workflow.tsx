@@ -3,10 +3,10 @@ import { WORKFLOW_STEPS } from '../content';
 
 /**
  * The workflow section — the concrete story of how a feature goes from new to
- * merged with mx: one fullscreen macOS Space per feature (terminal split with
- * the editor), the coding agent in the first terminal tab, a three-finger swipe
- * to switch, and archive on merge. Told as *the* workflow (not a hedged "one of
- * many"), with the it-doesn't-have-to-be-this-way note saved for the end.
+ * merged with mx: one tmux session per feature (Claude Code and the editor side
+ * by side, dev servers a window away), one fullscreen macOS Space per session, a
+ * three-finger swipe to switch, and archive on merge. Told as *the* workflow (not
+ * a hedged "one of many"), with the it-doesn't-have-to-be-this-way note at the end.
  */
 export function Workflow() {
   return (
@@ -59,10 +59,10 @@ export function Workflow() {
 }
 
 /**
- * A stylized mock of one feature's fullscreen Space: a terminal pane on the left
- * (tab 1 = the agent session, tab 2 = the dev server) and the editor on the
- * right, with swipe affordances on the sides to convey "each feature is its own
- * Space; swipe to switch." Purely decorative — built from styled divs.
+ * A stylized mock of one feature's tmux session in a fullscreen Space: the main
+ * window on the left (Claude Code, with the run window a tab away) and the editor
+ * on the right, with swipe affordances on the sides to convey "each feature is
+ * its own Space; swipe to switch." Purely decorative — built from styled divs.
  */
 function SpaceMock() {
   return (
@@ -84,12 +84,12 @@ function SpaceMock() {
           {/* Left half: the terminal, with two tabs. */}
           <div className="border-b border-line md:border-r md:border-b-0">
             <div className="flex items-center gap-1 border-b border-line px-3 pt-2">
-              <TermTab label="claude" active />
-              <TermTab label="dev server" />
+              <TermTab label="main" active />
+              <TermTab label="run" />
             </div>
             <div className="px-4 py-4 font-mono text-[12px] leading-6">
               <div className="text-ink-soft">
-                <span className="mr-2 text-accent">$</span>mx work open -n checkout-redesign
+                <span className="mr-2 text-accent">$</span>mx work attach -n checkout-redesign
               </div>
               <div className="text-muted">◆ Claude Code · auto mode on</div>
               <div className="text-faint"># create worktrees + build the feature…</div>

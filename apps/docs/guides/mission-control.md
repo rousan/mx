@@ -37,7 +37,7 @@ Health checks are purely local — they audit branches, uncommitted changes, wor
 
 ## Organizing your desktop with dividers
 
-If you keep one macOS Space per feature (a common way to work — see [Coding agents](/guides/coding-agents)), the Spaces can blur together. `mx divider` fills a terminal with big block-letter text to act as a visual separator between groups of Spaces:
+If you keep a terminal window (or a macOS Space) per feature — each holding that work's [tmux session](/guides/tmux) — the Spaces can blur together. `mx divider` fills a terminal with big block-letter text to act as a visual separator between groups of Spaces:
 
 ```bash
 mx divider "IN REVIEW"       # take over the current terminal with the banner
@@ -49,4 +49,5 @@ Drop a labeled divider Space between clusters of feature Spaces — `IN PROGRESS
 ## Related
 
 - **[Ports](/guides/ports)** — where the ports on the board come from.
-- **[Coding agents](/guides/coding-agents)** — the one-Space-per-feature workflow.
+- **[The tmux workflow](/guides/tmux)** — one session per feature.
+- **[Coding agents](/guides/coding-agents)** — the per-feature workflow.

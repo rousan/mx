@@ -232,8 +232,9 @@ export const runtimeHooksDir = (root: string): string => path.join(root, 'hooks'
  * a non-zero exit is only a warning; `repo-health` / `work-health` augment
  * `mx repo health` / `mx work health` with their stdout; `session-prompt` emits
  * (on stdout) the initial prompt for a new Claude session opened by
- * `mx work open`. The set is extensible — add an event here and a stamped
- * template, and wire the call site.
+ * `mx work open`; `work-session` runs after mx builds a work's tmux session and
+ * can rearrange or extend the layout. The set is extensible — add an event here
+ * and a stamped template, and wire the call site.
  */
 export const HOOK_EVENTS = [
   'pre-work-archive',
@@ -249,6 +250,7 @@ export const HOOK_EVENTS = [
   'repo-health',
   'work-health',
   'session-prompt',
+  'work-session',
 ] as const;
 
 /**

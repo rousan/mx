@@ -61,7 +61,8 @@ mx/
 │   ├── pre-repo-fetch · post-repo-fetch
 │   ├── repo-health         # augments `mx repo health`
 │   ├── work-health         # augments `mx work health`
-│   └── session-prompt      # generates the initial prompt for a new session (mx work open)
+│   ├── session-prompt      # generates the initial prompt for a new session (mx work attach/open)
+│   └── work-session        # customizes a work's tmux session layout after mx builds it
 ├── bin/                    # runtime-wide utility executables (put on PATH); mx ships some, add your own (see § Runtime bin)
 ├── context/                # shared memory across all features (see § Context registry)
 │   ├── INDEX.json          # single source of truth — metadata for every entry
@@ -175,13 +176,15 @@ the script — e.g. a different hydrate for `web` vs `api`, or only for branch `
 | `pre-repo-fetch` / `post-repo-fetch` | around `mx repo fetch` | pre **aborts**; post warns |
 | `repo-health` | during `mx repo health` (cwd = the pristine clone) | stdout captured into the `extra` row (print nothing or `ok` when healthy → ✓, the problem when not → ⚠) |
 | `work-health` | during `mx work health` / `mx health` (cwd = the work folder) | stdout captured into the `extra` row (same silent-when-healthy convention) |
-| `session-prompt` | when `mx work open` (or `mx work new -o`) creates a new Claude session (cwd = the work folder) | stdout becomes the session's initial prompt (empty → clean session) |
+| `session-prompt` | when `mx work attach`/`open` first CREATES a work's Claude session (cwd = the work folder) | stdout becomes the session's initial prompt (empty → clean session) |
+| `work-session` | after mx BUILDS a work's tmux session, before attaching (cwd = the work folder) | post-style: a non-zero exit only warns; use it to rearrange/extend the default layout |
 
 `pre-*` hooks are veto points (a non-zero exit aborts the operation before anything is mutated); `post-*`
 hooks run after success and a non-zero exit is only a warning. Context arrives as `MX_*` environment
 variables — always `$MX_EVENT` and `$MX_RUNTIME`, plus event-specific ones like `$MX_WORK`, `$MX_REPO`,
-`$MX_BRANCH`, `$MX_BASE`, `$MX_WORKTREE_PATH`, `$MX_WORK_PATH`, `$MX_GIT_DIR`, `$MX_SESSION_NAME`. Each shipped hook's header
-comment documents exactly which variables it gets and its working directory.
+`$MX_BRANCH`, `$MX_BASE`, `$MX_WORKTREE_PATH`, `$MX_WORK_PATH`, `$MX_GIT_DIR`, `$MX_SESSION_NAME`,
+`$MX_TMUX_SESSION`, `$MX_CLAUDE_SESSION_ID`. Each shipped hook's header comment documents exactly which
+variables it gets and its working directory.
 
 ## The work folder holds mx-native files only
 
@@ -397,6 +400,19 @@ clarity; dropping it works while you're inside the work.
   across all works). This only records the port in `work.json` — **you** must then wire that port
   into the repo's own env/config (`.env`, `PORT=`, etc.) and remap any outbound URL to a sibling
   service to its allocated port too. Release with `port unset`.
+- **Enter a work (its tmux session):** every active work maps to **one tmux session** named `mx/<feature>`.
+  `mx work -n <feature> attach` builds that session on first use — a `main` window (left pane: the work's
+  Claude session, resumed by its pinned id; right pane: `nvim` at the work root) and a `run` window (a 2×2
+  grid of shells for dev servers) — then attaches **this** terminal to it (or `switch-client`s when you're
+  already inside tmux). `mx work -n <feature> open` (and `mx work new -o`) does the same but in a **new**
+  terminal window. Building is lazy and self-healing: after a reboot or a manual `tmux kill-session`, the next
+  `attach` just rebuilds it. Customize the layout via the `<runtime>/hooks/work-session` hook. Need extra
+  terminals? Make new tmux windows/panes yourself — they belong to the session. The `.code-workspace` is still
+  written, so you can open the work in VS Code too if you prefer. (mx no longer drives editors/terminals via
+  osascript.)
+- **Check the toolchain:** `mx doctor` verifies the tmux workflow's dependencies (tmux, neovim, claude) plus
+  the recommended editor toolbelt, and prints the exact install command for anything missing (`--install`
+  runs it). Run it once on a new machine.
 - **Check health:** `mx repo health` audits the pristine clones; `mx work health` audits the work folders
   (stray files in a work root, worktree presence vs `work.json`, cross-work port collisions, archive
   invariants); `mx health` shows both for the whole runtime (`--all` includes archived works). All are
@@ -405,8 +421,10 @@ clarity; dropping it works while you're inside the work.
   monochrome view of all repo/work health and a consolidated ports board (which work owns which port, with a
   `localhost` URL). Updates live over SSE. `--port <n>` sets the port (default 7777), `-o` opens the browser.
   Long-running (Ctrl-C to stop) — if you start it for the user, tell them the URL.
-- **Tear down (user-initiated, after merge):** `mx work -n <feature> destroy` removes the worktrees
-  and the work folder but **keeps the branches**. It refuses if any worktree has uncommitted changes.
+- **Tear down (user-initiated, after merge):** `mx work -n <feature> destroy` removes the worktrees,
+  the work folder, and the work's tmux session but **keeps the branches**. It refuses if any worktree has
+  uncommitted changes. (`mx work archive` likewise kills the session — it warns first if a pane holds a live
+  process like a dev server or a running `claude`.)
 
 ## Hard rules
 

@@ -61,6 +61,7 @@ export default defineConfig({
         items: [
           { text: 'What is mx?', link: '/' },
           { text: 'Why mx', link: '/why-mx' },
+          { text: 'Prerequisites', link: '/prerequisites' },
           { text: 'Getting started', link: '/getting-started' },
           { text: 'Core concepts', link: '/concepts' },
         ],
@@ -74,6 +75,7 @@ export default defineConfig({
         items: [
           { text: 'Repos', link: '/guides/repos' },
           { text: 'Works & worktrees', link: '/guides/works-and-worktrees' },
+          { text: 'The tmux workflow', link: '/guides/tmux' },
           { text: 'Ports', link: '/guides/ports' },
           { text: 'Hooks & hydration', link: '/guides/hooks' },
           { text: 'Context registry', link: '/guides/context' },
