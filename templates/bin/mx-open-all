@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+#
+# mx-open-all — open mx works in ONE fullscreen macOS Terminal window, one tab
+# per work, each running `mx work attach <work>`.
+#
+#   mx-open-all                 # open every ACTIVE work
+#   mx-open-all sidekick dev-mx # open only the named works (a subset)
+#
+# Named works are validated against the active set — a name that isn't an active
+# work is skipped with a warning (rather than opening a tab that just errors).
+#
+# macOS + Terminal.app only. This is a user bin (mx never ships or overwrites
+# it). It asks mx for the works (stable JSON via --porcelain), then drives
+# Terminal.app with AppleScript: the first work opens a new window (tab 1), each
+# remaining work gets a new tab (Cmd-T), and the window is finally made
+# fullscreen. Each tab runs `mx work attach <work>`, which builds that work's
+# tmux session if needed and attaches the tab to it.
+set -euo pipefail
+
+case "${1:-}" in
+  -h | --help)
+    sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+    ;;
+esac
+
+# Terminal.app + AppleScript is macOS-only. Fail cleanly elsewhere rather than
+# erroring deep inside osascript.
+if [ "$(uname -s)" != "Darwin" ]; then
+  echo "mx-open-all: macOS + Terminal.app only" >&2
+  exit 1
+fi
+
+# The runtime the tabs should target. Terminal opens fresh login shells that
+# won't inherit this process's environment, so we bake it into each command.
+runtime="${MX_RUNTIME:-$HOME/mx}"
+
+# The set of ACTIVE work names. `mx work ls --porcelain` is active-only by
+# default; the isArchived guard is belt-and-suspenders. node is always present
+# (mx itself runs on it). Portable read loop (macOS's stock bash 3.2 — no mapfile).
+active=()
+while IFS= read -r line; do
+  [ -n "$line" ] && active+=("$line")
+done < <(MX_RUNTIME="$runtime" mx work ls --porcelain | node -e '
+  let s = "";
+  process.stdin.on("data", (d) => (s += d)).on("end", () => {
+    for (const w of JSON.parse(s)) if (w.isArchived !== true) console.log(w.name);
+  });
+')
+
+if [ "${#active[@]}" -eq 0 ]; then
+  echo "mx-open-all: no active mx works to open" >&2
+  exit 0
+fi
+
+# Decide which works to open. With no arguments, every active work; with
+# arguments, only the named ones that are ACTIVE — an archived, destroyed, or
+# unknown name is ignored with a warning (never opened, so no dead tabs). The
+# guard above ensures `active` is non-empty here, so expanding it is safe even
+# under `set -u` on bash 3.2.
+works=()
+if [ "$#" -gt 0 ]; then
+  for req in "$@"; do
+    is_active=0
+    for a in "${active[@]}"; do
+      [ "$a" = "$req" ] && is_active=1 && break
+    done
+    if [ "$is_active" -eq 1 ]; then
+      works+=("$req")
+    else
+      echo "mx-open-all: ignoring \"$req\" (not an active work)" >&2
+    fi
+  done
+else
+  works=("${active[@]}")
+fi
+
+if [ "${#works[@]}" -eq 0 ]; then
+  echo "mx-open-all: nothing to open" >&2
+  exit 0
+fi
+
+# Escape a string for safe embedding inside an AppleScript double-quoted literal
+# (backslash and double-quote).
+apl() { printf '%s' "$1" | sed 's/[\\"]/\\&/g'; }
+
+# The shell command a tab runs for a given work.
+attach_cmd() { printf 'MX_RUNTIME=%s mx work attach %s' "$(apl "$runtime")" "$(apl "$1")"; }
+
+# Build the AppleScript. Tab 1 opens a new window; the rest are new tabs in it.
+script="tell application \"Terminal\"
+  activate
+  do script \"$(attach_cmd "${works[0]}")\"
+end tell
+delay 0.6"
+
+i=1
+while [ "$i" -lt "${#works[@]}" ]; do
+  script="$script
+tell application \"System Events\" to keystroke \"t\" using command down
+delay 0.6
+tell application \"Terminal\" to do script \"$(attach_cmd "${works[$i]}")\" in front window
+delay 0.3"
+  i=$((i + 1))
+done
+
+# Finally, make the fleet window fullscreen.
+script="$script
+tell application \"System Events\" to tell process \"Terminal\"
+  set value of attribute \"AXFullScreen\" of window 1 to true
+end tell"
+
+echo "mx-open-all: opening ${#works[@]} work(s) in a fullscreen Terminal..." >&2
+osascript -e "$script"
