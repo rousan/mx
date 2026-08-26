@@ -402,7 +402,8 @@ clarity; dropping it works while you're inside the work.
   service to its allocated port too. Release with `port unset`.
 - **Enter a work (its tmux session):** every active work maps to **one tmux session** named `mx/<feature>`.
   `mx work -n <feature> attach` builds that session on first use — a `main` window (left pane: the work's
-  Claude session, resumed by its pinned id; right pane: `nvim` at the work root) and a `run` window (a 2×2
+  Claude session, resumed by work name — the newest session named after the work, else a fresh one; right
+  pane: `nvim` at the work root) and a `run` window (a 2×2
   grid of shells for dev servers) — then attaches **this** terminal to it (or `switch-client`s when you're
   already inside tmux). `mx work -n <feature> open` (and `mx work new -o`) does the same but in a **new**
   terminal window. Building is lazy and self-healing: after a reboot or a manual `tmux kill-session`, the next

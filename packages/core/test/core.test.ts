@@ -1866,3 +1866,37 @@ describe('contextIndexStatus', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 });
+
+describe('findSessionsByName (resume-by-work-name)', () => {
+  it('finds sessions whose display name equals the work, newest-first, exact-match only', async () => {
+    const { findSessionsByName, claudeProjectDirName } = await import('../src/claudeSessions');
+    const projectsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mx-cs-'));
+    const workPath = '/tmp/mx/works/feat';
+    const dir = path.join(projectsRoot, claudeProjectDirName(workPath));
+    fs.mkdirSync(dir, { recursive: true });
+    const writeSession = (id: string, title: string, mtime: number): void => {
+      const f = path.join(dir, `${id}.jsonl`);
+      fs.writeFileSync(f, JSON.stringify({ type: 'custom-title', customTitle: title }) + '\n');
+      fs.utimesSync(f, mtime, mtime);
+    };
+    // Two sessions named "feat" (older + newer), one named "feat-2" (must NOT match), one unnamed.
+    writeSession('aaaaaaaa-0000-0000-0000-000000000001', 'feat', 1000);
+    writeSession('bbbbbbbb-0000-0000-0000-000000000002', 'feat', 2000);
+    writeSession('cccccccc-0000-0000-0000-000000000003', 'feat-2', 3000);
+    fs.writeFileSync(path.join(dir, 'dddddddd-0000-0000-0000-000000000004.jsonl'), '{}\n');
+
+    const found = findSessionsByName(projectsRoot, workPath, 'feat');
+    // exact "feat" only — the "feat-2" and unnamed sessions are excluded
+    expect(found.map((s) => s.id)).toEqual([
+      'bbbbbbbb-0000-0000-0000-000000000002', // newest first
+      'aaaaaaaa-0000-0000-0000-000000000001',
+    ]);
+    // resolveClaudeCommand resumes found[0] — the most recent named session.
+    expect(found[0].name).toBe('feat');
+
+    // No project dir / no match → empty (resolveClaudeCommand then creates).
+    expect(findSessionsByName(projectsRoot, '/tmp/mx/works/other', 'other')).toEqual([]);
+
+    fs.rmSync(projectsRoot, { recursive: true, force: true });
+  });
+});
