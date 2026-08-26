@@ -201,7 +201,8 @@ export interface BuildSessionOpts {
  *   `MX_*` environment (work, paths, runtime, ports) so every pane knows its
  *   context;
  * - window `main`: left pane runs the resolved `claude` command, right pane runs
- *   `nvim` at the work root (all worktrees visible under `wt/`), focus on claude;
+ *   `nvim wt` (the work's worktrees folder — overridable in the work-session
+ *   hook), focus on claude;
  * - window `run`: a 2x2 tiled grid of shells for dev servers and ad-hoc work.
  *
  * The session is created detached and generously sized so the splits compute
@@ -234,11 +235,14 @@ export function buildSession(session: string, opts: BuildSessionOpts): void {
     const key = `MX_PORT_${p.worktree}_${p.service}`.replace(/[^A-Za-z0-9_]/g, '_');
     setenv(key, String(p.port));
   }
-  // Main window: claude (left) + nvim (right).
+  // Main window: claude (left) + nvim (right). nvim opens the work's `wt/`
+  // folder — the worktrees are what you actually edit — not the work-folder root
+  // (which holds mx-native files). A work can override this in the work-session
+  // hook. Panes' cwd stays the work folder, so `wt` resolves under it.
   tmux(['rename-window', '-t', `${session}:0`, 'main']);
   tmux(['send-keys', '-t', `${session}:main.0`, claudeCmd, 'Enter']);
   tmux(['split-window', '-h', '-t', `${session}:main.0`, '-c', workPath]);
-  tmux(['send-keys', '-t', `${session}:main.1`, 'nvim .', 'Enter']);
+  tmux(['send-keys', '-t', `${session}:main.1`, 'nvim wt', 'Enter']);
   tmux(['select-pane', '-t', `${session}:main.0`]);
   // Run window: 2x2 grid of shells for servers / ad-hoc commands. Three splits
   // off the active pane then a tiled layout give an even 2x2.

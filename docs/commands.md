@@ -290,7 +290,7 @@ Enter a work — the **primary** way in. Every active work maps to exactly **one
 
 The default session mx builds:
 
-- window `main` — LEFT pane: the work's Claude Code session; RIGHT pane: `nvim .` at the work root (every worktree under `wt/` visible). Focus starts on the claude pane.
+- window `main` — LEFT pane: the work's Claude Code session; RIGHT pane: `nvim wt` (the work's `wt/` worktrees folder, not the work-folder root; overridable in the `work-session` hook). Focus starts on the claude pane.
 - window `run` — a 2×2 tiled grid of shells for dev servers and ad-hoc commands.
 - session environment: `MX_WORK`, `MX_WORK_PATH`, `MX_RUNTIME`, `MX_TMUX=1`, `MX_CLAUDE_SESSION_ID`, plus one `MX_PORT_<worktree>_<service>` per allocated port.
 
