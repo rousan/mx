@@ -179,6 +179,23 @@ mx work gc                # review and confirm what gets pruned
 
 Active works with a live session are healthy and never touched, and neither are sessions belonging to a different runtime that happens to share your tmux server.
 
+## Open your whole fleet (macOS)
+
+On macOS you don't have to attach works one at a time. mx ships a bin, `mx-open-all`, that opens **one fullscreen Terminal.app window with a tab per work**, each tab running `mx work attach`:
+
+```bash
+mx-open-all                    # every active work, one tab each
+mx-open-all feature-a feature-b  # just the named works
+```
+
+Named works are validated against the active set — an archived, destroyed, or unknown name is ignored (never opened), so every tab is a live work. It needs the runtime `bin/` on your `PATH`:
+
+```bash
+export PATH="$(mx bin path):$PATH"    # add to your shell rc
+```
+
+Terminal.app only. Closing the window detaches every tab (the sessions keep running); reopen the fleet any time.
+
 ## Related
 
 - **[Prerequisites](/prerequisites)** — install tmux, neovim, and the toolbelt; `mx doctor`.
