@@ -42,7 +42,8 @@ Write them in **any language** — bash, Node, Python — just set the shebang a
 | `pre/post-repo-fetch` | around `mx repo fetch` | pre aborts; post warns |
 | `repo-health` | during `mx repo health` | stdout captured into the health report |
 | `work-health` | during `mx work health` | stdout captured into the health report |
-| `session-prompt` | when `mx work open` creates a new agent session | stdout becomes the session's initial prompt |
+| `session-prompt` | when `mx work attach` / `open` **creates** a work's agent session | stdout becomes the session's initial prompt |
+| `work-session` | after mx builds a work's tmux session | warning (session kept) |
 
 `pre-*` hooks are veto points — a non-zero exit aborts the operation before anything is mutated. `post-*` hooks run after success; a non-zero exit is only a warning.
 
@@ -58,9 +59,37 @@ Write them in **any language** — bash, Node, Python — just set the shebang a
 
 ## The `session-prompt` hook
 
-When `mx work open` creates a new coding-agent session, this hook's stdout becomes the session's initial prompt — a great place to seed the agent with the feature's ticket, links, or task. See **[Coding agents](/guides/coding-agents)**.
+When `mx work attach` (or `open`) **creates** a work's coding-agent session, this hook's stdout becomes the session's initial prompt — a great place to seed the agent with the feature's ticket, links, or task. It fires only on **create**, never on resume, and `--prompt <text>` overrides it. See **[Coding agents](/guides/coding-agents)**.
+
+## The `work-session` hook
+
+mx builds every work a tmux session with a default layout — a `main` window (Claude + `nvim`) and a `run` window of shells. The `work-session` hook fires **after** mx has built that session, with the work folder as the working directory, so you can reshape the layout: add a window per repo worktree, start a dev server, swap the editor, rename panes.
+
+Its environment adds two variables on top of the usual `MX_WORK` / `MX_WORK_PATH`:
+
+- **`MX_TMUX_SESSION`** — the tmux session name (`mx/<work>`), i.e. your tmux target.
+- **`MX_CLAUDE_SESSION_ID`** — the work's pinned Claude session id.
+
+It's post-style — a non-zero exit only warns, and the session is kept. Delete the file to keep mx's default layout.
+
+```bash
+#!/usr/bin/env bash
+# <runtime>/hooks/work-session   (cwd = the work folder)
+set -euo pipefail
+
+# Add one dedicated window per worktree under wt/.
+for dir in wt/*/; do
+  name="$(basename "$dir")"
+  tmux new-window -t "$MX_TMUX_SESSION" -n "$name" -c "$MX_WORK_PATH/$dir"
+done
+```
+
+::: tip session-prompt vs work-session
+`session-prompt` seeds the **first** agent prompt (create-only). `work-session` shapes the tmux **layout** every time the session is built. See **[The tmux workflow](/guides/tmux)**.
+:::
 
 ## Related
 
+- **[The tmux workflow](/guides/tmux)** — where the `work-session` hook fits.
 - **[Coding agents](/guides/coding-agents)** — the `session-prompt` hook in context.
 - **[Archive & resume](/guides/lifecycle)** — the archive/unarchive hooks.

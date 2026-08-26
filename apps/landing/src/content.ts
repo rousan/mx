@@ -27,7 +27,7 @@ export const FEATURES: Feature[] = [
   {
     icon: 'sparkles',
     title: 'A coding agent per feature',
-    body: 'Open a feature in a fullscreen terminal that resumes or starts its own Claude Code session, pre-seeded with context. Run several agents at once, one per feature, without them tripping over each other.',
+    body: 'Each feature gets its own tmux session — attach and Claude Code is right there, your editor beside it and dev-server shells a window away, resuming exactly where you left off. Run several at once, one per feature, without them tripping over each other.',
   },
   {
     icon: 'layers',
@@ -73,14 +73,14 @@ export interface AgentPoint {
 
 /**
  * How mx supports a fleet of coding agents, concretely. These map to real
- * commands and hooks (mx work open, the session-prompt hook, per-feature ports,
+ * commands and hooks (mx work attach, the session-prompt hook, per-feature ports,
  * --porcelain output), so the section stays truthful rather than aspirational.
  */
 export const AGENT_POINTS: AgentPoint[] = [
   {
     icon: 'sparkles',
     title: 'One session per feature',
-    body: 'mx work open drops you into a fullscreen terminal that resumes — or starts — that feature’s Claude Code session. Each feature keeps its own conversation, history, and context.',
+    body: 'mx work attach drops you into the feature’s tmux session, resuming — or starting — its Claude Code agent. Each feature keeps its own conversation, history, and context, pinned to the work and back instantly on the next attach.',
   },
   {
     icon: 'plug',
@@ -202,33 +202,32 @@ export interface WorkflowStep {
 }
 
 /**
- * A concrete, opinionated way to work day to day with mx — one fullscreen macOS
- * Space per feature (terminal split with the editor), the coding agent in the
- * first terminal tab, and a swipe to switch features. mx doesn't require any of
- * this; it's one workflow that works well, offered so a newcomer has a starting
- * shape to copy rather than a blank page.
+ * A concrete, opinionated way to work day to day with mx — one tmux session per
+ * feature (Claude Code and your editor side by side, dev servers a window away),
+ * one fullscreen Space per session on macOS, and a swipe to switch features. mx
+ * doesn't require any of this; it's one workflow that works well, offered so a
+ * newcomer has a starting shape to copy rather than a blank page.
  */
 export const WORKFLOW_STEPS: WorkflowStep[] = [
   {
     n: 1,
-    title: 'One fullscreen Space per feature',
-    body: 'Open a fullscreen terminal and create the work. Then jump into its folder and open the editor workspace mx generated for you — every repo’s worktree shows up as a folder in one window (code for VS Code, cursor for Cursor).',
+    title: 'One session per feature',
+    body: 'Create the work, then open it — mx launches the feature’s tmux session in a fresh fullscreen terminal. That one session is the feature: Claude Code and your editor already side by side, with dev-server shells a window away.',
     cmds: [
       'mx work new checkout-redesign app api',
-      'cd "$(mx work -n checkout-redesign path)"',
-      'code checkout-redesign.code-workspace',
+      'mx work open -n checkout-redesign',
     ],
   },
   {
     n: 2,
-    title: 'Split the terminal and editor side by side',
-    body: 'Put the terminal and the editor into a macOS split view — terminal on the left, editor on the right. That single fullscreen pane is one feature. Build the next feature the same way, in its own Space.',
+    title: 'Claude, editor, and servers, already laid out',
+    body: 'No window juggling: the session opens with a main window — Claude Code on the left, your editor (nvim by default) on the right — and a run window holding a 2x2 grid of shells for dev servers and logs. It’s editor-agnostic and identical over SSH.',
   },
   {
     n: 3,
-    title: 'Agent in tab 1, everything else in more tabs',
-    body: 'Run the feature’s Claude Code session in the first terminal tab. Use a second tab — or tmux panes — for the dev server, logs, and git, so each concern for that feature has its place.',
-    cmds: ['mx work open -n checkout-redesign'],
+    title: 'Detach and reattach without losing your place',
+    body: 'Run the dev servers in the run window, each on the feature’s own ports. Detach whenever you like — the session keeps running and the Claude conversation stays pinned to the work, so the next attach resumes right where you left off.',
+    cmds: ['mx work attach -n checkout-redesign'],
   },
   {
     n: 4,
@@ -238,7 +237,7 @@ export const WORKFLOW_STEPS: WorkflowStep[] = [
   {
     n: 5,
     title: 'Switch features with a three-finger swipe',
-    body: 'Because each feature is its own fullscreen Space, a three-finger left/right swipe on the trackpad jumps you between features instantly — no windows to hunt for, nothing torn down behind you.',
+    body: 'On macOS, each feature’s session opens in its own fullscreen Space, so a three-finger left/right swipe on the trackpad jumps you between features instantly — no windows to hunt for, nothing torn down behind you.',
   },
   {
     n: 6,
@@ -249,7 +248,7 @@ export const WORKFLOW_STEPS: WorkflowStep[] = [
   {
     n: 7,
     title: 'Wrap up when it’s merged',
-    body: 'When the feature ships, ask the agent to write a session summary (per mx’s session rules), then archive the work — that frees its ports and worktrees while keeping the branches and summaries — and close the terminal and editor.',
+    body: 'When the feature ships, ask the agent to write a session summary (per mx’s session rules), then archive the work — that frees its ports and worktrees while keeping the branches and summaries — and detach and close the terminal.',
     cmds: ['mx work archive -n checkout-redesign'],
   },
 ];
@@ -275,6 +274,7 @@ export const COMMAND_GROUPS: CommandGroup[] = [
     blurb: 'Create the runtime and bring repos in. You run these rarely.',
     commands: [
       { cmd: 'mx init', desc: 'Scaffold the runtime (the ~/mx home folder).' },
+      { cmd: 'mx doctor', desc: 'Check the tmux-workflow prerequisites (tmux, neovim, claude, git, and a recommended toolbelt) and print install commands for anything missing.' },
       { cmd: 'mx repo add <git-url>', desc: 'Clone a repo into the runtime as read-only reference.' },
       { cmd: 'mx repo new <name>', desc: 'Create a fresh local repo with no remote (for experiments).' },
       { cmd: 'mx repo ls', desc: 'List the repos mx knows about.' },
@@ -293,10 +293,11 @@ export const COMMAND_GROUPS: CommandGroup[] = [
   },
   {
     title: 'Ports & sessions',
-    blurb: 'Give a feature its own ports, and open it in a terminal or editor.',
+    blurb: 'Give a feature its own ports, and drop into its tmux session.',
     commands: [
       { cmd: 'mx work -n <name> port set <wt> <service>', desc: 'Allocate a free port, unique across all features.' },
-      { cmd: 'mx work -n <name> open', desc: 'Open a fullscreen terminal that resumes or starts the feature’s Claude session (macOS).' },
+      { cmd: 'mx work -n <name> attach', desc: 'Attach to the feature’s tmux session — Claude Code, your editor, and dev-server shells in one place. Works over SSH.' },
+      { cmd: 'mx work -n <name> open', desc: 'Open the feature’s tmux session in a new terminal window (resumes or starts its Claude session).' },
       { cmd: 'mx mission-control', desc: 'Launch a live web dashboard of health and ports (alias: mx mc).' },
       { cmd: 'mx divider <text>', desc: 'Fill a terminal with big block text — a visual separator for macOS Spaces.' },
     ],
@@ -350,7 +351,7 @@ export const FAQS: Faq[] = [
   },
   {
     q: 'Which platforms does it run on?',
-    a: 'mx is cross-platform (Node 22+ and git). A couple of convenience helpers that open a fullscreen Terminal window — mx work open -o and mx divider -o — are macOS-only; everything else works everywhere.',
+    a: 'macOS and Linux. The tmux workflow wants Node 22+, git, tmux, neovim, and claude — run mx doctor and it prints install commands for anything missing. Attaching to a feature’s session (mx work attach) works anywhere, including over SSH; the Spaces divider (mx divider -o) is macOS-only.',
   },
 ];
 

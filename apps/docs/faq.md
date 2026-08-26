@@ -10,7 +10,11 @@ No. mx is useful for any parallel work — it just happens to be *especially* go
 
 ## Does mx work with agents other than Claude Code?
 
-Yes. mx manages worktrees, ports, and lifecycle — it doesn't care which agent (or editor) you run inside a worktree. Claude Code, Cursor, and others all work. The one agent-specific convenience (`mx work open` resuming a named session) is currently oriented around Claude Code sessions; everything else is agent-agnostic.
+Yes. mx manages worktrees, ports, and lifecycle — it doesn't care which agent (or editor) you run inside a worktree. Claude Code, Cursor, and others all work. The one agent-specific convenience (`mx work attach` building a tmux session with the work's Claude session already resumed) is currently oriented around Claude Code; everything else is agent-agnostic — run whatever you like in the session's other windows.
+
+## Do I need tmux and neovim?
+
+For the tmux workflow (`mx work attach` / `open`) — yes: it builds each work a tmux session with your coding agent and `nvim` laid out, so you need **tmux**, **neovim**, the **Claude Code CLI**, and **git**, plus an optional toolbelt. Run `mx doctor` to check what's missing and get the install command. mx supports macOS and Linux (Windows isn't officially supported). The rest of mx — repos, worktrees, ports, health — works without any of that; and mx still generates a `.code-workspace` file if you'd rather open the work in VS Code. See [Prerequisites](/prerequisites) and [The tmux workflow](/guides/tmux).
 
 ## Can one feature span multiple repositories?
 

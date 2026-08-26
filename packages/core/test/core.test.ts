@@ -1796,3 +1796,37 @@ describe('workHealth / listWorkHealth', () => {
     ]);
   });
 });
+
+describe('tmux session naming + claude session id', () => {
+  it('mxSessionName prefixes with mx/ and sanitizes tmux-hostile characters', async () => {
+    const { mxSessionName, sanitizeTmuxName, isMxSessionName, MX_SESSION_PREFIX } = await import(
+      '../src/tmux'
+    );
+    expect(mxSessionName('feature-a')).toBe('mx/feature-a');
+    // colons and dots are tmux target separators — must be replaced.
+    expect(mxSessionName('a.b:c')).toBe('mx/a-b-c');
+    expect(sanitizeTmuxName('x y')).toBe('x-y');
+    expect(isMxSessionName('mx/feature-a')).toBe(true);
+    expect(isMxSessionName('some-other')).toBe(false);
+    expect(MX_SESSION_PREFIX).toBe('mx/');
+  });
+
+  it('claudeSessionId is a deterministic v5 UUID, unique per work name', async () => {
+    const { claudeSessionId, uuidv5, MX_CLAUDE_NAMESPACE } = await import('../src/tmux');
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    const a = claudeSessionId('feature-a');
+    expect(a).toMatch(uuidRe); // version 5 + RFC 4122 variant bits
+    expect(claudeSessionId('feature-a')).toBe(a); // deterministic
+    expect(claudeSessionId('feature-b')).not.toBe(a); // unique per name
+    // matches a direct uuidv5 in the mx namespace
+    expect(claudeSessionId('feature-a')).toBe(uuidv5('feature-a', MX_CLAUDE_NAMESPACE));
+  });
+
+  it('uuidv5 matches the RFC 4122 reference vector', async () => {
+    const { uuidv5 } = await import('../src/tmux');
+    // Well-known DNS-namespace vector: uuidv5("www.example.com", DNS namespace).
+    expect(uuidv5('www.example.com', '6ba7b810-9dad-11d1-80b4-00c04fd430c8')).toBe(
+      '2ed6657d-e927-568b-95e1-2665a8aea6a2',
+    );
+  });
+});

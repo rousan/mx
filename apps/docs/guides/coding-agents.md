@@ -14,20 +14,26 @@ Each has its own branch and its own ports, so their dev servers and changes neve
 
 ## Open a work with its session
 
-On macOS, `mx work open` (alias `-o`) opens a fullscreen Terminal in the work folder and **resumes or creates** that work's coding-agent session:
+Each work is a **tmux session** named `mx/<work>`, with the agent already running in it. Enter a work with `attach` (this terminal) or `open` (a new window):
 
 ```bash
+mx work -n search-filters attach
+# open in a new terminal window instead:
 mx work -n search-filters open
 # or create-and-open in one step:
 mx work new search-filters web api -o
 ```
 
-- No existing session → mx creates one, seeded by the `session-prompt` hook (or `--prompt`).
-- One existing session → mx resumes it.
+Either way, mx builds the session if it doesn't exist yet — a `main` window with the **Claude Code session** on the left and `nvim` on the right, plus a `run` window of shells. The agent session is keyed to the work, so you always continue the **same** conversation:
+
+- First time → mx creates it, seeded by the `session-prompt` hook (or `--prompt`).
+- Re-attach → mx resumes the same session by its pinned id.
+
+See **[The tmux workflow](/guides/tmux)** for the full model — the default layout, self-healing, and customizing it.
 
 ## Seed the agent with `session-prompt`
 
-The `session-prompt` hook runs when `mx work open` **creates** a new session (not on resume). Its stdout becomes the session's initial prompt — a great place to hand the agent the feature's context automatically:
+The `session-prompt` hook runs when mx **creates** a work's session (not on resume). Its stdout becomes the session's initial prompt — a great place to hand the agent the feature's context automatically:
 
 ```bash
 #!/usr/bin/env bash
@@ -36,7 +42,7 @@ echo "You are working on the feature '$MX_WORK'."
 echo "Read ../../context/INDEX.json for shared conventions before starting."
 ```
 
-Override it for a single open with `mx work open --prompt "…"`.
+Override it for a single session with `mx work attach --prompt "…"` (or `open --prompt`).
 
 ## Shared memory across agents
 
@@ -46,16 +52,16 @@ Every agent, in every work, can read the runtime's **[context registry](/guides/
 
 One common setup, feature by feature:
 
-- **One fullscreen macOS Space per feature** — terminal and editor split side by side.
-- The **coding agent in the terminal**; dev server and git in another tab.
-- **Three-finger swipe** between features; macOS Mission Control for the whole board.
-- Group Spaces by stage with **[`mx divider`](/guides/mission-control#organizing-your-desktop-with-dividers)** — in progress, in review, shipped.
-- On merge: write a **[session summary](/guides/lifecycle#session-summaries)**, then `mx work archive`.
+- **One tmux session per feature** (`mx work attach`) — the agent and `nvim` split in the `main` window, dev servers in the `run` window.
+- **Switch features** by detaching (tmux prefix + `d`) and `attach`-ing another; each session keeps running in the background.
+- Keep a terminal window per active feature if you like, and group them into **macOS Spaces** — then label the Spaces by stage with **[`mx divider`](/guides/mission-control#organizing-your-desktop-with-dividers)** (in progress, in review, shipped).
+- On merge: write a **[session summary](/guides/lifecycle#session-summaries)**, then `mx work archive` (which also tears down the tmux session).
 
 The workflow is flexible — this is just one shape that fits the tool well.
 
 ## Related
 
+- **[The tmux workflow](/guides/tmux)** — the session, layout, and `attach`/`open`.
 - **[Context registry](/guides/context)** — shared memory every agent reads.
-- **[Hooks & hydration](/guides/hooks)** — the `session-prompt` hook.
+- **[Hooks & hydration](/guides/hooks)** — the `session-prompt` and `work-session` hooks.
 - **[Mission control](/guides/mission-control)** — dividers and the fleet view.

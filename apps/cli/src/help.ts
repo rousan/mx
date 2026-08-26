@@ -9,6 +9,7 @@ Global:
   mx sync                                re-stamp runtime files (CLAUDE.md, scaffolding) from current templates — same-major, non-breaking
   mx update                              self-update the mx CLI within its major (npm i -g), then auto-run mx sync; flags a newer major if one exists
   mx migrate [--dry-run]                 upgrade an older-version runtime to the version this CLI supports (the only command allowed on a mismatched runtime); --dry-run previews the plan without changing anything
+  mx doctor [--install [--yes]]          check the tmux-workflow deps (tmux, neovim, claude) + the recommended toolbelt; prints the install command for anything missing (--install runs it)
   mx help | version
 
 Repos (pristine clones):
@@ -25,11 +26,14 @@ Repos (pristine clones):
 
 Works (features):
   mx work new <name> [<repo>[:<branch>[:<base>]]]... [--description <t>] [--branch <b>] [--base <ref>] [-o|--open]
-                                                       creates the work; extra args are repos to make initial worktrees for (per repo: branch = :<branch> else --branch else work name; base = :<base> else --base else pristine HEAD); -o opens a fullscreen Terminal + starts the work's Claude session (macOS)
+                                                       creates the work; extra args are repos to make initial worktrees for (per repo: branch = :<branch> else --branch else work name; base = :<base> else --base else pristine HEAD); -o builds the work's tmux session and opens it in a new terminal
   mx work ls [--all|--archived] [--porcelain]           default: active only; --all includes archived; --archived shows archived only
   mx work -n <name> info [--porcelain]
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
-  mx work -n <name> open  (or -o) [--prompt <text>]     fullscreen Terminal (macOS); resumes the work's Claude session named <name>, or creates it (seeded by the session-prompt hook or --prompt); errors if 2+ share the name
+  mx work -n <name> attach [--prompt <text>]            build the work's tmux session (mx/<name>) if needed, then attach THIS terminal to it (switch-client when already inside tmux); the primary way to enter a work
+  mx work -n <name> open  (or -o) [--prompt <text>]     same, but opens a NEW terminal window (fullscreen on macOS; $MX_TERMINAL or a known emulator on Linux) and attaches there
+  mx work switch [<name>]                               jump between works' sessions: with <name> it's attach; without, an fzf picker over this runtime's live mx/* sessions
+  mx work gc [--yes|-y]                                 prune orphaned tmux sessions — live mx/<work> sessions whose work is archived or gone (e.g. restored by tmux-resurrect after a reboot)
   mx work -n <name> describe <text>
   mx work -n <name> worktree add <repo> [<name>] [--branch <b>] [--base <ref>]   fires pre/post-worktree-create hooks; <name> (default repo) lets one work hold multiple worktrees of a repo
   mx work -n <name> worktree ls [--porcelain]
@@ -38,7 +42,7 @@ Works (features):
   mx work -n <name> port set <worktree> <service> [<port>]  auto-picks a free port if omitted
   mx work -n <name> port unset <worktree> <service>
   mx work -n <name> port ls [--porcelain]
-  mx work -n <name> archive [--yes|-y]                  removes worktrees; keeps folder + work.json + sessions; prompts for confirmation (use --yes to skip)
+  mx work -n <name> archive [--yes|-y]                  removes worktrees + kills the work's tmux session; keeps folder + work.json + sessions; prompts for confirmation (use --yes to skip)
   mx work -n <name> unarchive [<worktree>=<branch>...]  re-creates worktrees from work.json; override per-worktree branch if recorded one is missing
   mx work -n <name> destroy --force                     PERMANENT: deletes the work folder including session summaries (branches kept). Prefer archive.
   mx work health [--all] [--porcelain]                  pure-local health for every active work (--all includes archived)

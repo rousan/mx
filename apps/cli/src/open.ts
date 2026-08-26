@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { MxError } from '@mx/core';
 
 /**
@@ -44,34 +44,71 @@ export function shq(s: string): string {
 }
 
 /**
- * Options for {@link openWorkLayout}.
+ * Candidate Linux terminal emulators tried (in order) when no `$MX_TERMINAL`
+ * template is set. Each entry is the argv that runs a shell command in a new
+ * window, with `{cmd}` replaced by the command. The first whose binary is on
+ * `PATH` wins.
  */
-export interface OpenWorkOpts {
-  /**
-   * Shell command to run in the new Terminal after `cd`-ing into the work
-   * folder — e.g. a `claude --resume <id>` / `claude -n <name>` invocation. When
-   * omitted, the Terminal simply opens at the work folder with an interactive
-   * shell (the original behavior).
-   */
-  command?: string;
+const LINUX_TERMINALS: string[][] = [
+  ['x-terminal-emulator', '-e', 'bash', '-lc', '{cmd}'],
+  ['kitty', '--start-as=fullscreen', 'bash', '-lc', '{cmd}'],
+  ['wezterm', 'start', '--', 'bash', '-lc', '{cmd}'],
+  ['alacritty', '-e', 'bash', '-lc', '{cmd}'],
+  ['gnome-terminal', '--full-screen', '--', 'bash', '-lc', '{cmd}'],
+  ['konsole', '--fullscreen', '-e', 'bash', '-lc', '{cmd}'],
+  ['xterm', '-e', 'bash', '-lc', '{cmd}'],
+];
+
+/**
+ * Whether a binary is resolvable on `PATH` (best-effort via `command -v`).
+ *
+ * @param bin - The executable name to look up.
+ * @returns True when the binary appears to be on PATH.
+ */
+function onPath(bin: string): boolean {
+  const r = spawnSync('command', ['-v', bin], { stdio: 'ignore', shell: '/bin/sh' });
+  return r.status === 0;
 }
 
 /**
- * macOS-only: open a work as a **fullscreen Terminal** cd'd into the work
- * folder. (It used to also launch a fullscreen editor on the work's
- * `.code-workspace`; that was dropped — open your editor yourself.)
+ * Open a **new terminal window** (fullscreen where the emulator supports it)
+ * running `command`. This is the cross-platform launcher behind `mx work open`:
  *
- * Best-effort: window-management hiccups are surfaced as a thrown `MxError` for
- * the caller to downgrade to a warning (the work itself is already created).
- * Throws `UNSUPPORTED` up front on non-macOS platforms.
+ * - **macOS:** a fullscreen Terminal via {@link openFullscreenTerminal}.
+ * - **Linux:** the `$MX_TERMINAL` template if set (a shell string where `{cmd}`
+ *   is replaced by the command, or, lacking `{cmd}`, the command is appended),
+ *   otherwise the first available emulator from a small built-in list.
  *
- * @param workdir - Absolute path to the work folder.
- * @param opts - Optional launch command to run in the new Terminal (e.g. a `claude` invocation).
+ * Throws `UNSUPPORTED` (with the exact `mx work attach` line to run by hand) when
+ * no launcher is available, so the caller can downgrade to a warning — the
+ * session already exists and `mx work attach` always works in-place.
+ *
+ * @param command - The shell command the new terminal should run (e.g. `mx work -n feat attach`).
  */
-export function openWorkLayout(workdir: string, opts: OpenWorkOpts = {}): void {
-  // The shell command Terminal runs: cd into the work folder, then optionally
-  // chain the caller's launch command (e.g. `claude --resume <id>`).
-  openFullscreenTerminal(`cd ${shq(workdir)}${opts.command ? ` && ${opts.command}` : ''}`);
+export function spawnWorkTerminal(command: string): void {
+  if (process.platform === 'darwin') {
+    openFullscreenTerminal(command);
+    return;
+  }
+  // Linux: prefer an explicit user-configured terminal template.
+  const tmpl = process.env.MX_TERMINAL;
+  if (tmpl && tmpl.trim()) {
+    const full = tmpl.includes('{cmd}') ? tmpl.replace(/\{cmd\}/g, command) : `${tmpl} ${command}`;
+    spawn('/bin/sh', ['-c', full], { detached: true, stdio: 'ignore' }).unref();
+    return;
+  }
+  // Otherwise try known emulators in order.
+  for (const argv of LINUX_TERMINALS) {
+    if (!onPath(argv[0])) continue;
+    const args = argv.slice(1).map((a) => a.replace('{cmd}', command));
+    spawn(argv[0], args, { detached: true, stdio: 'ignore' }).unref();
+    return;
+  }
+  throw new MxError(
+    'no terminal emulator found to open a window — set $MX_TERMINAL (a command template using {cmd}) ' +
+      'or just run the attach command yourself in a terminal',
+    'UNSUPPORTED',
+  );
 }
 
 /**
