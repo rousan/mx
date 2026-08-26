@@ -32,6 +32,8 @@ Works (features):
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
   mx work -n <name> attach [--prompt <text>]            build the work's tmux session (mx/<name>) if needed, then attach THIS terminal to it (switch-client when already inside tmux); the primary way to enter a work
   mx work -n <name> open  (or -o) [--prompt <text>]     same, but opens a NEW terminal window (fullscreen on macOS; $MX_TERMINAL or a known emulator on Linux) and attaches there
+  mx work switch [<name>]                               jump between works' sessions: with <name> it's attach; without, an fzf picker over this runtime's live mx/* sessions
+  mx work gc [--yes|-y]                                 prune orphaned tmux sessions — live mx/<work> sessions whose work is archived or gone (e.g. restored by tmux-resurrect after a reboot)
   mx work -n <name> describe <text>
   mx work -n <name> worktree add <repo> [<name>] [--branch <b>] [--base <ref>]   fires pre/post-worktree-create hooks; <name> (default repo) lets one work hold multiple worktrees of a repo
   mx work -n <name> worktree ls [--porcelain]

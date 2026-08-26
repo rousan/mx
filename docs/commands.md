@@ -119,7 +119,7 @@ The registered steps:
 
 ### `mx doctor [--install [--yes]]`
 
-Environment check for the **tmux workflow** ([`mx work attach`/`open`](#mx-work--n-name-attach---prompt-text)). Verifies the **required** tools (tmux, neovim, claude, git) and a **recommended** editor toolbelt (ripgrep, fd, fzf, bat, lazygit, eza, zoxide), reporting each with its detected version, then prints the exact install command for anything missing — resolved to the detected package manager (Homebrew, then apt/dnf/pacman) with distro-specific package names (`fd` is `fd-find` on Debian, `bat` is `batcat`, and eza/lazygit may need an extra repo). It also reminds tmux-resurrect users to wire the shipped `mx-tmux-resurrect-filter` bin (which keeps `mx/*` sessions out of resurrect's global snapshot).
+Environment check for the **tmux workflow** ([`mx work attach`/`open`](#mx-work--n-name-attach---prompt-text)). Verifies the **required** tools (tmux, neovim, claude, git) and a **recommended** editor toolbelt (ripgrep, fd, fzf, bat, lazygit, eza, zoxide), reporting each with its detected version, then prints the exact install command for anything missing — resolved to the detected package manager (Homebrew, then apt/dnf/pacman) with distro-specific package names (`fd` is `fd-find` on Debian, `bat` is `batcat`, and eza/lazygit may need an extra repo). It also reminds tmux-resurrect users that mx sessions save and restore like any other (no special exclusion), and that [`mx work gc`](#mx-work-gc---yes) prunes any session resurrect brings back for a work you've since archived or destroyed.
 
 `--install` runs the install command after a confirmation prompt (`--yes` skips it). Errors `NO_PACKAGE_MANAGER` when none of brew/apt/dnf/pacman is found, `INSTALL_FAILED` when the install command exits non-zero. Not version-gated and touches no runtime state — a pure environment check. `--porcelain` returns `{tools, packageManager, missing, installCommand}`.
 
@@ -303,6 +303,16 @@ Building is **lazy and self-healing**: nothing is created until the first `attac
 ### `mx work -n <name> open` (or `mx work -n <name> -o`)
 
 Same as `attach`, but opens the work's session in a **new terminal window** rather than the current one. macOS: a fullscreen Terminal (via osascript). Linux: the `$MX_TERMINAL` template if set (a command string containing `{cmd}`), otherwise the first available of `x-terminal-emulator`, `kitty`, `wezterm`, `alacritty`, `gnome-terminal`, `konsole`, `xterm`. If no terminal can be launched it warns and prints the `mx work -n <name> attach` line to run by hand — the session is already built, so nothing is lost. `mx work -n <name> -o` is shorthand for `… open`.
+
+### `mx work switch [<name>]`
+
+Jump between works' tmux sessions. With an explicit `<name>` (positional, or `-n`, or inferred from the cwd) it's exactly [`attach`](#mx-work--n-name-attach---prompt-text). Without one, it opens an **fzf picker** over this runtime's live `mx/*` sessions and attaches (or `switch-client`s) to the one you choose. Only sessions belonging to this runtime are listed (matched by each session's seeded `MX_RUNTIME`, so a same-named work in another runtime sharing the tmux server isn't shown). If `fzf` isn't installed it prints the list and asks you to pass a name; `--porcelain` returns the candidate sessions without attaching.
+
+### `mx work gc [--yes|-y]`
+
+Prune **orphaned** mx tmux sessions — live `mx/<work>` sessions whose work, in this runtime, is **archived** or **no longer exists**. This is the cleanup for the reboot case: mx lets tmux-resurrect save and restore its sessions like any other (so a work's custom layout survives a reboot), but resurrect may bring back a session for a work you archived or destroyed before the last save; `gc` finds and kills those.
+
+A session is judged against **this** runtime only, matched by its seeded `MX_RUNTIME` — a destroyed-work session is pruned only when it explicitly reports this runtime, so another runtime's sessions on the same tmux server are never touched. Active works with a live session are healthy and left alone. Killing sessions is destructive, so `gc` **prompts for confirmation** (and **warns** if a pane holds a live foreground process); `--yes`/`-y` skips the prompt and is **required** with `--porcelain` or a non-TTY (else `NEED_CONFIRMATION`). Porcelain returns the pruned `{session, work, reason}` list.
 
 ### `mx work -n <name> describe <text>`
 

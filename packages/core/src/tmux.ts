@@ -59,8 +59,8 @@ export function mxSessionName(workName: string): string {
 
 /**
  * Whether a tmux session name belongs to mx (carries the {@link MX_SESSION_PREFIX}).
- * Used to filter a raw `tmux ls` down to mx-owned sessions and to decide which
- * sessions the resurrect filter should drop.
+ * Used to filter a raw `tmux ls` down to mx-owned sessions (e.g. for
+ * `mx work switch` / `mx work gc`).
  *
  * @param sessionName - A tmux session name from `tmux ls`.
  * @returns True when the session is mx-owned.

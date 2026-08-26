@@ -148,19 +148,36 @@ This is why detaching and re-attaching feels seamless: it's literally the same s
 
 ## tmux-resurrect
 
-If you use [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect) to persist and restore sessions across reboots, exclude mx's sessions from it — they're rebuildable and mx owns their lifecycle, so having resurrect restore an already-archived mx session would be wrong. mx ships a filter bin, `mx-tmux-resurrect-filter`, that handles this. Add **one line** to `~/.tmux.conf`, after the plugin is loaded:
+If you use [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect) (with [tmux-continuum](https://github.com/tmux-plugins/tmux-continuum)) to persist and restore sessions across reboots, mx works need **no special setup** — they save and restore like any other session, so a work's **custom** window/pane layout survives a reboot. That's the whole point: mx's own rebuild only knows the default layout, but resurrect remembers whatever you grew the session into.
+
+Resurrect restores the layout and each pane's working directory; it doesn't relaunch programs unless you list them (e.g. `set -g @resurrect-processes 'nvim'`). Claude and dev servers generally shouldn't auto-restart anyway — the **structure** is what you want back, and `mx work attach` drops you into it.
+
+The one thing to clean up: resurrect's last save may still contain a session for a work you **archived or destroyed** after that save. On the next reboot it gets restored — a live session for a dead work (its worktrees are gone). Prune those with:
 
 ```bash
-set -g @resurrect-hook-post-save-all 'mx-tmux-resurrect-filter'
+mx work gc
 ```
 
-This requires the runtime `bin/` on your `PATH`, which is a one-time setup you likely want anyway:
+See [Housekeeping](#housekeeping-switch-and-gc) below.
+
+## Housekeeping: `switch` and `gc`
+
+Two commands help you live with a fleet of sessions.
+
+**`mx work switch`** — jump between works. With a name it's just `attach`; with no argument it opens an **fzf picker** over this runtime's live `mx/*` sessions and switches to the one you choose:
 
 ```bash
-export PATH="$(mx bin path):$PATH"    # add to your shell rc
+mx work switch            # pick from a list
+mx work switch feature-b  # jump straight to feature-b
 ```
 
-Your non-mx sessions still resurrect normally; only mx's sessions are skipped, and `attach` rebuilds those on demand.
+**`mx work gc`** — prune **orphaned** sessions: live `mx/<work>` sessions whose work is archived or no longer exists (the reboot-restore case above, or a session left behind if something went sideways). It kills only sessions that belong to **this** runtime, warns if a pane holds a live process, and asks before killing (`--yes` to skip):
+
+```bash
+mx work gc                # review and confirm what gets pruned
+```
+
+Active works with a live session are healthy and never touched, and neither are sessions belonging to a different runtime that happens to share your tmux server.
 
 ## Related
 

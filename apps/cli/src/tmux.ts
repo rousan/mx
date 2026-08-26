@@ -276,3 +276,66 @@ export function attachOrSwitch(session: string): void {
 export function sessionFor(work: string): string {
   return mxSessionName(work);
 }
+
+/**
+ * Read one environment variable from a live tmux session's environment (as set
+ * by `set-environment`). Returns null when the session is gone or the variable
+ * isn't set. Used by `mx work gc` to read a session's `MX_RUNTIME` so it only
+ * judges sessions that belong to the current runtime.
+ *
+ * @param session - The tmux session name.
+ * @param key - The environment variable to read.
+ * @returns The value, or null when absent.
+ */
+export function sessionEnv(session: string, key: string): string | null {
+  const r = spawnSync('tmux', ['show-environment', '-t', `=${session}`, key], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  if (r.status !== 0 || !r.stdout) return null;
+  const line = r.stdout.trim();
+  // Output is `KEY=value`, or `-KEY` when the variable is explicitly unset.
+  const eq = line.indexOf('=');
+  if (eq < 0) return null;
+  return line.slice(eq + 1);
+}
+
+/**
+ * Whether an executable resolves on `PATH` (best-effort via `command -v`).
+ *
+ * @param bin - Executable name.
+ * @returns True when found.
+ */
+function onPath(bin: string): boolean {
+  return spawnSync('command', ['-v', bin], { stdio: 'ignore', shell: '/bin/sh' }).status === 0;
+}
+
+/**
+ * Whether `fzf` is available for an interactive picker (`mx work switch`).
+ *
+ * @returns True when fzf is on PATH.
+ */
+export function fzfAvailable(): boolean {
+  return onPath('fzf');
+}
+
+/**
+ * Present a list of choices in an fzf picker and return the selected line, or
+ * null when fzf isn't installed or the user cancelled (Esc / empty selection).
+ * fzf reads the candidate list from stdin and drives its UI on `/dev/tty`, so
+ * this works even though stdin is a pipe here.
+ *
+ * @param choices - Candidate lines to choose among.
+ * @param prompt - The fzf prompt label.
+ * @returns The chosen line, or null.
+ */
+export function fzfPick(choices: string[], prompt: string): string | null {
+  if (!onPath('fzf')) return null;
+  const r = spawnSync('fzf', ['--prompt', prompt, '--height', '40%', '--reverse'], {
+    input: choices.join('\n'),
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'inherit'],
+  });
+  const sel = (r.stdout ?? '').trim();
+  return sel === '' ? null : sel;
+}

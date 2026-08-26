@@ -5,6 +5,7 @@ import {
   listRepoNames,
   parseInitWorktreeSpec,
   listWorksInfo,
+  listWorkNames,
   workInfo,
   workDescribe,
   workPath,
@@ -40,6 +41,10 @@ import {
   killSession,
   busyPanes,
   sessionFor,
+  listMxSessions,
+  sessionEnv,
+  fzfPick,
+  fzfAvailable,
 } from '../tmux';
 import { runPreHook, runPostHook, runHookCapture } from '../hooks';
 import type { Flags } from '../args';
@@ -96,6 +101,46 @@ function need(v: string | undefined | null, msg: string): string {
  * per-work session transcripts live.
  */
 const claudeProjectsRoot = (): string => path.join(os.homedir(), '.claude', 'projects');
+
+/**
+ * Canonicalize a path for comparison, tolerating a missing target (falls back
+ * to the resolved-but-not-real path). Used to compare a session's `MX_RUNTIME`
+ * against the current runtime root despite symlinks (macOS `/tmp` ->
+ * `/private/tmp`).
+ *
+ * @param p - The path to canonicalize.
+ * @returns The realpath when it exists, else the absolute path.
+ */
+function canonical(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+}
+
+/**
+ * Whether a live mx tmux session belongs to the given runtime, judged by the
+ * `MX_RUNTIME` mx seeds into every session it builds:
+ *
+ * - `true` — the session reports this runtime;
+ * - `false` — it reports a *different* runtime (e.g. a same-named work in another
+ *   runtime sharing the tmux server) and must not be touched;
+ * - `null` — the session has no `MX_RUNTIME` (can't tell).
+ *
+ * `mx work gc` only prunes a *destroyed*-work session on a `true`, so it never
+ * kills another runtime's session; `mx work switch` treats non-`false` as
+ * candidates.
+ *
+ * @param session - The tmux session name.
+ * @param root - The current runtime root.
+ * @returns Ownership verdict as described.
+ */
+function sessionBelongsTo(session: string, root: string): boolean | null {
+  const rt = sessionEnv(session, 'MX_RUNTIME');
+  if (rt == null || rt === '') return null;
+  return canonical(rt) === canonical(root);
+}
 
 /**
  * Resolve the initial prompt for a *new* Claude session. An explicit
@@ -440,6 +485,110 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         });
       }, list);
     }
+    return;
+  }
+
+  if (action === 'switch') {
+    // Jump between works' tmux sessions. With an explicit name it's `attach`;
+    // without one, an fzf picker over the runtime's live mx sessions.
+    const root = requireRuntime({ runtime: flags.runtime });
+    requireTmux();
+    const explicit = flags.name || positionals[2] || inferContext(root).work;
+    if (explicit) {
+      const res = workPath(root, explicit);
+      const ensured = ensureWorkSession(root, explicit, res.path, flags);
+      if (flags.porcelain) {
+        emit(() => {}, { work: explicit, session: ensured.session, created: ensured.created, attach: false });
+        return;
+      }
+      attachOrSwitch(ensured.session);
+      return;
+    }
+    // Picker: this runtime's live sessions — include those with no MX_RUNTIME
+    // (can't tell), exclude only sessions that explicitly report another runtime.
+    const mine = listMxSessions().filter((s) => sessionBelongsTo(s.session, root) !== false);
+    if (mine.length === 0) {
+      emit(() => console.log(dim('no live mx sessions — `mx work -n <name> attach` to start one')), { sessions: [] });
+      return;
+    }
+    if (flags.porcelain) {
+      // Non-interactive: just list the candidates; the caller picks + attaches.
+      emit(() => {}, { sessions: mine.map((s) => ({ work: s.work, session: s.session, attached: s.attached })) });
+      return;
+    }
+    if (!fzfAvailable()) {
+      process.stderr.write(`${warn()} ${dim('install fzf for a picker, or pass a name: `mx work switch <name>`')}\n`);
+      emit(() => {
+        for (const s of mine) console.log(`  ${bold(s.work)}${s.attached ? dim('  (attached)') : ''}`);
+      }, { sessions: mine.map((s) => ({ work: s.work, session: s.session, attached: s.attached })) });
+      return;
+    }
+    const pick = fzfPick(mine.map((s) => s.work), 'mx work> ');
+    if (!pick) return; // cancelled
+    attachOrSwitch(sessionFor(pick));
+    return;
+  }
+
+  if (action === 'gc') {
+    // Prune orphaned mx tmux sessions: those whose work (in THIS runtime) is
+    // archived or no longer exists. Active works with a live session are healthy.
+    const root = requireRuntime({ runtime: flags.runtime });
+    requireTmux();
+    const known = new Set(listWorkNames(root));
+    const orphans: { session: string; work: string; reason: 'archived' | 'destroyed'; busy: string[] }[] = [];
+    for (const s of listMxSessions()) {
+      const belongs = sessionBelongsTo(s.session, root);
+      if (known.has(s.work)) {
+        // A work in this runtime — only an orphan if it's archived (a session
+        // shouldn't outlive the archive). Skip a same-named work in another
+        // runtime whose session explicitly reports a different MX_RUNTIME.
+        if (belongs === false) continue;
+        if (workInfo(root, s.work).isArchived === true) {
+          orphans.push({ session: s.session, work: s.work, reason: 'archived', busy: busyPanes(s.session) });
+        }
+      } else if (belongs === true) {
+        // Work is gone from this runtime and the session says it's ours → destroyed.
+        orphans.push({ session: s.session, work: s.work, reason: 'destroyed', busy: busyPanes(s.session) });
+      }
+    }
+    if (orphans.length === 0) {
+      emit(() => console.log(`${check()} no orphaned mx sessions`), { pruned: [] });
+      return;
+    }
+    // Killing sessions is destructive; confirm unless --yes (required for
+    // --porcelain / non-TTY).
+    if (!flags.yes) {
+      if (flags.porcelain || !process.stdin.isTTY) {
+        throw new MxError(
+          'gc removes tmux sessions — pass --yes when running non-interactively or with --porcelain',
+          'NEED_CONFIRMATION',
+        );
+      }
+      process.stderr.write(`${warn()} About to kill ${orphans.length} orphaned mx session(s):\n`);
+      for (const o of orphans) {
+        const busyNote = o.busy.length ? `  ${warn()} ${dim(`live: ${o.busy.join(', ')}`)}` : '';
+        process.stderr.write(`  ${bold(o.session)} ${dim(`(work ${o.reason})`)}${busyNote}\n`);
+      }
+      process.stderr.write('\n');
+      if (!confirmYesNo('Proceed? (y/N) ')) {
+        process.stderr.write(`${dim('Aborted.')}\n`);
+        return;
+      }
+    }
+    const pruned: string[] = [];
+    for (const o of orphans) {
+      try {
+        killSession(o.session);
+        pruned.push(o.session);
+      } catch (e) {
+        const msg = e instanceof MxError ? e.message : String(e);
+        if (!flags.porcelain) process.stderr.write(`${warn()} ${dim(`could not kill ${o.session}: ${msg}`)}\n`);
+      }
+    }
+    emit(() => {
+      console.log(`${check()} pruned ${pruned.length} orphaned mx session(s)`);
+      for (const s of pruned) console.log(`  ${dim(s)}`);
+    }, { pruned: orphans.map((o) => ({ session: o.session, work: o.work, reason: o.reason })) });
     return;
   }
 

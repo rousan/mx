@@ -202,10 +202,12 @@ export function runDoctor(_positionals: string[], flags: Flags): void {
       }
       console.log(`${dim('or run')} ${bold('mx doctor --install')} ${dim('to install them now.')}`);
     }
-    // The resurrect-exclusion reminder — mx sessions are rebuildable, so they
-    // should be kept out of tmux-resurrect's global snapshot.
+    // tmux-resurrect note — mx works are saved/restored like any session (so
+    // custom layouts survive a reboot); `mx work gc` prunes any session that
+    // resurrect brings back for a work you've since archived/destroyed.
     console.log();
-    console.log(dim('tmux-resurrect users: exclude mx sessions from the global snapshot — see'));
+    console.log(dim('tmux-resurrect users: mx works save/restore normally; run `mx work gc` after a'));
+    console.log(dim('  reboot to prune sessions for archived/destroyed works. See'));
     console.log(dim('  https://mx.rousanali.com/docs/guides/tmux'));
   }, {
     tools: statuses.map((s) => ({ name: s.spec.name, kind: s.spec.kind, installed: s.installed, version: s.version })),
