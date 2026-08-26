@@ -84,8 +84,9 @@ fi
 # (backslash and double-quote).
 apl() { printf '%s' "$1" | sed 's/[\\"]/\\&/g'; }
 
-# The shell command a tab runs for a given work.
-attach_cmd() { printf 'MX_RUNTIME=%s mx work attach %s' "$(apl "$runtime")" "$(apl "$1")"; }
+# The shell command a tab runs for a given work. `mx work attach` takes the work
+# via `-n <name>` (not a positional), so build it that way.
+attach_cmd() { printf 'MX_RUNTIME=%s mx work -n %s attach' "$(apl "$runtime")" "$(apl "$1")"; }
 
 # Build the AppleScript. Tab 1 opens a new window; the rest are new tabs in it.
 script="tell application \"Terminal\"

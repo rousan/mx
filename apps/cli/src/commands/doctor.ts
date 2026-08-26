@@ -1,5 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { MxError } from '@mx/core';
+import { existsSync } from 'node:fs';
+import * as path from 'node:path';
+import {
+  MxError,
+  discoverRuntime,
+  contextIndexStatus,
+  CLAUDE_IMPORT_LIMIT,
+  type ContextIndexStatus,
+} from '@mx/core';
 import { emit, dim, bold, check, warn, confirmYesNo } from '../output';
 import type { Flags } from '../args';
 
@@ -125,6 +133,31 @@ function checkTools(): ToolStatus[] {
 }
 
 /**
+ * Format a character count as a short `k`-suffixed string (e.g. `157.6k`).
+ *
+ * @param chars - Character count.
+ * @returns The compact display string.
+ */
+function formatChars(chars: number): string {
+  return `${(chars / 1000).toFixed(1)}k`;
+}
+
+/**
+ * Resolve the runtime's `context/INDEX.json` status without failing doctor when
+ * there's no runtime. Doctor is an environment check and isn't version-gated, so
+ * this uses path-only discovery and only reports when a real runtime (with an
+ * `.mx-root`) is present; otherwise it returns null and the check is skipped.
+ *
+ * @param flags - Parsed flags (provides an explicit `--runtime`).
+ * @returns The index status, or null when no runtime is found.
+ */
+function runtimeContextIndex(flags: Flags): ContextIndexStatus | null {
+  const root = discoverRuntime({ runtime: flags.runtime });
+  if (!existsSync(path.join(root, '.mx-root'))) return null;
+  return contextIndexStatus(root);
+}
+
+/**
  * `mx doctor` — check the tools mx's tmux workflow relies on (and the
  * recommended editor toolbelt), report what's present, and print the exact
  * install command for whatever is missing. With `--install`, run that command
@@ -168,6 +201,10 @@ export function runDoctor(_positionals: string[], flags: Flags): void {
     return;
   }
 
+  // The runtime's context-index size vs Claude Code's @import limit (best-effort;
+  // null when doctor is run without a runtime present).
+  const idx = runtimeContextIndex(flags);
+
   emit(() => {
     const rows = statuses;
     const nameW = Math.max(...rows.map((r) => r.spec.name.length));
@@ -202,6 +239,26 @@ export function runDoctor(_positionals: string[], flags: Flags): void {
       }
       console.log(`${dim('or run')} ${bold('mx doctor --install')} ${dim('to install them now.')}`);
     }
+    // Context registry: the runtime CLAUDE.md @imports context/INDEX.json into
+    // every session, and Claude Code caps an imported file at ~150k chars. Flag
+    // an index that's over (may truncate) or approaching that ceiling.
+    if (idx && idx.exists) {
+      console.log();
+      console.log(bold('Context registry'));
+      const entriesNote = idx.entries != null ? `${idx.entries} entries · ` : '';
+      const size = `${entriesNote}${formatChars(idx.chars)} chars`;
+      const limit = formatChars(CLAUDE_IMPORT_LIMIT);
+      if (idx.overLimit) {
+        console.log(`  ${warn()} INDEX.json  ${dim(size)}`);
+        console.log(`  ${dim(`over Claude Code's ${limit} @import limit — it may drop the tail; trim descriptions or move detail into body files (\`/memory\` frees session context)`)}`);
+      } else if (idx.nearLimit) {
+        console.log(`  ${warn()} INDEX.json  ${dim(size)}`);
+        console.log(`  ${dim(`approaching Claude Code's ${limit} @import limit — consider trimming before entries are dropped`)}`);
+      } else {
+        console.log(`  ${check()} INDEX.json  ${dim(`${size}  (under the ${limit} @import limit)`)}`);
+      }
+    }
+
     // tmux-resurrect note — mx works are saved/restored like any session (so
     // custom layouts survive a reboot); `mx work gc` prunes any session that
     // resurrect brings back for a work you've since archived/destroyed.
@@ -214,5 +271,6 @@ export function runDoctor(_positionals: string[], flags: Flags): void {
     packageManager: pm?.id ?? null,
     missing: missing.map((s) => s.spec.name),
     installCommand: pm && missingPkgs.length ? pm.install(missingPkgs) : null,
+    contextIndex: idx,
   });
 }

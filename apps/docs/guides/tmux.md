@@ -139,12 +139,12 @@ Don't confuse the two. **`work-session`** shapes the tmux **layout** after the s
 
 ## The Claude session resumes
 
-The Claude Code session is keyed to the work, so you always continue the **same** conversation. mx pins a deterministic session id — a UUIDv5 derived from the work name, so it's stable and nothing has to be stored — and sets the session's display name to the work name.
+The Claude Code session is keyed to the **work name**, so you always continue the **same** conversation. When mx builds the session it decides the `claude` command by looking for an existing session named after the work:
 
-- **First time**: mx creates the session with that id and name, seeded by the `session-prompt` hook (or `--prompt`).
-- **Re-attach**: mx resumes the same id, so the agent picks up exactly where it left off.
+- **Existing session for the work** → mx resumes the most recent one (`claude --resume <id>`). This finds both a session created by this flow *and* any older one — from the pre-tmux `mx work open`, or a `claude` you ran in the work folder yourself — since those are named after the work too. So a fresh `attach` picks up where you left off instead of starting over.
+- **No session yet** → mx creates one, named after the work and pinned to a stable id (`uuidv5(work)`), seeded by the `session-prompt` hook (or `--prompt`).
 
-This is why detaching and re-attaching feels seamless: it's literally the same session, resumed by its stable id.
+This is why detaching and re-attaching feels seamless: it's the same session, resumed by name.
 
 ## tmux-resurrect
 

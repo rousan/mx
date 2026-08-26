@@ -25,6 +25,7 @@ import {
   listWorkHealth,
   claudeSessionId,
   claudeProjectDirName,
+  findSessionsByName,
   MxError,
 } from '@mx/core';
 import type { WorkHealth, WorktreeAddResult } from '@mx/core';
@@ -180,16 +181,25 @@ interface ClaudeLaunch {
 }
 
 /**
- * Resolve the `claude` command for a work's session, keyed to a **pinned,
- * deterministic session id** (`uuidv5(work name)`), so re-attaching always
- * resumes the same conversation:
+ * Resolve the `claude` command for a work's session — **resume the existing
+ * session for the work when there is one, otherwise create a new one** named
+ * after the work:
  *
- * - transcript for the pinned id already exists → **resume** it
- *   (`claude --resume <id>`; the display name persists from the transcript).
- * - no transcript yet → **create** it with the pinned id and the work name as
- *   the display name (`claude --session-id <id> -n <work>`), seeded with the
- *   resolved initial prompt (from `--prompt` or the `session-prompt` hook) when
- *   there is one.
+ * 1. **By name (primary).** Look for a Claude session in the work's project
+ *    directory whose display name equals the work name. This finds *both* a
+ *    session created by this tmux flow (which is named via `-n <work>`) *and*
+ *    any older session — from the pre-tmux `mx work open`, or a `claude` you ran
+ *    in the work folder by hand — since those are named after the work too. If
+ *    one or more match, resume the **most recent** (`claude --resume <id>`). This
+ *    is why a fresh `attach` picks up your existing conversation instead of
+ *    starting over.
+ * 2. **By pinned id (fallback).** If nothing matches by name but a transcript
+ *    exists under the work's pinned id (`uuidv5(work)`) — e.g. a session that was
+ *    renamed away — resume that.
+ * 3. **Create.** With nothing to resume, create a new session with the pinned id
+ *    and the work name as its display name (`claude --session-id <id> -n <work>`),
+ *    seeded with the resolved initial prompt (from `--prompt` or the
+ *    `session-prompt` hook) when there is one.
  *
  * When creating with a prompt, the prompt is written to a throwaway file under
  * the work's `tmp/` and the launched shell reads-then-removes it — keeping
@@ -199,7 +209,7 @@ interface ClaudeLaunch {
  * @param name - Work name (also the session's display name).
  * @param workFolder - Absolute work folder path (the pane's cwd).
  * @param flags - Parsed flags (provides `--prompt` / `--porcelain`).
- * @returns The command to run plus whether it resumes or creates, and the pinned id.
+ * @returns The command to run plus whether it resumes or creates, and the session id.
  */
 function resolveClaudeCommand(
   root: string,
@@ -213,18 +223,21 @@ function resolveClaudeCommand(
   try {
     realWork = fs.realpathSync(workFolder);
   } catch {
-    // Fall back to the given path; the transcript check just won't match if wrong.
+    // Fall back to the given path; the lookups just won't match if it's wrong.
   }
-  const transcript = path.join(
-    claudeProjectsRoot(),
-    claudeProjectDirName(realWork),
-    `${sid}.jsonl`,
-  );
+  const projectsRoot = claudeProjectsRoot();
+  // 1. Resume an existing session NAMED after the work (newest first), covering
+  //    both new-flow and pre-existing sessions.
+  const named = findSessionsByName(projectsRoot, realWork, name);
+  if (named.length >= 1) {
+    return { command: `claude --resume ${shq(named[0].id)}`, action: 'resume', sessionId: named[0].id };
+  }
+  // 2. Fallback: a session under the pinned id that isn't named (renamed away).
+  const transcript = path.join(projectsRoot, claudeProjectDirName(realWork), `${sid}.jsonl`);
   if (fs.existsSync(transcript)) {
-    // Resume the pinned conversation; the name is already baked into the transcript.
     return { command: `claude --resume ${shq(sid)}`, action: 'resume', sessionId: sid };
   }
-  // No transcript yet — create with the pinned id + the work name as display name.
+  // 3. Nothing to resume — create with the pinned id + the work name as display name.
   const create = `claude --session-id ${shq(sid)} -n ${shq(name)}`;
   const prompt = resolveInitialPrompt(root, name, workFolder, flags);
   if (!prompt) return { command: create, action: 'create', sessionId: sid };

@@ -121,6 +121,8 @@ The registered steps:
 
 Environment check for the **tmux workflow** ([`mx work attach`/`open`](#mx-work--n-name-attach---prompt-text)). Verifies the **required** tools (tmux, neovim, claude, git) and a **recommended** editor toolbelt (ripgrep, fd, fzf, bat, lazygit, eza, zoxide), reporting each with its detected version, then prints the exact install command for anything missing — resolved to the detected package manager (Homebrew, then apt/dnf/pacman) with distro-specific package names (`fd` is `fd-find` on Debian, `bat` is `batcat`, and eza/lazygit may need an extra repo). It also reminds tmux-resurrect users that mx sessions save and restore like any other (no special exclusion), and that [`mx work gc`](#mx-work-gc---yes) prunes any session resurrect brings back for a work you've since archived or destroyed.
 
+When run with a runtime present, doctor additionally reports the **context registry** index size: the runtime `CLAUDE.md` `@import`s `context/INDEX.json` into every session, and Claude Code caps an imported file at ~150k chars. Doctor shows the index's size (and entry count) with a ✓ when it's under the limit, a ⚠ when it's **approaching** (≥ 85%), and a ⚠ when it's **over** — past which Claude Code may drop the tail, so the fix is to trim descriptions or move detail into body files. Porcelain adds a `contextIndex` field (`{path, exists, chars, entries, nearLimit, overLimit}`).
+
 `--install` runs the install command after a confirmation prompt (`--yes` skips it). Errors `NO_PACKAGE_MANAGER` when none of brew/apt/dnf/pacman is found, `INSTALL_FAILED` when the install command exits non-zero. Not version-gated and touches no runtime state — a pure environment check. `--porcelain` returns `{tools, packageManager, missing, installCommand}`.
 
 ### `mx help`, `mx version` (or `--help` / `-h`, `--version` / `-v`)
@@ -296,7 +298,13 @@ After building, the [`work-session` hook](#hooks) fires (cwd = the work folder) 
 
 Building is **lazy and self-healing**: nothing is created until the first `attach`/`open`, and after a reboot or a manual `tmux kill-session` the next `attach` simply rebuilds it. `--porcelain` ensures the session **without** attaching (prints `{work, session, created, attach:false}`) — useful for scripts.
 
-**The Claude session.** mx pins a deterministic id for the work — `uuidv5(<name>)`, stable and unique because work names are unique, with nothing stored — and sets the session's display name to `<name>`. First time (no transcript for that id yet): `claude --session-id <uuid> -n <name>`, seeded with an initial prompt when one is resolved (see below). Re-attach (transcript exists): `claude --resume <uuid>`, continuing the same conversation (the name persists from the transcript). (mx deliberately does **not** use Claude Code's own `--tmux`/`--worktree` flags — mx owns worktrees and the session.)
+**The Claude session — resume-or-create, keyed to the work name.** When it builds the session, mx decides the pane's `claude` command by looking for an **existing session named after the work**:
+
+1. **By name (primary).** It scans the work's Claude project directory for a session whose display name equals `<name>` and, if one or more match, resumes the **most recent** (`claude --resume <id>`). This finds both a session created by this flow *and* any older one — from the pre-tmux `mx work open` or a `claude` you ran in the work folder by hand — because those are named after the work too. This is why a fresh `attach` picks up your existing conversation instead of starting over.
+2. **By pinned id (fallback).** If nothing matches by name but a transcript exists under the work's pinned id `uuidv5(<name>)`, it resumes that.
+3. **Create.** With nothing to resume, it creates a new session with the pinned id and the work name as its display name — `claude --session-id <uuid> -n <name>` — seeded with an initial prompt when one is resolved (see below).
+
+(mx deliberately does **not** use Claude Code's own `--tmux`/`--worktree` flags — mx owns worktrees and the session.)
 
 **Initial prompt (new session only).** Resolved as: an explicit `--prompt <text>` wins (pass `--prompt ''` for none); otherwise the [`session-prompt` hook](#hooks) is fired (cwd = the work folder) and its stdout is used. If neither yields text, the session opens clean. The resolved prompt is passed to Claude as the first message (routed through a throwaway file under the work's `tmp/` so multi-line prompts need no shell escaping).
 

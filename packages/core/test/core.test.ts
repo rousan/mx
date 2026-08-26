@@ -1830,3 +1830,73 @@ describe('tmux session naming + claude session id', () => {
     );
   });
 });
+
+describe('contextIndexStatus', () => {
+  it('reports size, entry count, and near/over-limit flags against the @import cap', async () => {
+    const { contextIndexStatus, CLAUDE_IMPORT_LIMIT } = await import('../src/context');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mx-ctxidx-'));
+    fs.mkdirSync(path.join(root, 'context'), { recursive: true });
+    const write = (s: string): void => fs.writeFileSync(path.join(root, 'context', 'INDEX.json'), s);
+    const idxFile = path.join(root, 'context', 'INDEX.json');
+
+    // Missing index → exists:false, no flags.
+    let st = contextIndexStatus(root);
+    expect(st).toMatchObject({ exists: false, chars: 0, entries: null, nearLimit: false, overLimit: false });
+    expect(st.path).toBe(idxFile);
+
+    // Small valid array → parsed entry count, well under the limit.
+    write(JSON.stringify([{ path: 'a' }, { path: 'b' }, { path: 'c' }]));
+    st = contextIndexStatus(root);
+    expect(st).toMatchObject({ exists: true, entries: 3, nearLimit: false, overLimit: false });
+    expect(st.chars).toBeGreaterThan(0);
+
+    // Just over the limit → overLimit (and therefore also nearLimit).
+    write('x'.repeat(CLAUDE_IMPORT_LIMIT + 1));
+    st = contextIndexStatus(root);
+    expect(st.overLimit).toBe(true);
+    expect(st.nearLimit).toBe(true);
+    expect(st.entries).toBeNull(); // not a JSON array → uncountable
+
+    // Between 85% and 100% → nearLimit but not over.
+    write('y'.repeat(Math.floor(CLAUDE_IMPORT_LIMIT * 0.9)));
+    st = contextIndexStatus(root);
+    expect(st.nearLimit).toBe(true);
+    expect(st.overLimit).toBe(false);
+
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+});
+
+describe('findSessionsByName (resume-by-work-name)', () => {
+  it('finds sessions whose display name equals the work, newest-first, exact-match only', async () => {
+    const { findSessionsByName, claudeProjectDirName } = await import('../src/claudeSessions');
+    const projectsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'mx-cs-'));
+    const workPath = '/tmp/mx/works/feat';
+    const dir = path.join(projectsRoot, claudeProjectDirName(workPath));
+    fs.mkdirSync(dir, { recursive: true });
+    const writeSession = (id: string, title: string, mtime: number): void => {
+      const f = path.join(dir, `${id}.jsonl`);
+      fs.writeFileSync(f, JSON.stringify({ type: 'custom-title', customTitle: title }) + '\n');
+      fs.utimesSync(f, mtime, mtime);
+    };
+    // Two sessions named "feat" (older + newer), one named "feat-2" (must NOT match), one unnamed.
+    writeSession('aaaaaaaa-0000-0000-0000-000000000001', 'feat', 1000);
+    writeSession('bbbbbbbb-0000-0000-0000-000000000002', 'feat', 2000);
+    writeSession('cccccccc-0000-0000-0000-000000000003', 'feat-2', 3000);
+    fs.writeFileSync(path.join(dir, 'dddddddd-0000-0000-0000-000000000004.jsonl'), '{}\n');
+
+    const found = findSessionsByName(projectsRoot, workPath, 'feat');
+    // exact "feat" only — the "feat-2" and unnamed sessions are excluded
+    expect(found.map((s) => s.id)).toEqual([
+      'bbbbbbbb-0000-0000-0000-000000000002', // newest first
+      'aaaaaaaa-0000-0000-0000-000000000001',
+    ]);
+    // resolveClaudeCommand resumes found[0] — the most recent named session.
+    expect(found[0].name).toBe('feat');
+
+    // No project dir / no match → empty (resolveClaudeCommand then creates).
+    expect(findSessionsByName(projectsRoot, '/tmp/mx/works/other', 'other')).toEqual([]);
+
+    fs.rmSync(projectsRoot, { recursive: true, force: true });
+  });
+});
