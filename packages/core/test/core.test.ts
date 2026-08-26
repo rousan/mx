@@ -1830,3 +1830,39 @@ describe('tmux session naming + claude session id', () => {
     );
   });
 });
+
+describe('contextIndexStatus', () => {
+  it('reports size, entry count, and near/over-limit flags against the @import cap', async () => {
+    const { contextIndexStatus, CLAUDE_IMPORT_LIMIT } = await import('../src/context');
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mx-ctxidx-'));
+    fs.mkdirSync(path.join(root, 'context'), { recursive: true });
+    const write = (s: string): void => fs.writeFileSync(path.join(root, 'context', 'INDEX.json'), s);
+    const idxFile = path.join(root, 'context', 'INDEX.json');
+
+    // Missing index → exists:false, no flags.
+    let st = contextIndexStatus(root);
+    expect(st).toMatchObject({ exists: false, chars: 0, entries: null, nearLimit: false, overLimit: false });
+    expect(st.path).toBe(idxFile);
+
+    // Small valid array → parsed entry count, well under the limit.
+    write(JSON.stringify([{ path: 'a' }, { path: 'b' }, { path: 'c' }]));
+    st = contextIndexStatus(root);
+    expect(st).toMatchObject({ exists: true, entries: 3, nearLimit: false, overLimit: false });
+    expect(st.chars).toBeGreaterThan(0);
+
+    // Just over the limit → overLimit (and therefore also nearLimit).
+    write('x'.repeat(CLAUDE_IMPORT_LIMIT + 1));
+    st = contextIndexStatus(root);
+    expect(st.overLimit).toBe(true);
+    expect(st.nearLimit).toBe(true);
+    expect(st.entries).toBeNull(); // not a JSON array → uncountable
+
+    // Between 85% and 100% → nearLimit but not over.
+    write('y'.repeat(Math.floor(CLAUDE_IMPORT_LIMIT * 0.9)));
+    st = contextIndexStatus(root);
+    expect(st.nearLimit).toBe(true);
+    expect(st.overLimit).toBe(false);
+
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+});

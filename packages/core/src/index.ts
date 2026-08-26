@@ -139,3 +139,11 @@ export type {
 
 export { statusRuntime } from './status';
 export type { StatusResult, StatusContext, StatusWork } from './status';
+
+export {
+  CLAUDE_IMPORT_LIMIT,
+  CONTEXT_INDEX_WARN_RATIO,
+  contextIndexFile,
+  contextIndexStatus,
+} from './context';
+export type { ContextIndexStatus } from './context';

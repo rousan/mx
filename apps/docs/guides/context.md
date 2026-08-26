@@ -49,6 +49,10 @@ Keep the index and the body files in sync — an orphaned body file is invisible
 - **One concept per file.** If you can't fit the gist into a 1–3 sentence description, split it.
 - **Cross-link** related entries via `related` in the index.
 
+## Keep the index lean
+
+The runtime `CLAUDE.md` `@import`s `INDEX.json` so every session auto-loads it — and Claude Code caps an imported file at **~150k characters**, past which it warns and can drop the tail. Keep `INDEX.json` to lean metadata (a `path` plus a 1–3 sentence `description`); push detail into the body `.md` files, not the index. Run [`mx doctor`](/reference/cli) to see the index's size — it flags when you're approaching or over the limit, so you can trim before entries are silently lost.
+
 ## Why it matters for agents
 
 When you run a fleet of coding agents — one per feature — each of them can read the same `context/` registry. That's how a convention decided in one feature, or a root cause traced in another, is available to every agent working in the runtime, instead of being trapped in a single session's history.

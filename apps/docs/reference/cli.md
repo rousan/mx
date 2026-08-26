@@ -11,7 +11,7 @@ Every mx command, grouped by area. Reads accept `--porcelain` for stable JSON; m
 | `mx health [--all]` | Whole-runtime health: every repo and active work. `--all` includes archived. |
 | `mx mission-control [--port <n>] [-o]` | Start the live, read-only web dashboard. Alias: `mx mc`. |
 | `mx divider <text> [-o]` | Fill a terminal with `<text>` as block letters — a visual separator for macOS Spaces. |
-| `mx doctor [--install [--yes]]` | Check the tmux workflow's dependencies and print the install command for anything missing. `--install` runs it. |
+| `mx doctor [--install [--yes]]` | Check the tmux workflow's dependencies and print the install command for anything missing (`--install` runs it). Also flags the context-registry `INDEX.json` when it nears/exceeds Claude Code's ~150k `@import` limit. |
 | `mx sync` | Re-stamp mx-owned runtime files (never touches your data). |
 | `mx update` | Self-update the CLI within its major; then auto-runs `mx sync`. |
 | `mx migrate [--dry-run]` | Upgrade an older runtime to the version this CLI supports. |
