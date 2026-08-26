@@ -39,7 +39,7 @@ Every pane is seeded with the work's context as environment variables, so any sh
 | `MX_WORK_PATH` | absolute path to the work folder |
 | `MX_RUNTIME` | absolute path to the runtime |
 | `MX_TMUX` | set to `1` inside an mx-built session |
-| `MX_CLAUDE_SESSION_ID` | the work's pinned Claude session id |
+| `MX_CLAUDE_SESSION_ID` | the resumed session id when resuming; empty on a fresh create |
 | `MX_PORT_<worktree>_<service>` | one per allocated port (non-alphanumerics in the names become `_`, so worktree `repo-a` service `web` → `MX_PORT_repo_a_web`) |
 
 The per-port variables mean a dev server can read its own port straight from the environment — no need to look it up.
@@ -115,7 +115,7 @@ The default layout suits most work, but it's only a default. To reshape it, add 
 Its environment includes the usual `MX_WORK` and `MX_WORK_PATH`, plus two that are specific to this hook:
 
 - **`MX_TMUX_SESSION`** — the session name, i.e. your tmux target (`mx/<work>`),
-- **`MX_CLAUDE_SESSION_ID`** — the work's pinned Claude session id.
+- **`MX_CLAUDE_SESSION_ID`** — the resumed session id (empty on a fresh create).
 
 It's post-style: a non-zero exit only **warns**, it never fails the build. Delete the file to keep mx's default layout.
 
@@ -139,10 +139,10 @@ Don't confuse the two. **`work-session`** shapes the tmux **layout** after the s
 
 ## The Claude session resumes
 
-The Claude Code session is keyed to the **work name**, so you always continue the **same** conversation. When mx builds the session it decides the `claude` command by looking for an existing session named after the work:
+The Claude Code session is keyed to the **work name**, so you always continue the **same** conversation. One name per work:
 
-- **Existing session for the work** → mx resumes the most recent one (`claude --resume <id>`). This finds both a session created by this flow *and* any older one — from the pre-tmux `mx work open`, or a `claude` you ran in the work folder yourself — since those are named after the work too. So a fresh `attach` picks up where you left off instead of starting over.
-- **No session yet** → mx creates one, named after the work and pinned to a stable id (`uuidv5(work)`), seeded by the `session-prompt` hook (or `--prompt`).
+- **Existing session for the work** → mx runs `claude --resume <work>`. Claude Code resolves `--resume` by session title, so this reattaches the work's conversation by name — covering both a session created by this flow *and* any older one (the pre-tmux `mx work open`, or a `claude` you ran in the folder yourself), since those are named after the work too. In the rare case of two sessions sharing the name, Claude Code shows its picker.
+- **No session yet** → mx runs `claude -n <work>`, naming the new session after the work (Claude assigns the id), seeded by the `session-prompt` hook (or `--prompt`).
 
 This is why detaching and re-attaching feels seamless: it's the same session, resumed by name.
 

@@ -68,7 +68,7 @@ mx builds every work a tmux session with a default layout — a `main` window (C
 Its environment adds two variables on top of the usual `MX_WORK` / `MX_WORK_PATH`:
 
 - **`MX_TMUX_SESSION`** — the tmux session name (`mx/<work>`), i.e. your tmux target.
-- **`MX_CLAUDE_SESSION_ID`** — the work's pinned Claude session id.
+- **`MX_CLAUDE_SESSION_ID`** — the resumed session id (empty on a fresh create).
 
 It's post-style — a non-zero exit only warns, and the session is kept. Delete the file to keep mx's default layout.
 
