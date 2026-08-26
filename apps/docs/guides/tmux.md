@@ -28,7 +28,7 @@ When mx builds a work's session, it lays out two windows:
 
 - **`main`** — split into two panes:
   - **left**: the work's **Claude Code session** (focus starts here),
-  - **right**: `nvim .` opened at the **work root**, so every worktree under `wt/` is visible in one editor.
+  - **right**: `nvim wt` — the work's **`wt/` folder**, so you land straight in the worktrees you edit (not the work-folder root, which holds mx-native files). A work can override this in the [`work-session` hook](#customizing-the-layout-the-work-session-hook).
 - **`run`** — a **2×2 tiled grid** of plain shells, for dev servers and ad-hoc commands.
 
 Every pane is seeded with the work's context as environment variables, so any shell already knows where it is:
