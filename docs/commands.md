@@ -298,13 +298,12 @@ After building, the [`work-session` hook](#hooks) fires (cwd = the work folder) 
 
 Building is **lazy and self-healing**: nothing is created until the first `attach`/`open`, and after a reboot or a manual `tmux kill-session` the next `attach` simply rebuilds it. `--porcelain` ensures the session **without** attaching (prints `{work, session, created, attach:false}`) — useful for scripts.
 
-**The Claude session — resume-or-create, keyed to the work name.** When it builds the session, mx decides the pane's `claude` command by looking for an **existing session named after the work**:
+**The Claude session — resume-or-create, keyed to the work name.** One name per work: mx decides the pane's `claude` command by whether a session **named after the work** already exists.
 
-1. **By name (primary).** It scans the work's Claude project directory for a session whose display name equals `<name>` and, if one or more match, resumes the **most recent** (`claude --resume <id>`). This finds both a session created by this flow *and* any older one — from the pre-tmux `mx work open` or a `claude` you ran in the work folder by hand — because those are named after the work too. This is why a fresh `attach` picks up your existing conversation instead of starting over.
-2. **By pinned id (fallback).** If nothing matches by name but a transcript exists under the work's pinned id `uuidv5(<name>)`, it resumes that.
-3. **Create.** With nothing to resume, it creates a new session with the pinned id and the work name as its display name — `claude --session-id <uuid> -n <name>` — seeded with an initial prompt when one is resolved (see below).
+- **Resume.** If a Claude session whose display name equals `<name>` exists in the work's project directory, mx runs **`claude --resume <name>`**. Claude Code resolves `--resume` by session title, so this reattaches the work's conversation by name — covering a session created by this flow *and* any older one (the pre-tmux `mx work open`, or a `claude` you ran in the folder by hand), since those are named after the work too. In the rare case of two sessions sharing the name, Claude Code shows its picker.
+- **Create.** With no such session, mx runs **`claude -n <name>`** (Claude assigns the id; only the name is pinned), seeded with an initial prompt when one is resolved (see below).
 
-(mx deliberately does **not** use Claude Code's own `--tmux`/`--worktree` flags — mx owns worktrees and the session.)
+mx uses `findSessionsByName` only to tell whether a session exists (so `--resume` isn't run with nothing to resume, and so a prompt is seeded only on a genuine first create). (mx deliberately does **not** use Claude Code's own `--tmux`/`--worktree` flags — mx owns worktrees and the session.)
 
 **Initial prompt (new session only).** Resolved as: an explicit `--prompt <text>` wins (pass `--prompt ''` for none); otherwise the [`session-prompt` hook](#hooks) is fired (cwd = the work folder) and its stdout is used. If neither yields text, the session opens clean. The resolved prompt is passed to Claude as the first message (routed through a throwaway file under the work's `tmp/` so multi-line prompts need no shell escaping).
 

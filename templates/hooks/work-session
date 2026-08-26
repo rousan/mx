@@ -25,7 +25,8 @@
 #     $MX_WORK — work name
 #     $MX_WORK_PATH — the work folder (every pane's cwd)
 #     $MX_TMUX_SESSION — the tmux session name (e.g. mx/feature-a) — your target
-#     $MX_CLAUDE_SESSION_ID — the work's pinned Claude session id (a UUID)
+#     $MX_CLAUDE_SESSION_ID — the resumed Claude session id, when resuming an
+#                             existing session; empty on a fresh create
 #     $MX_EVENT (this event name), $MX_RUNTIME (runtime root)
 #   Plus, exported INTO the session (visible to every pane, not to this hook):
 #     $MX_WORK, $MX_WORK_PATH, $MX_RUNTIME, $MX_TMUX=1, $MX_CLAUDE_SESSION_ID,

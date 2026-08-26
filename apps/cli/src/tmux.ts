@@ -188,8 +188,8 @@ export interface BuildSessionOpts {
   workPath: string;
   /** The full shell command the main window's left pane runs (a `claude` invocation). */
   claudeCmd: string;
-  /** The work's Claude session id (exported as `MX_CLAUDE_SESSION_ID` for the hook). */
-  claudeSessionId: string;
+  /** The work's Claude session id when known (a resume) — exported as `MX_CLAUDE_SESSION_ID`; omitted on a fresh create. */
+  claudeSessionId?: string;
   /** `service -> port` entries to export as `MX_PORT_*`, flattened across worktrees. */
   ports: { worktree: string; service: string; port: number }[];
 }
@@ -226,7 +226,9 @@ export function buildSession(session: string, opts: BuildSessionOpts): void {
   setenv('MX_WORK_PATH', workPath);
   setenv('MX_RUNTIME', root);
   setenv('MX_TMUX', '1');
-  setenv('MX_CLAUDE_SESSION_ID', sid);
+  // Only known when resuming an existing session; a fresh create lets Claude
+  // assign the id, so there's nothing to export yet.
+  if (sid) setenv('MX_CLAUDE_SESSION_ID', sid);
   for (const p of ports) {
     // e.g. MX_PORT_repo_a_web=3000 — a flat, shell-safe handle per allocated port.
     const key = `MX_PORT_${p.worktree}_${p.service}`.replace(/[^A-Za-z0-9_]/g, '_');

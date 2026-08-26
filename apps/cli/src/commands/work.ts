@@ -23,8 +23,6 @@ import {
   portList,
   workHealth,
   listWorkHealth,
-  claudeSessionId,
-  claudeProjectDirName,
   findSessionsByName,
   MxError,
 } from '@mx/core';
@@ -174,33 +172,31 @@ function resolveInitialPrompt(root: string, name: string, workFolder: string, fl
 interface ClaudeLaunch {
   /** Shell command the main pane runs (a `claude` invocation). */
   command: string;
-  /** Whether the pinned session is resumed or created fresh. */
+  /** Whether an existing session is resumed or a fresh one is created. */
   action: 'resume' | 'create';
-  /** The work's pinned Claude session id (a deterministic UUID). */
-  sessionId: string;
+  /** The resumed session's id, when resuming (unknown on a fresh create — Claude assigns it). */
+  sessionId?: string;
 }
 
 /**
  * Resolve the `claude` command for a work's session — **resume the existing
- * session for the work when there is one, otherwise create a new one** named
- * after the work:
+ * session named after the work when there is one, otherwise create a new one**
+ * with the work name as its display name. The whole model is one name per work:
  *
- * 1. **By name (primary).** Look for a Claude session in the work's project
- *    directory whose display name equals the work name. This finds *both* a
- *    session created by this tmux flow (which is named via `-n <work>`) *and*
- *    any older session — from the pre-tmux `mx work open`, or a `claude` you ran
- *    in the work folder by hand — since those are named after the work too. If
- *    one or more match, resume the **most recent** (`claude --resume <id>`). This
- *    is why a fresh `attach` picks up your existing conversation instead of
- *    starting over.
- * 2. **By pinned id (fallback).** If nothing matches by name but a transcript
- *    exists under the work's pinned id (`uuidv5(work)`) — e.g. a session that was
- *    renamed away — resume that.
- * 3. **Create.** With nothing to resume, create a new session with the pinned id
- *    and the work name as its display name (`claude --session-id <id> -n <work>`),
- *    seeded with the resolved initial prompt (from `--prompt` or the
- *    `session-prompt` hook) when there is one.
+ * - **Resume.** If a Claude session whose display name equals the work name
+ *   exists in the work's project directory, run `claude --resume <work>`. Claude
+ *   Code resolves `--resume` by session title, so this reattaches the work's
+ *   conversation by name — covering a session created by this flow *and* any
+ *   older one (the pre-tmux `mx work open`, or a `claude` you ran in the folder
+ *   by hand), since those are named after the work too. In the rare case of two
+ *   sessions sharing the name, Claude Code shows its picker — an acceptable
+ *   worst case.
+ * - **Create.** With no such session, run `claude -n <work>` (Claude assigns the
+ *   id; we only pin the name), seeded with the resolved initial prompt (from
+ *   `--prompt` or the `session-prompt` hook) when there is one.
  *
+ * The existence check (`findSessionsByName`) is what keeps `--resume` from
+ * running when there's nothing to resume, and decides whether to seed a prompt.
  * When creating with a prompt, the prompt is written to a throwaway file under
  * the work's `tmp/` and the launched shell reads-then-removes it — keeping
  * arbitrary multi-line prompt text out of the command line entirely.
@@ -209,7 +205,7 @@ interface ClaudeLaunch {
  * @param name - Work name (also the session's display name).
  * @param workFolder - Absolute work folder path (the pane's cwd).
  * @param flags - Parsed flags (provides `--prompt` / `--porcelain`).
- * @returns The command to run plus whether it resumes or creates, and the session id.
+ * @returns The command to run plus whether it resumes or creates.
  */
 function resolveClaudeCommand(
   root: string,
@@ -217,30 +213,22 @@ function resolveClaudeCommand(
   workFolder: string,
   flags: Flags,
 ): ClaudeLaunch {
-  const sid = claudeSessionId(name);
   // Claude keys its project dir off the realpath'd cwd (macOS /tmp -> /private/tmp).
   let realWork = workFolder;
   try {
     realWork = fs.realpathSync(workFolder);
   } catch {
-    // Fall back to the given path; the lookups just won't match if it's wrong.
+    // Fall back to the given path; the lookup just won't match if it's wrong.
   }
-  const projectsRoot = claudeProjectsRoot();
-  // 1. Resume an existing session NAMED after the work (newest first), covering
-  //    both new-flow and pre-existing sessions.
-  const named = findSessionsByName(projectsRoot, realWork, name);
+  // Resume by NAME when a session named after the work already exists.
+  const named = findSessionsByName(claudeProjectsRoot(), realWork, name);
   if (named.length >= 1) {
-    return { command: `claude --resume ${shq(named[0].id)}`, action: 'resume', sessionId: named[0].id };
+    return { command: `claude --resume ${shq(name)}`, action: 'resume', sessionId: named[0].id };
   }
-  // 2. Fallback: a session under the pinned id that isn't named (renamed away).
-  const transcript = path.join(projectsRoot, claudeProjectDirName(realWork), `${sid}.jsonl`);
-  if (fs.existsSync(transcript)) {
-    return { command: `claude --resume ${shq(sid)}`, action: 'resume', sessionId: sid };
-  }
-  // 3. Nothing to resume — create with the pinned id + the work name as display name.
-  const create = `claude --session-id ${shq(sid)} -n ${shq(name)}`;
+  // Nothing to resume — create a session named after the work (Claude assigns the id).
+  const create = `claude -n ${shq(name)}`;
   const prompt = resolveInitialPrompt(root, name, workFolder, flags);
-  if (!prompt) return { command: create, action: 'create', sessionId: sid };
+  if (!prompt) return { command: create, action: 'create' };
   const promptFile = path.join(workFolder, 'tmp', `.mx-session-prompt-${process.pid}`);
   fs.mkdirSync(path.dirname(promptFile), { recursive: true });
   fs.writeFileSync(promptFile, prompt);
@@ -248,7 +236,7 @@ function resolveClaudeCommand(
   // claude as the first message — preserving newlines/quotes with no inline
   // escaping. `"$(...)"` keeps the whole file content as one argument.
   const command = `${create} "$(cat ${shq(promptFile)}; rm -f ${shq(promptFile)})"`;
-  return { command, action: 'create', sessionId: sid };
+  return { command, action: 'create' };
 }
 
 /**
@@ -306,7 +294,9 @@ function ensureWorkSession(root: string, name: string, workFolder: string, flags
         MX_WORK: name,
         MX_WORK_PATH: workFolder,
         MX_TMUX_SESSION: session,
-        MX_CLAUDE_SESSION_ID: launch.sessionId,
+        // Known only when resuming an existing session; empty on a fresh create
+        // (Claude assigns the id).
+        MX_CLAUDE_SESSION_ID: launch.sessionId ?? '',
       },
     },
     flags.porcelain,
