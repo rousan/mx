@@ -1,165 +1,410 @@
-#!/usr/bin/env bash
-#
-# mx-open-all — open mx works in ONE fullscreen macOS Terminal window, one tab
-# per work, each running `mx work attach <work>`.
-#
-#   mx-open-all                     # open every ACTIVE work
-#   mx-open-all sidekick dev-mx     # only the named works (a subset)
-#   mx-open-all 'valkyrie-*'        # works matching a glob (quote it!)
-#   mx-open-all -x 'sk-*'           # every active work EXCEPT those matching a glob
-#   mx-open-all -x 'sk-*' -x dojo   # repeat -x to exclude more
-#
-# Positional args select works to open — an exact name, or a shell glob like
-# `valkyrie-*` (quote globs so your shell doesn't expand them first); with none,
-# all active works. `-x`/`--except <glob>` removes matching works from that set
-# (repeatable). Only ACTIVE works are ever opened; an exact name that isn't an
-# active work is skipped with a warning.
-#
-# macOS + Terminal.app only. This is a shipped bin (mx re-stamps it on
-# init/sync). It asks mx for the works (stable JSON via --porcelain), then drives
-# Terminal.app with AppleScript: the first work opens a new window (tab 1), each
-# remaining work gets a new tab (Cmd-T), and the window is finally made
-# fullscreen. Each tab runs `mx work attach <work>`, building/attaching its tmux
-# session.
-set -euo pipefail
+#!/usr/bin/env node
+'use strict';
 
-# Parse args: -x/--except <glob> excludes (repeatable); everything else is an
-# include selector (an exact name or a glob).
-includes=()
-excludes=()
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -h | --help)
-      sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
-      exit 0
-      ;;
-    -x | --except)
-      shift
-      [ "$#" -gt 0 ] || { echo "mx-open-all: -x/--except needs a pattern" >&2; exit 2; }
-      excludes+=("$1")
-      ;;
-    -*)
-      echo "mx-open-all: unknown flag: $1" >&2
-      exit 2
-      ;;
-    *)
-      includes+=("$1")
-      ;;
-  esac
-  shift
-done
+/**
+ * mx-open-all — open mx works in ONE fullscreen macOS Terminal window, one tab
+ * per work, each running `mx work attach <work>`.
+ *
+ *   mx-open-all                     open every ACTIVE work (or follow a config)
+ *   mx-open-all sidekick dev-mx     only the named works (a subset)
+ *   mx-open-all 'valkyrie-*'        works matching a glob (quote it)
+ *   mx-open-all -x 'sk-*'           every active work EXCEPT those matching a glob
+ *   mx-open-all --config <path>     use a specific layout config file
+ *   mx-open-all --no-config         ignore any config; just open all active works
+ *   mx-open-all --dry-run           print the tabs that would open (no Terminal)
+ *   mx-open-all --example           print a starter config to stdout
+ *
+ * LAYOUT CONFIG (optional). When you run `mx-open-all` with no positional args
+ * and a config file exists, it is followed instead of "all active". Default
+ * path: <runtime>/files/mx-open-all.conf (override with --config or
+ * $MX_OPEN_ALL_CONFIG). One tab per line, in order:
+ *
+ *   <work-name>      open that work
+ *   <glob>           open matching active works (e.g. valkyrie-*)
+ *   divider: TEXT    a divider tab (runs `mx divider "TEXT"`)
+ *   *                all active works not named/matched elsewhere in the layout
+ *   exclude: <glob>  never open matching works (repeatable)
+ *   # comment        ignored; blank lines ignored
+ *
+ * Passing positional args always bypasses the config (explicit wins). Only
+ * ACTIVE works are opened; an unknown exact name is skipped with a warning.
+ *
+ * macOS + Terminal.app only (drives it via AppleScript). Node bin, shipped by mx
+ * (re-stamped on init/sync).
+ */
 
-# Terminal.app + AppleScript is macOS-only. Fail cleanly elsewhere rather than
-# erroring deep inside osascript.
-if [ "$(uname -s)" != "Darwin" ]; then
-  echo "mx-open-all: macOS + Terminal.app only" >&2
-  exit 1
-fi
+const { execFileSync } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
-# The runtime the tabs should target. Terminal opens fresh login shells that
-# won't inherit this process's environment, so we bake it into each command.
-runtime="${MX_RUNTIME:-$HOME/mx}"
+/**
+ * A starter layout config printed by `mx-open-all --example`.
+ */
+const EXAMPLE_CONFIG = `# mx-open-all layout — one tab per line, in order.
+#   <work-name>      open that work
+#   <glob>           open matching active works (e.g. valkyrie-*)
+#   divider: TEXT    a divider tab (runs \`mx divider "TEXT"\`)
+#   *                all active works not named/matched elsewhere
+#   exclude: <glob>  never open matching works (repeatable)
 
-# The set of ACTIVE work names. `mx work ls --porcelain` is active-only by
-# default; the isArchived guard is belt-and-suspenders. node is always present
-# (mx itself runs on it). Portable read loop (macOS's stock bash 3.2 — no mapfile).
-active=()
-while IFS= read -r line; do
-  [ -n "$line" ] && active+=("$line")
-done < <(MX_RUNTIME="$runtime" mx work ls --porcelain | node -e '
-  let s = "";
-  process.stdin.on("data", (d) => (s += d)).on("end", () => {
-    for (const w of JSON.parse(s)) if (w.isArchived !== true) console.log(w.name);
-  });
-')
+exclude: sk-*
 
-if [ "${#active[@]}" -eq 0 ]; then
-  echo "mx-open-all: no active mx works to open" >&2
-  exit 0
-fi
+divider: MAIN
+sidekick
+dojo
+playground
 
-# Build the candidate set from the include selectors (or all active if none). A
-# selector is a glob when it contains * ? or [ ; otherwise an exact name that
-# must be active (else warn). `[[ x == pat ]]` glob-matches with pat unquoted.
-cand=()
-if [ "${#includes[@]}" -eq 0 ]; then
-  cand=("${active[@]}")
-else
-  for tok in "${includes[@]}"; do
-    case "$tok" in
-      *[\*\?\[]*)
-        matched=0
-        for a in "${active[@]}"; do
-          if [[ "$a" == $tok ]]; then cand+=("$a"); matched=1; fi
-        done
-        [ "$matched" -eq 0 ] && echo "mx-open-all: no active work matches \"$tok\"" >&2
-        ;;
-      *)
-        found=0
-        for a in "${active[@]}"; do [ "$a" = "$tok" ] && found=1 && break; done
-        if [ "$found" -eq 1 ]; then
-          cand+=("$tok")
-        else
-          echo "mx-open-all: ignoring \"$tok\" (not an active work)" >&2
-        fi
-        ;;
-    esac
-  done
-fi
+divider: IN PROGRESS
+valkyrie-*
 
-# Apply excludes and de-duplicate (a work can match several selectors / globs).
-works=()
-if [ "${#cand[@]}" -gt 0 ]; then
-  for w in "${cand[@]}"; do
-    dup=0
-    if [ "${#works[@]}" -gt 0 ]; then
-      for x in "${works[@]}"; do [ "$x" = "$w" ] && dup=1 && break; done
-    fi
-    [ "$dup" -eq 1 ] && continue
-    skip=0
-    if [ "${#excludes[@]}" -gt 0 ]; then
-      for pat in "${excludes[@]}"; do [[ "$w" == $pat ]] && skip=1 && break; done
-    fi
-    [ "$skip" -eq 1 ] && continue
-    works+=("$w")
-  done
-fi
+divider: IN REVIEW
+*
 
-if [ "${#works[@]}" -eq 0 ]; then
-  echo "mx-open-all: nothing to open" >&2
-  exit 0
-fi
+divider: DEV
+dev-mx
+`;
 
-# Escape a string for safe embedding inside an AppleScript double-quoted literal
-# (backslash and double-quote).
-apl() { printf '%s' "$1" | sed 's/[\\"]/\\&/g'; }
+/**
+ * Print the header block (lines 4..40 of this file) as help text and exit.
+ */
+function printHelp() {
+  const src = fs.readFileSync(__filename, 'utf8').split('\n');
+  // The JSDoc header sits between the first `/**` and its closing `*/`.
+  const start = src.findIndex((l) => l.trim() === '/**');
+  const out = [];
+  for (let i = start + 1; i < src.length; i++) {
+    if (src[i].trim() === '*/') break;
+    out.push(src[i].replace(/^\s*\* ?/, ''));
+  }
+  process.stdout.write(out.join('\n').trim() + '\n');
+}
 
-# The shell command a tab runs for a given work. `mx work attach` takes the work
-# via `-n <name>` (not a positional), so build it that way.
-attach_cmd() { printf 'MX_RUNTIME=%s mx work -n %s attach' "$(apl "$runtime")" "$(apl "$1")"; }
+/**
+ * Whether a selector string is a glob (contains `*`, `?`, or `[`).
+ *
+ * @param {string} s - The selector.
+ * @returns {boolean} True when it should be glob-matched rather than compared exactly.
+ */
+function isGlob(s) {
+  return /[*?[]/.test(s);
+}
 
-# Build the AppleScript. Tab 1 opens a new window; the rest are new tabs in it.
-script="tell application \"Terminal\"
-  activate
-  do script \"$(attach_cmd "${works[0]}")\"
-end tell
-delay 0.6"
+/**
+ * Compile a shell-style glob into an anchored RegExp (`*` = any run, `?` = one
+ * char, `[...]` = char class; every other regex metacharacter is escaped).
+ *
+ * @param {string} glob - The glob pattern.
+ * @returns {RegExp} The anchored matcher.
+ */
+function globToRegExp(glob) {
+  let re = '^';
+  for (const c of glob) {
+    if (c === '*') re += '.*';
+    else if (c === '?') re += '.';
+    else if (c === '[' || c === ']') re += c;
+    else if ('+.^$(){}|\\/'.includes(c)) re += '\\' + c;
+    else re += c;
+  }
+  return new RegExp(re + '$');
+}
 
-i=1
-while [ "$i" -lt "${#works[@]}" ]; do
-  script="$script
-tell application \"System Events\" to keystroke \"t\" using command down
-delay 0.6
-tell application \"Terminal\" to do script \"$(attach_cmd "${works[$i]}")\" in front window
-delay 0.3"
-  i=$((i + 1))
-done
+/**
+ * Whether a work name matches a selector (exact string or glob).
+ *
+ * @param {string} name - The work name.
+ * @param {string} sel - The selector (exact or glob).
+ * @returns {boolean} True on a match.
+ */
+function matches(name, sel) {
+  return isGlob(sel) ? globToRegExp(sel).test(name) : name === sel;
+}
 
-# Finally, make the fleet window fullscreen.
-script="$script
-tell application \"System Events\" to tell process \"Terminal\"
-  set value of attribute \"AXFullScreen\" of window 1 to true
-end tell"
+/**
+ * Single-quote a string for safe use as one POSIX-shell argument.
+ *
+ * @param {string} s - Raw string.
+ * @returns {string} The shell-single-quoted token.
+ */
+function shq(s) {
+  return `'${String(s).replace(/'/g, `'\\''`)}'`;
+}
 
-echo "mx-open-all: opening ${#works[@]} work(s) in a fullscreen Terminal..." >&2
-osascript -e "$script"
+/**
+ * Escape a string for embedding inside an AppleScript double-quoted literal.
+ *
+ * @param {string} s - Raw string.
+ * @returns {string} The escaped string.
+ */
+function apl(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/**
+ * The active (non-archived) work names in a runtime, via `mx work ls --porcelain`.
+ *
+ * @param {string} runtime - The runtime path to target (as MX_RUNTIME).
+ * @returns {string[]} Active work names in mx's listing order.
+ */
+function activeWorks(runtime) {
+  let out;
+  try {
+    out = execFileSync('mx', ['work', 'ls', '--porcelain'], {
+      encoding: 'utf8',
+      env: { ...process.env, MX_RUNTIME: runtime },
+    });
+  } catch (e) {
+    process.stderr.write(`mx-open-all: could not list works: ${e.message}\n`);
+    process.exit(1);
+  }
+  let works;
+  try {
+    works = JSON.parse(out);
+  } catch {
+    process.stderr.write('mx-open-all: could not parse `mx work ls --porcelain` output\n');
+    process.exit(1);
+  }
+  return works.filter((w) => w && w.isArchived !== true).map((w) => w.name);
+}
+
+/**
+ * Parse a layout config file's text into ordered items plus global excludes.
+ *
+ * @param {string} text - The config file contents.
+ * @returns {{items: object[], excludes: string[]}} Ordered items (`{divider}`,
+ *   `{rest:true}`, or `{sel}`) and the exclude globs.
+ */
+function parseConfig(text) {
+  const items = [];
+  const excludes = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    if (line.toLowerCase().startsWith('exclude:')) {
+      const g = line.slice(line.indexOf(':') + 1).trim();
+      if (g) excludes.push(g);
+    } else if (line.toLowerCase().startsWith('divider:')) {
+      items.push({ divider: line.slice(line.indexOf(':') + 1).trim() });
+    } else if (line === '*') {
+      items.push({ rest: true });
+    } else {
+      items.push({ sel: line });
+    }
+  }
+  return { items, excludes };
+}
+
+/**
+ * Resolve a config layout against the active works into an ordered tab list.
+ * Each tab is `{ work }` (open that work) or `{ divider }` (a divider banner).
+ * `*` expands to active works matched by no explicit selector anywhere in the
+ * layout; excluded works never appear.
+ *
+ * @param {string[]} active - Active work names in listing order.
+ * @param {{items: object[], excludes: string[]}} cfg - Parsed config.
+ * @param {string[]} cliExcludes - Extra exclude globs from the command line.
+ * @returns {object[]} Ordered tabs.
+ */
+function resolveConfig(active, cfg, cliExcludes) {
+  const excludes = cfg.excludes.concat(cliExcludes);
+  const activeSet = active.filter((w) => !excludes.some((g) => matches(w, g)));
+  const selectors = cfg.items.filter((i) => i.sel).map((i) => i.sel);
+  const claimed = new Set(activeSet.filter((w) => selectors.some((s) => matches(w, s))));
+  const emitted = new Set();
+  const tabs = [];
+  for (const item of cfg.items) {
+    if (item.divider !== undefined) {
+      tabs.push({ divider: item.divider });
+    } else if (item.rest) {
+      for (const w of activeSet) {
+        if (!claimed.has(w) && !emitted.has(w)) {
+          tabs.push({ work: w });
+          emitted.add(w);
+        }
+      }
+    } else {
+      const sel = item.sel;
+      if (isGlob(sel)) {
+        const found = activeSet.filter((w) => matches(w, sel));
+        if (!found.length) process.stderr.write(`mx-open-all: no active work matches "${sel}"\n`);
+        for (const w of found) {
+          if (!emitted.has(w)) {
+            tabs.push({ work: w });
+            emitted.add(w);
+          }
+        }
+      } else if (activeSet.includes(sel)) {
+        if (!emitted.has(sel)) {
+          tabs.push({ work: sel });
+          emitted.add(sel);
+        }
+      } else if (!active.includes(sel)) {
+        process.stderr.write(`mx-open-all: ignoring "${sel}" (not an active work)\n`);
+      }
+      // else: it's active but excluded — silently skip.
+    }
+  }
+  return tabs;
+}
+
+/**
+ * Resolve a plain selector list (CLI positionals, or all active) into work tabs,
+ * applying excludes and de-duplicating. No dividers.
+ *
+ * @param {string[]} active - Active work names.
+ * @param {string[]} includes - Selectors (exact/glob); empty means all active.
+ * @param {string[]} excludes - Exclude globs.
+ * @returns {object[]} Ordered work tabs.
+ */
+function resolveSelectors(active, includes, excludes) {
+  const activeSet = active.filter((w) => !excludes.some((g) => matches(w, g)));
+  let cand;
+  if (!includes.length) {
+    cand = activeSet.slice();
+  } else {
+    cand = [];
+    for (const tok of includes) {
+      if (isGlob(tok)) {
+        const found = activeSet.filter((w) => matches(w, tok));
+        if (!found.length) process.stderr.write(`mx-open-all: no active work matches "${tok}"\n`);
+        cand.push(...found);
+      } else if (activeSet.includes(tok)) {
+        cand.push(tok);
+      } else {
+        process.stderr.write(`mx-open-all: ignoring "${tok}" (not an active work)\n`);
+      }
+    }
+  }
+  const emitted = new Set();
+  const tabs = [];
+  for (const w of cand) {
+    if (!emitted.has(w)) {
+      emitted.add(w);
+      tabs.push({ work: w });
+    }
+  }
+  return tabs;
+}
+
+/**
+ * The shell command a tab runs. A work tab attaches its tmux session; a divider
+ * tab renders the block-letter banner (it holds the tab until Ctrl-C).
+ *
+ * @param {object} tab - `{ work }` or `{ divider }`.
+ * @param {string} runtime - Runtime path baked into a work's attach command.
+ * @returns {string} The shell command line.
+ */
+function tabCommand(tab, runtime) {
+  if (tab.divider !== undefined) return `mx divider ${shq(tab.divider)}`;
+  return `MX_RUNTIME=${shq(runtime)} mx work -n ${shq(tab.work)} attach`;
+}
+
+/**
+ * Open the given tabs in one fullscreen Terminal.app window: the first command
+ * opens a new window, each remaining one a new tab (Cmd-T), then fullscreen.
+ *
+ * @param {string[]} commands - The per-tab shell commands, in order.
+ */
+function openInTerminal(commands) {
+  let script =
+    'tell application "Terminal"\n  activate\n' +
+    `  do script "${apl(commands[0])}"\nend tell\ndelay 0.6`;
+  for (let i = 1; i < commands.length; i++) {
+    script +=
+      '\ntell application "System Events" to keystroke "t" using command down' +
+      '\ndelay 0.6' +
+      `\ntell application "Terminal" to do script "${apl(commands[i])}" in front window` +
+      '\ndelay 0.3';
+  }
+  script +=
+    '\ntell application "System Events" to tell process "Terminal"\n' +
+    '  set value of attribute "AXFullScreen" of window 1 to true\nend tell';
+  execFileSync('osascript', ['-e', script]);
+}
+
+/**
+ * Entry point: parse args, resolve the tab list (CLI selectors, config layout,
+ * or all active), and open them in a fullscreen Terminal.
+ */
+function main() {
+  const argv = process.argv.slice(2);
+  const includes = [];
+  const excludes = [];
+  let configPath = process.env.MX_OPEN_ALL_CONFIG || '';
+  let noConfig = false;
+  let dryRun = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '-h' || a === '--help') return printHelp();
+    if (a === '--example') return process.stdout.write(EXAMPLE_CONFIG);
+    if (a === '--dry-run') dryRun = true;
+    else if (a === '--no-config') noConfig = true;
+    else if (a === '--config') {
+      configPath = argv[++i];
+      if (!configPath) {
+        process.stderr.write('mx-open-all: --config needs a path\n');
+        process.exit(2);
+      }
+    } else if (a === '-x' || a === '--except') {
+      const g = argv[++i];
+      if (!g) {
+        process.stderr.write('mx-open-all: -x/--except needs a pattern\n');
+        process.exit(2);
+      }
+      excludes.push(g);
+    } else if (a.startsWith('-')) {
+      process.stderr.write(`mx-open-all: unknown flag: ${a}\n`);
+      process.exit(2);
+    } else {
+      includes.push(a);
+    }
+  }
+
+  if (process.platform !== 'darwin' && !dryRun) {
+    process.stderr.write('mx-open-all: macOS + Terminal.app only\n');
+    process.exit(1);
+  }
+
+  const runtime = process.env.MX_RUNTIME || path.join(os.homedir(), 'mx');
+  const active = activeWorks(runtime);
+  if (!active.length) {
+    process.stderr.write('mx-open-all: no active mx works to open\n');
+    return;
+  }
+
+  // Config drives the layout only when no positional selectors were given.
+  if (!configPath) configPath = path.join(runtime, 'files', 'mx-open-all.conf');
+  const useConfig = !noConfig && includes.length === 0 && fs.existsSync(configPath);
+
+  let tabs;
+  if (useConfig) {
+    tabs = resolveConfig(active, parseConfig(fs.readFileSync(configPath, 'utf8')), excludes);
+  } else {
+    tabs = resolveSelectors(active, includes, excludes);
+  }
+
+  if (!tabs.length) {
+    process.stderr.write('mx-open-all: nothing to open\n');
+    return;
+  }
+
+  const commands = tabs.map((t) => tabCommand(t, runtime));
+
+  if (dryRun) {
+    // Preview: one line per tab, labeled work/divider, then the exact command.
+    for (const t of tabs) {
+      const label = t.divider !== undefined ? `divider  ${t.divider}` : `work     ${t.work}`;
+      process.stdout.write(`${label}\n`);
+    }
+    return;
+  }
+
+  const works = tabs.filter((t) => t.work !== undefined).length;
+  const divs = tabs.length - works;
+  process.stderr.write(
+    `mx-open-all: opening ${works} work(s)${divs ? ` + ${divs} divider(s)` : ''} in a fullscreen Terminal...\n`,
+  );
+  openInTerminal(commands);
+}
+
+main();

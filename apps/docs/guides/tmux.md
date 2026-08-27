@@ -190,14 +190,42 @@ Active works with a live session are healthy and never touched, and neither are 
 On macOS you don't have to attach works one at a time. mx ships a bin, `mx-open-all`, that opens **one fullscreen Terminal.app window with a tab per work**, each tab running `mx work attach`:
 
 ```bash
-mx-open-all                       # every active work, one tab each
+mx-open-all                       # every active work (or follow a config, below)
 mx-open-all feature-a feature-b   # just the named works
 mx-open-all 'valkyrie-*'          # works matching a glob (quote it)
 mx-open-all -x 'sk-*'             # every active work EXCEPT those matching a glob
-mx-open-all -x 'sk-*' -x dojo     # repeat -x to exclude more
+mx-open-all --dry-run             # print the tabs it would open, without opening
 ```
 
 Positional args select works by exact name or glob; `-x`/`--except <glob>` removes matching works (repeatable). Only active works are ever opened — an archived, destroyed, or unknown *name* is ignored (never opened), so every tab is a live work.
+
+### A layout config
+
+For a fixed fleet layout — a set order, with **divider tabs** grouping your works — drop a config at `<runtime>/files/mx-open-all.conf` (override with `--config <path>` or `$MX_OPEN_ALL_CONFIG`). Run `mx-open-all --example` to print a starter. Each line is a tab, in order:
+
+```
+exclude: sk-*
+
+divider: MAIN
+sidekick
+dojo
+playground
+
+divider: IN PROGRESS
+valkyrie-*
+
+divider: IN REVIEW
+*
+
+divider: DEV
+dev-mx
+```
+
+- `divider: TEXT` opens a tab running `mx divider "TEXT"` (a block-letter banner that holds the tab — a visual separator between groups).
+- `*` expands to every active work **not named/matched elsewhere** in the layout (so `dev-mx`, listed last, isn't swept in).
+- `exclude: <glob>` drops works everywhere; a plain line is a work name or glob.
+
+The config is used when you run `mx-open-all` with **no positional args**; passing works or `-x` on the command line bypasses it (`--no-config` forces plain "all active"). Preview any of this with `--dry-run`.
 
 The counterpart closes everything at once:
 
