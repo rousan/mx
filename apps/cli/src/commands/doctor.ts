@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   MxError,
@@ -158,6 +159,81 @@ function runtimeContextIndex(flags: Flags): ContextIndexStatus | null {
 }
 
 /**
+ * The mx-shipped bin that strips `mx/*` sessions from tmux-resurrect saves.
+ */
+const RESURRECT_FILTER_BIN = 'mx-tmux-resurrect-filter';
+
+/**
+ * Whether tmux-resurrect is in use and, if so, whether the mx exclusion filter
+ * is wired into it.
+ */
+interface ResurrectStatus {
+  /** True when tmux-resurrect appears to be installed/configured. */
+  usesResurrect: boolean;
+  /** True when the `mx-tmux-resurrect-filter` is wired as the post-save-all hook. */
+  wired: boolean;
+}
+
+/**
+ * Read a global tmux option's value from the running server, or null when it's
+ * unset or there's no server.
+ *
+ * @param name - The tmux option name (e.g. `@resurrect-hook-post-save-all`).
+ * @returns The option value, or null.
+ */
+function tmuxGlobalOption(name: string): string | null {
+  const r = spawnSync('tmux', ['show-options', '-gqv', name], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  if (r.status !== 0) return null;
+  const v = (r.stdout ?? '').trim();
+  return v === '' ? null : v;
+}
+
+/**
+ * Concatenated text of the user's tmux config files that exist (`~/.tmux.conf`
+ * and `$XDG_CONFIG_HOME/tmux/tmux.conf`).
+ *
+ * @returns The combined config text (empty when none exist).
+ */
+function tmuxConfigText(): string {
+  const home = os.homedir();
+  const xdg = process.env.XDG_CONFIG_HOME || path.join(home, '.config');
+  const files = [path.join(home, '.tmux.conf'), path.join(xdg, 'tmux', 'tmux.conf')];
+  let text = '';
+  for (const f of files) {
+    try {
+      text += readFileSync(f, 'utf8') + '\n';
+    } catch {
+      // File absent — skip.
+    }
+  }
+  return text;
+}
+
+/**
+ * Detect whether tmux-resurrect is in use and whether the mx exclusion filter is
+ * wired. "In use" is inferred from the resurrect plugin directory, a `resurrect`
+ * mention in the tmux config, or a live `@resurrect-*` option. "Wired" is true
+ * when the live `@resurrect-hook-post-save-all` option — or the config text —
+ * references {@link RESURRECT_FILTER_BIN}. Checking both the live option and the
+ * file means it's detected whether or not the server has reloaded the config.
+ *
+ * @returns The resurrect/filter status.
+ */
+function resurrectFilterStatus(): ResurrectStatus {
+  const hookValue = tmuxGlobalOption('@resurrect-hook-post-save-all');
+  const config = tmuxConfigText();
+  const pluginDir = existsSync(path.join(os.homedir(), '.tmux', 'plugins', 'tmux-resurrect'));
+  const usesResurrect = hookValue !== null || pluginDir || /resurrect/i.test(config);
+  const wired =
+    (hookValue !== null && hookValue.includes(RESURRECT_FILTER_BIN)) ||
+    new RegExp(`@resurrect-hook-post-save-all[^\\n]*${RESURRECT_FILTER_BIN}`).test(config);
+  return { usesResurrect, wired };
+}
+
+/**
  * `mx doctor` — check the tools mx's tmux workflow relies on (and the
  * recommended editor toolbelt), report what's present, and print the exact
  * install command for whatever is missing. With `--install`, run that command
@@ -204,6 +280,8 @@ export function runDoctor(_positionals: string[], flags: Flags): void {
   // The runtime's context-index size vs Claude Code's @import limit (best-effort;
   // null when doctor is run without a runtime present).
   const idx = runtimeContextIndex(flags);
+  // Whether tmux-resurrect is used and the mx exclusion filter is wired.
+  const res = resurrectFilterStatus();
 
   emit(() => {
     const rows = statuses;
@@ -259,17 +337,26 @@ export function runDoctor(_positionals: string[], flags: Flags): void {
       }
     }
 
-    // tmux-resurrect note — mx sessions are disposable (attach rebuilds them), so
-    // keep them out of resurrect's snapshot with the shipped filter.
+    // tmux-resurrect: mx sessions are disposable (attach rebuilds them), so they
+    // should be excluded from resurrect's snapshot via the shipped filter. Report
+    // whether it's wired when resurrect is in use.
     console.log();
-    console.log(dim('tmux-resurrect users: keep mx sessions out of your snapshot — add to ~/.tmux.conf'));
-    console.log(dim("  set -g @resurrect-hook-post-save-all 'mx-tmux-resurrect-filter'"));
-    console.log(dim('  (needs `mx bin path` on PATH). See https://mx.rousanali.com/docs/guides/tmux'));
+    console.log(bold('tmux-resurrect'));
+    if (!res.usesResurrect) {
+      console.log(`  ${dim('not detected — mx sessions are not persisted anyway')}`);
+    } else if (res.wired) {
+      console.log(`  ${check()} ${dim(`mx sessions excluded (${RESURRECT_FILTER_BIN} wired)`)}`);
+    } else {
+      console.log(`  ${warn()} ${dim('mx sessions NOT excluded from resurrect — add this to ~/.tmux.conf:')}`);
+      console.log(`      ${bold(`set -g @resurrect-hook-post-save-all '${RESURRECT_FILTER_BIN}'`)}`);
+      console.log(`  ${dim('(needs `mx bin path` on PATH). See https://mx.rousanali.com/docs/guides/tmux')}`);
+    }
   }, {
     tools: statuses.map((s) => ({ name: s.spec.name, kind: s.spec.kind, installed: s.installed, version: s.version })),
     packageManager: pm?.id ?? null,
     missing: missing.map((s) => s.spec.name),
     installCommand: pm && missingPkgs.length ? pm.install(missingPkgs) : null,
     contextIndex: idx,
+    tmuxResurrect: res,
   });
 }
