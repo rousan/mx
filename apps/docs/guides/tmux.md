@@ -150,17 +150,21 @@ This is why detaching and re-attaching feels seamless: it's the same session, re
 
 ## tmux-resurrect
 
-If you use [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect) (with [tmux-continuum](https://github.com/tmux-plugins/tmux-continuum)) to persist and restore sessions across reboots, mx works need **no special setup** — they save and restore like any other session, so a work's **custom** window/pane layout survives a reboot. That's the whole point: mx's own rebuild only knows the default layout, but resurrect remembers whatever you grew the session into.
+If you use [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect) to persist and restore sessions across reboots, **keep mx sessions out of it**. mx sessions are disposable — `mx work attach` rebuilds a work's session on demand — so there's no reason for resurrect to persist them, and restoring stale ones after a reboot is just noise. After a reboot you simply recreate what you want with [`mx-open-all`](#open-and-close-your-whole-fleet-macos) or `mx work attach`.
 
-Resurrect restores the layout and each pane's working directory; it doesn't relaunch programs unless you list them (e.g. `set -g @resurrect-processes 'nvim'`). Claude and dev servers generally shouldn't auto-restart anyway — the **structure** is what you want back, and `mx work attach` drops you into it.
-
-The one thing to clean up: resurrect's last save may still contain a session for a work you **archived or destroyed** after that save. On the next reboot it gets restored — a live session for a dead work (its worktrees are gone). Prune those with:
+mx ships a filter, `mx-tmux-resurrect-filter`, that strips `mx/*` sessions from each resurrect save. Wire it in with **one line** in `~/.tmux.conf`, after the plugin is loaded:
 
 ```bash
-mx work gc
+set -g @resurrect-hook-post-save-all 'mx-tmux-resurrect-filter'
 ```
 
-See [Housekeeping](#housekeeping-switch-and-gc) below.
+It needs the runtime `bin/` on your `PATH`:
+
+```bash
+export PATH="$(mx bin path):$PATH"    # add to your shell rc
+```
+
+Your **other** sessions still save and restore normally; only `mx/*` sessions are dropped. (If you ever do end up with a stray mx session for a work you've since archived or destroyed, [`mx work gc`](#housekeeping-switch-and-gc) prunes it.)
 
 ## Housekeeping: `switch` and `gc`
 
