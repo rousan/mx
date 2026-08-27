@@ -31,6 +31,8 @@ When mx builds a work's session, it lays out two windows:
   - **right**: `nvim wt` — the work's **`wt/` folder**, so you land straight in the worktrees you edit (not the work-folder root, which holds mx-native files). A work can override this in the [`work-session` hook](#customizing-the-layout-the-work-session-hook).
 - **`run`** — a **2×2 tiled grid** of plain shells, for dev servers and ad-hoc commands.
 
+Windows are numbered from **1** (`main` = 1, `run` = 2), so any window you add continues at 3, 4, … (`prefix + 2` jumps to `run`). Panes stay 0-indexed. This is set on the mx session only — your other tmux sessions are untouched.
+
 Every pane is seeded with the work's context as environment variables, so any shell already knows where it is:
 
 | Variable | What it holds |
@@ -179,22 +181,36 @@ mx work gc                # review and confirm what gets pruned
 
 Active works with a live session are healthy and never touched, and neither are sessions belonging to a different runtime that happens to share your tmux server.
 
-## Open your whole fleet (macOS)
+## Open (and close) your whole fleet (macOS)
 
 On macOS you don't have to attach works one at a time. mx ships a bin, `mx-open-all`, that opens **one fullscreen Terminal.app window with a tab per work**, each tab running `mx work attach`:
 
 ```bash
-mx-open-all                    # every active work, one tab each
-mx-open-all feature-a feature-b  # just the named works
+mx-open-all                       # every active work, one tab each
+mx-open-all feature-a feature-b   # just the named works
+mx-open-all 'valkyrie-*'          # works matching a glob (quote it)
+mx-open-all -x 'sk-*'             # every active work EXCEPT those matching a glob
+mx-open-all -x 'sk-*' -x dojo     # repeat -x to exclude more
 ```
 
-Named works are validated against the active set — an archived, destroyed, or unknown name is ignored (never opened), so every tab is a live work. It needs the runtime `bin/` on your `PATH`:
+Positional args select works by exact name or glob; `-x`/`--except <glob>` removes matching works (repeatable). Only active works are ever opened — an archived, destroyed, or unknown *name* is ignored (never opened), so every tab is a live work.
+
+The counterpart closes everything at once:
+
+```bash
+mx-kill-sessions        # confirm, then kill every mx/* tmux session
+mx-kill-sessions -y     # skip the confirmation
+```
+
+`mx-kill-sessions` only closes the tmux sessions — the works stay active, and `mx work attach` rebuilds a session on demand (it does end whatever was running in them, so it prompts first).
+
+Both bins need the runtime `bin/` on your `PATH`:
 
 ```bash
 export PATH="$(mx bin path):$PATH"    # add to your shell rc
 ```
 
-Terminal.app only. Closing the window detaches every tab (the sessions keep running); reopen the fleet any time.
+`mx-open-all` is Terminal.app-only; `mx-kill-sessions` works anywhere tmux does. Closing the fleet window detaches every tab (the sessions keep running); reopen any time.
 
 ## Related
 

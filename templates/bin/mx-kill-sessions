@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+#
+# mx-kill-sessions — kill ALL live mx tmux sessions (mx/*) at once.
+#
+#   mx-kill-sessions          # confirm, then kill every mx/* session
+#   mx-kill-sessions -y        # skip the confirmation
+#
+# The counterpart to mx-open-all: closes every work's tmux session in one go.
+# This does NOT archive or destroy any work — the works stay active, and
+# `mx work attach` rebuilds a session on demand. It DOES terminate whatever is
+# running in those sessions (dev servers, a running claude), so it prompts first
+# unless you pass -y/--yes. Kills every mx/* session on the tmux server (across
+# runtimes, if you have more than one).
+#
+# This is a shipped bin (mx re-stamps it on init/sync). macOS + Linux.
+set -euo pipefail
+
+yes=0
+case "${1:-}" in
+  -y | --yes) yes=1 ;;
+  -h | --help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  '') : ;;
+  *) echo "mx-kill-sessions: unknown argument: $1" >&2; exit 2 ;;
+esac
+
+# Collect live mx/* sessions (empty when there's no tmux server yet). Portable
+# read loop (macOS's stock bash 3.2 — no mapfile).
+sessions=()
+while IFS= read -r s; do
+  [ -n "$s" ] && sessions+=("$s")
+done < <(tmux list-sessions -F '#{session_name}' 2>/dev/null | grep '^mx/' || true)
+
+if [ "${#sessions[@]}" -eq 0 ]; then
+  echo "mx-kill-sessions: no mx tmux sessions to kill" >&2
+  exit 0
+fi
+
+if [ "$yes" -ne 1 ]; then
+  printf 'About to kill %d mx session(s):\n' "${#sessions[@]}" >&2
+  for s in "${sessions[@]}"; do printf '  %s\n' "$s" >&2; done
+  printf 'Proceed? (y/N) ' >&2
+  read -r ans || ans=""
+  case "$ans" in
+    y | Y | yes | YES) : ;;
+    *) echo "Aborted." >&2; exit 0 ;;
+  esac
+fi
+
+for s in "${sessions[@]}"; do
+  # `=` is an exact-match target so a name is never treated as a prefix.
+  tmux kill-session -t "=$s" && echo "killed $s"
+done

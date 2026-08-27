@@ -3,26 +3,51 @@
 # mx-open-all — open mx works in ONE fullscreen macOS Terminal window, one tab
 # per work, each running `mx work attach <work>`.
 #
-#   mx-open-all                 # open every ACTIVE work
-#   mx-open-all sidekick dev-mx # open only the named works (a subset)
+#   mx-open-all                     # open every ACTIVE work
+#   mx-open-all sidekick dev-mx     # only the named works (a subset)
+#   mx-open-all 'valkyrie-*'        # works matching a glob (quote it!)
+#   mx-open-all -x 'sk-*'           # every active work EXCEPT those matching a glob
+#   mx-open-all -x 'sk-*' -x dojo   # repeat -x to exclude more
 #
-# Named works are validated against the active set — a name that isn't an active
-# work is skipped with a warning (rather than opening a tab that just errors).
+# Positional args select works to open — an exact name, or a shell glob like
+# `valkyrie-*` (quote globs so your shell doesn't expand them first); with none,
+# all active works. `-x`/`--except <glob>` removes matching works from that set
+# (repeatable). Only ACTIVE works are ever opened; an exact name that isn't an
+# active work is skipped with a warning.
 #
-# macOS + Terminal.app only. This is a user bin (mx never ships or overwrites
-# it). It asks mx for the works (stable JSON via --porcelain), then drives
+# macOS + Terminal.app only. This is a shipped bin (mx re-stamps it on
+# init/sync). It asks mx for the works (stable JSON via --porcelain), then drives
 # Terminal.app with AppleScript: the first work opens a new window (tab 1), each
 # remaining work gets a new tab (Cmd-T), and the window is finally made
-# fullscreen. Each tab runs `mx work attach <work>`, which builds that work's
-# tmux session if needed and attaches the tab to it.
+# fullscreen. Each tab runs `mx work attach <work>`, building/attaching its tmux
+# session.
 set -euo pipefail
 
-case "${1:-}" in
-  -h | --help)
-    sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
-    exit 0
-    ;;
-esac
+# Parse args: -x/--except <glob> excludes (repeatable); everything else is an
+# include selector (an exact name or a glob).
+includes=()
+excludes=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h | --help)
+      sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    -x | --except)
+      shift
+      [ "$#" -gt 0 ] || { echo "mx-open-all: -x/--except needs a pattern" >&2; exit 2; }
+      excludes+=("$1")
+      ;;
+    -*)
+      echo "mx-open-all: unknown flag: $1" >&2
+      exit 2
+      ;;
+    *)
+      includes+=("$1")
+      ;;
+  esac
+  shift
+done
 
 # Terminal.app + AppleScript is macOS-only. Fail cleanly elsewhere rather than
 # erroring deep inside osascript.
@@ -53,26 +78,51 @@ if [ "${#active[@]}" -eq 0 ]; then
   exit 0
 fi
 
-# Decide which works to open. With no arguments, every active work; with
-# arguments, only the named ones that are ACTIVE — an archived, destroyed, or
-# unknown name is ignored with a warning (never opened, so no dead tabs). The
-# guard above ensures `active` is non-empty here, so expanding it is safe even
-# under `set -u` on bash 3.2.
-works=()
-if [ "$#" -gt 0 ]; then
-  for req in "$@"; do
-    is_active=0
-    for a in "${active[@]}"; do
-      [ "$a" = "$req" ] && is_active=1 && break
-    done
-    if [ "$is_active" -eq 1 ]; then
-      works+=("$req")
-    else
-      echo "mx-open-all: ignoring \"$req\" (not an active work)" >&2
-    fi
-  done
+# Build the candidate set from the include selectors (or all active if none). A
+# selector is a glob when it contains * ? or [ ; otherwise an exact name that
+# must be active (else warn). `[[ x == pat ]]` glob-matches with pat unquoted.
+cand=()
+if [ "${#includes[@]}" -eq 0 ]; then
+  cand=("${active[@]}")
 else
-  works=("${active[@]}")
+  for tok in "${includes[@]}"; do
+    case "$tok" in
+      *[\*\?\[]*)
+        matched=0
+        for a in "${active[@]}"; do
+          if [[ "$a" == $tok ]]; then cand+=("$a"); matched=1; fi
+        done
+        [ "$matched" -eq 0 ] && echo "mx-open-all: no active work matches \"$tok\"" >&2
+        ;;
+      *)
+        found=0
+        for a in "${active[@]}"; do [ "$a" = "$tok" ] && found=1 && break; done
+        if [ "$found" -eq 1 ]; then
+          cand+=("$tok")
+        else
+          echo "mx-open-all: ignoring \"$tok\" (not an active work)" >&2
+        fi
+        ;;
+    esac
+  done
+fi
+
+# Apply excludes and de-duplicate (a work can match several selectors / globs).
+works=()
+if [ "${#cand[@]}" -gt 0 ]; then
+  for w in "${cand[@]}"; do
+    dup=0
+    if [ "${#works[@]}" -gt 0 ]; then
+      for x in "${works[@]}"; do [ "$x" = "$w" ] && dup=1 && break; done
+    fi
+    [ "$dup" -eq 1 ] && continue
+    skip=0
+    if [ "${#excludes[@]}" -gt 0 ]; then
+      for pat in "${excludes[@]}"; do [[ "$w" == $pat ]] && skip=1 && break; done
+    fi
+    [ "$skip" -eq 1 ] && continue
+    works+=("$w")
+  done
 fi
 
 if [ "${#works[@]}" -eq 0 ]; then

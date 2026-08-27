@@ -449,7 +449,11 @@ Start a local, **read-only live web dashboard** for the runtime and block until 
 
 ### `mx bin ls` · `mx bin path` (alias `mx bins`)
 
-Manage the runtime-wide `bin/` directory — utility executables shared across every work, meant to be on your `PATH`. mx ships some (`dcs` / `lcs` — delete / list Claude Code sessions by name; `mx-open-all` — open every active work, or a named subset, in one fullscreen macOS Terminal.app window with a tab per work each running `mx work attach`) and you can drop your own in; any executable file is picked up.
+Manage the runtime-wide `bin/` directory — utility executables shared across every work, meant to be on your `PATH`. mx ships some and you can drop your own in; any executable file is picked up. Shipped bins:
+
+- **`dcs` / `lcs`** — delete / list Claude Code sessions by name.
+- **`mx-open-all`** (macOS) — open active works in one fullscreen Terminal.app window, a tab per work each running `mx work attach`. Positional args select works by exact name or glob (`mx-open-all 'valkyrie-*'`); `-x`/`--except <glob>` excludes matching works (repeatable), e.g. `mx-open-all -x 'sk-*'` opens everything except `sk-*`. With no args, all active works.
+- **`mx-kill-sessions`** — kill every live `mx/*` tmux session at once (the counterpart to `mx-open-all`). Prompts first unless `-y`/`--yes`. This only closes the tmux sessions; the works stay active and `mx work attach` rebuilds a session on demand.
 
 - **`mx bin ls`** (or bare `mx bin`) — list the bins, each tagged `built-in` (shipped) or `user` (yours), with a warning on any that aren't executable. It ends with PATH guidance: a ✓ when `bin/` is already on your `PATH`, otherwise a step-by-step instruction to add `export PATH="$(mx bin path):$PATH"` to your shell startup file (`~/.zshrc`, `~/.bashrc`, …). Porcelain returns `{ "dir", "onPath", "bins": [{ "name", "path", "executable", "shipped" }] }`.
 - **`mx bin path`** — print the absolute `bin/` directory, for wiring it onto `PATH`:
