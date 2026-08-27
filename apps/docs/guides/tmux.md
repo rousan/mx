@@ -221,7 +221,7 @@ divider: DEV
 dev-mx
 ```
 
-- `divider: TEXT` opens a tab running `mx divider "TEXT"` (a block-letter banner that holds the tab — a visual separator between groups).
+- `divider: TEXT` opens a tab running `mx divider "TEXT"` (a block-letter banner that holds the tab — a visual separator between groups). Double-quote the text to keep leading/trailing padding, e.g. `divider: "   MAIN   "`.
 - `*` expands to every active work **not named/matched elsewhere** in the layout (so `dev-mx`, listed last, isn't swept in).
 - `exclude: <glob>` drops works everywhere; a plain line is a work name or glob.
 
