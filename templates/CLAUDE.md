@@ -412,10 +412,12 @@ clarity; dropping it works while you're inside the work.
   `mx work switch` (an fzf picker over live `mx/*` sessions, or `mx work switch <feature>`). The
   `.code-workspace` is still written, so you can open the work in VS Code too if you prefer. (mx no longer
   drives editors/terminals via osascript.)
-- **tmux-resurrect + cleanup:** mx works save/restore through tmux-resurrect like any session (a work's custom
-  layout survives a reboot) — no special exclusion. After a reboot, resurrect may bring back a session for a
-  work that's since been archived/destroyed; `mx work gc` prunes those orphaned `mx/<feature>` sessions (only
-  this runtime's, warns on live panes, confirm or `--yes`).
+- **tmux-resurrect:** mx sessions are disposable (`mx work attach` rebuilds them), so keep them OUT of
+  tmux-resurrect: add `set -g @resurrect-hook-post-save-all 'mx-tmux-resurrect-filter'` to `~/.tmux.conf`
+  (the shipped `mx-tmux-resurrect-filter` bin strips `mx/*` from each save; needs `<runtime>/bin` on `PATH`).
+  Your other sessions still save/restore; after a reboot recreate mx works with `mx-open-all` / `mx work attach`.
+  `mx work gc` prunes any stray orphaned `mx/<feature>` session (archived/destroyed work; only this runtime's,
+  warns on live panes, confirm or `--yes`).
 - **Check the toolchain:** `mx doctor` verifies the tmux workflow's dependencies (tmux, neovim, claude) plus
   the recommended editor toolbelt, and prints the exact install command for anything missing (`--install`
   runs it). Run it once on a new machine.

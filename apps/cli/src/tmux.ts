@@ -239,7 +239,9 @@ export function buildSession(session: string, opts: BuildSessionOpts): void {
   // folder — the worktrees are what you actually edit — not the work-folder root
   // (which holds mx-native files). A work can override this in the work-session
   // hook. Panes' cwd stays the work folder, so `wt` resolves under it.
-  tmux(['rename-window', '-t', `${session}:0`, 'main']);
+  // Rename the first (active) window by session target, not `:0`, so it works
+  // regardless of the user's global base-index.
+  tmux(['rename-window', '-t', session, 'main']);
   tmux(['send-keys', '-t', `${session}:main.0`, claudeCmd, 'Enter']);
   tmux(['split-window', '-h', '-t', `${session}:main.0`, '-c', workPath]);
   tmux(['send-keys', '-t', `${session}:main.1`, 'nvim wt', 'Enter']);
@@ -251,6 +253,11 @@ export function buildSession(session: string, opts: BuildSessionOpts): void {
   tmux(['split-window', '-t', `${session}:run`, '-c', workPath]);
   tmux(['split-window', '-t', `${session}:run`, '-c', workPath]);
   tmux(['select-layout', '-t', `${session}:run`, 'tiled']);
+  // Number windows from 1 (main=1, run=2) — a common tmux preference. Set on the
+  // session only (never the user's other sessions), then renumber the existing
+  // windows to close the gap. Panes stay 0-indexed (mx targets them as .0/.1).
+  tmux(['set-option', '-t', session, 'base-index', '1']);
+  tmux(['move-window', '-r', '-t', session]);
   // Land the user on the main window.
   tmux(['select-window', '-t', `${session}:main`]);
 }

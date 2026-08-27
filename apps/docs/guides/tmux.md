@@ -31,6 +31,8 @@ When mx builds a work's session, it lays out two windows:
   - **right**: `nvim wt` — the work's **`wt/` folder**, so you land straight in the worktrees you edit (not the work-folder root, which holds mx-native files). A work can override this in the [`work-session` hook](#customizing-the-layout-the-work-session-hook).
 - **`run`** — a **2×2 tiled grid** of plain shells, for dev servers and ad-hoc commands.
 
+Windows are numbered from **1** (`main` = 1, `run` = 2), so any window you add continues at 3, 4, … (`prefix + 2` jumps to `run`). Panes stay 0-indexed. This is set on the mx session only — your other tmux sessions are untouched.
+
 Every pane is seeded with the work's context as environment variables, so any shell already knows where it is:
 
 | Variable | What it holds |
@@ -148,17 +150,21 @@ This is why detaching and re-attaching feels seamless: it's the same session, re
 
 ## tmux-resurrect
 
-If you use [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect) (with [tmux-continuum](https://github.com/tmux-plugins/tmux-continuum)) to persist and restore sessions across reboots, mx works need **no special setup** — they save and restore like any other session, so a work's **custom** window/pane layout survives a reboot. That's the whole point: mx's own rebuild only knows the default layout, but resurrect remembers whatever you grew the session into.
+If you use [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect) to persist and restore sessions across reboots, **keep mx sessions out of it**. mx sessions are disposable — `mx work attach` rebuilds a work's session on demand — so there's no reason for resurrect to persist them, and restoring stale ones after a reboot is just noise. After a reboot you simply recreate what you want with [`mx-open-all`](#open-and-close-your-whole-fleet-macos) or `mx work attach`.
 
-Resurrect restores the layout and each pane's working directory; it doesn't relaunch programs unless you list them (e.g. `set -g @resurrect-processes 'nvim'`). Claude and dev servers generally shouldn't auto-restart anyway — the **structure** is what you want back, and `mx work attach` drops you into it.
-
-The one thing to clean up: resurrect's last save may still contain a session for a work you **archived or destroyed** after that save. On the next reboot it gets restored — a live session for a dead work (its worktrees are gone). Prune those with:
+mx ships a filter, `mx-tmux-resurrect-filter`, that strips `mx/*` sessions from each resurrect save. Wire it in with **one line** in `~/.tmux.conf`, after the plugin is loaded:
 
 ```bash
-mx work gc
+set -g @resurrect-hook-post-save-all 'mx-tmux-resurrect-filter'
 ```
 
-See [Housekeeping](#housekeeping-switch-and-gc) below.
+It needs the runtime `bin/` on your `PATH`:
+
+```bash
+export PATH="$(mx bin path):$PATH"    # add to your shell rc
+```
+
+Your **other** sessions still save and restore normally; only `mx/*` sessions are dropped. (If you ever do end up with a stray mx session for a work you've since archived or destroyed, [`mx work gc`](#housekeeping-switch-and-gc) prunes it.)
 
 ## Housekeeping: `switch` and `gc`
 
@@ -179,22 +185,36 @@ mx work gc                # review and confirm what gets pruned
 
 Active works with a live session are healthy and never touched, and neither are sessions belonging to a different runtime that happens to share your tmux server.
 
-## Open your whole fleet (macOS)
+## Open (and close) your whole fleet (macOS)
 
 On macOS you don't have to attach works one at a time. mx ships a bin, `mx-open-all`, that opens **one fullscreen Terminal.app window with a tab per work**, each tab running `mx work attach`:
 
 ```bash
-mx-open-all                    # every active work, one tab each
-mx-open-all feature-a feature-b  # just the named works
+mx-open-all                       # every active work, one tab each
+mx-open-all feature-a feature-b   # just the named works
+mx-open-all 'valkyrie-*'          # works matching a glob (quote it)
+mx-open-all -x 'sk-*'             # every active work EXCEPT those matching a glob
+mx-open-all -x 'sk-*' -x dojo     # repeat -x to exclude more
 ```
 
-Named works are validated against the active set — an archived, destroyed, or unknown name is ignored (never opened), so every tab is a live work. It needs the runtime `bin/` on your `PATH`:
+Positional args select works by exact name or glob; `-x`/`--except <glob>` removes matching works (repeatable). Only active works are ever opened — an archived, destroyed, or unknown *name* is ignored (never opened), so every tab is a live work.
+
+The counterpart closes everything at once:
+
+```bash
+mx-kill-sessions        # confirm, then kill every mx/* tmux session
+mx-kill-sessions -y     # skip the confirmation
+```
+
+`mx-kill-sessions` only closes the tmux sessions — the works stay active, and `mx work attach` rebuilds a session on demand (it does end whatever was running in them, so it prompts first).
+
+Both bins need the runtime `bin/` on your `PATH`:
 
 ```bash
 export PATH="$(mx bin path):$PATH"    # add to your shell rc
 ```
 
-Terminal.app only. Closing the window detaches every tab (the sessions keep running); reopen the fleet any time.
+`mx-open-all` is Terminal.app-only; `mx-kill-sessions` works anywhere tmux does. Closing the fleet window detaches every tab (the sessions keep running); reopen any time.
 
 ## Related
 

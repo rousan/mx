@@ -259,13 +259,12 @@ export function runDoctor(_positionals: string[], flags: Flags): void {
       }
     }
 
-    // tmux-resurrect note — mx works are saved/restored like any session (so
-    // custom layouts survive a reboot); `mx work gc` prunes any session that
-    // resurrect brings back for a work you've since archived/destroyed.
+    // tmux-resurrect note — mx sessions are disposable (attach rebuilds them), so
+    // keep them out of resurrect's snapshot with the shipped filter.
     console.log();
-    console.log(dim('tmux-resurrect users: mx works save/restore normally; run `mx work gc` after a'));
-    console.log(dim('  reboot to prune sessions for archived/destroyed works. See'));
-    console.log(dim('  https://mx.rousanali.com/docs/guides/tmux'));
+    console.log(dim('tmux-resurrect users: keep mx sessions out of your snapshot — add to ~/.tmux.conf'));
+    console.log(dim("  set -g @resurrect-hook-post-save-all 'mx-tmux-resurrect-filter'"));
+    console.log(dim('  (needs `mx bin path` on PATH). See https://mx.rousanali.com/docs/guides/tmux'));
   }, {
     tools: statuses.map((s) => ({ name: s.spec.name, kind: s.spec.kind, installed: s.installed, version: s.version })),
     packageManager: pm?.id ?? null,
