@@ -301,25 +301,45 @@ function tabCommand(tab, runtime) {
 
 /**
  * Open the given tabs in one fullscreen Terminal.app window: the first command
- * opens a new window, each remaining one a new tab (Cmd-T), then fullscreen.
+ * opens a new window, each remaining one a new tab.
+ *
+ * Reliability: rather than fire `Cmd-T` and hope a fixed delay is enough (which
+ * dropped a tab under load, especially right after a full-screen `mx divider`),
+ * each step records the current tab count, sends `Cmd-T`, then **waits until a
+ * new tab actually appears** before running the command in that exact
+ * (`last tab`) tab. No race, no lost tab.
  *
  * @param {string[]} commands - The per-tab shell commands, in order.
  */
 function openInTerminal(commands) {
-  let script =
-    'tell application "Terminal"\n  activate\n' +
-    `  do script "${apl(commands[0])}"\nend tell\ndelay 0.6`;
+  const lines = [
+    'tell application "Terminal"',
+    '  activate',
+    `  do script "${apl(commands[0])}"`,
+    'end tell',
+    'delay 0.5',
+  ];
   for (let i = 1; i < commands.length; i++) {
-    script +=
-      '\ntell application "System Events" to keystroke "t" using command down' +
-      '\ndelay 0.6' +
-      `\ntell application "Terminal" to do script "${apl(commands[i])}" in front window` +
-      '\ndelay 0.3';
+    lines.push(
+      'tell application "Terminal" to set _n to count of tabs of front window',
+      'tell application "System Events" to keystroke "t" using command down',
+      'delay 0.3',
+      'tell application "Terminal"',
+      '  repeat 30 times',
+      '    if (count of tabs of front window) > _n then exit repeat',
+      '    delay 0.2',
+      '  end repeat',
+      `  do script "${apl(commands[i])}" in last tab of front window`,
+      'end tell',
+      'delay 0.2',
+    );
   }
-  script +=
-    '\ntell application "System Events" to tell process "Terminal"\n' +
-    '  set value of attribute "AXFullScreen" of window 1 to true\nend tell';
-  execFileSync('osascript', ['-e', script]);
+  lines.push(
+    'tell application "System Events" to tell process "Terminal"',
+    '  set value of attribute "AXFullScreen" of window 1 to true',
+    'end tell',
+  );
+  execFileSync('osascript', ['-e', lines.join('\n')]);
 }
 
 /**
