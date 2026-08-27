@@ -301,7 +301,10 @@ function tabCommand(tab, runtime) {
 
 /**
  * Open the given tabs in one fullscreen Terminal.app window: the first command
- * opens a new window, each remaining one a new tab.
+ * opens a new window, each remaining one a new tab. Each tab is given a clean
+ * **custom title** (the work name, or the divider text) so the tab bar reads
+ * `sidekick`, `MAIN`, … instead of the full command line — a custom title sticks
+ * and isn't overwritten by the running process (tmux/claude).
  *
  * Reliability: rather than fire `Cmd-T` and hope a fixed delay is enough (which
  * dropped a tab under load, especially right after a full-screen `mx divider`),
@@ -309,17 +312,17 @@ function tabCommand(tab, runtime) {
  * new tab actually appears** before running the command in that exact
  * (`last tab`) tab. No race, no lost tab.
  *
- * @param {string[]} commands - The per-tab shell commands, in order.
+ * @param {{command: string, title: string}[]} items - Per-tab command + tab title, in order.
  */
-function openInTerminal(commands) {
+function openInTerminal(items) {
   const lines = [
     'tell application "Terminal"',
     '  activate',
-    `  do script "${apl(commands[0])}"`,
+    `  set _t1 to do script "${apl(items[0].command)}"`,
     'end tell',
     'delay 0.5',
   ];
-  for (let i = 1; i < commands.length; i++) {
+  for (let i = 1; i < items.length; i++) {
     lines.push(
       'tell application "Terminal" to set _n to count of tabs of front window',
       'tell application "System Events" to keystroke "t" using command down',
@@ -329,11 +332,19 @@ function openInTerminal(commands) {
       '    if (count of tabs of front window) > _n then exit repeat',
       '    delay 0.2',
       '  end repeat',
-      `  do script "${apl(commands[i])}" in last tab of front window`,
+      `  do script "${apl(items[i].command)}" in last tab of front window`,
+      `  set _t${i + 1} to last tab of front window`,
       'end tell',
       'delay 0.2',
     );
   }
+  // Final pass: set each tab's custom title AFTER the command-driven auto-titles
+  // have settled, so our clean names (work / divider text) win and stick.
+  lines.push('delay 0.4', 'tell application "Terminal"');
+  for (let i = 0; i < items.length; i++) {
+    lines.push(`  set custom title of _t${i + 1} to "${apl(items[i].title)}"`);
+  }
+  lines.push('end tell');
   lines.push(
     'tell application "System Events" to tell process "Terminal"',
     '  set value of attribute "AXFullScreen" of window 1 to true',
@@ -408,8 +419,6 @@ function main() {
     return;
   }
 
-  const commands = tabs.map((t) => tabCommand(t, runtime));
-
   if (dryRun) {
     // Preview: one line per tab, labeled work/divider, then the exact command.
     for (const t of tabs) {
@@ -419,12 +428,17 @@ function main() {
     return;
   }
 
+  // Each tab: its command, plus the tab-bar title (work name, or divider text).
+  const items = tabs.map((t) => ({
+    command: tabCommand(t, runtime),
+    title: t.work !== undefined ? t.work : t.divider,
+  }));
   const works = tabs.filter((t) => t.work !== undefined).length;
   const divs = tabs.length - works;
   process.stderr.write(
     `mx-open-all: opening ${works} work(s)${divs ? ` + ${divs} divider(s)` : ''} in a fullscreen Terminal...\n`,
   );
-  openInTerminal(commands);
+  openInTerminal(items);
 }
 
 main();
