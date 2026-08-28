@@ -147,6 +147,15 @@ export function dispatchRepo(positionals: string[], flags: Flags): void {
           console.log(dim('no repos yet — `mx repo add <git-url>`'));
           return;
         }
+        // --lite: a compact two-column table — name on the left, path on the
+        // right, one row per repo. No branch/remote detail.
+        if (flags.lite) {
+          const nameW = Math.max(...repos.map((r) => r.name.length));
+          for (const r of repos) {
+            console.log(`${bold(r.name.padEnd(nameW))}  ${dim(tildify(r.path))}`);
+          }
+          return;
+        }
         // Same clean shape as `mx work ls`: bold name, dim path, dim detail,
         // a blank line between entries.
         for (let i = 0; i < repos.length; i++) {

@@ -410,10 +410,7 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       onlyArchived: flags.archived,
     });
     emit(() => {
-      // Human mode: detailed per-work view — header line with name + chip +
-      // counts; then optional description; then indented worktree rows with
-      // branches and ports. Active works first, archived after; alphabetical
-      // within each group. Porcelain consumers see the raw order above.
+      // Active works first, archived after — the order both views use.
       const ordered = [
         ...works.filter((w) => w.isArchived !== true),
         ...works.filter((w) => w.isArchived === true),
@@ -422,6 +419,22 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         console.log(dim('no works yet — `mx work new <name>`'));
         return;
       }
+      // --lite: a compact two-column table — name on the left, path on the
+      // right, one row per work. No worktrees, descriptions, chips, or ports.
+      if (flags.lite) {
+        const nameW = Math.max(...ordered.map((w) => w.name.length));
+        for (const w of ordered) {
+          // Pad the plain name to the column width, then style — active bold,
+          // archived dim — so the eye still lands on active works first.
+          const padded = w.name.padEnd(nameW);
+          const styledName = w.isArchived === true ? dim(padded) : bold(padded);
+          console.log(`${styledName}  ${dim(tildify(w.path))}`);
+        }
+        return;
+      }
+      // Human mode: detailed per-work view — header line with name + chip +
+      // counts; then optional description; then indented worktree rows with
+      // branches and ports.
       for (let i = 0; i < ordered.length; i++) {
         if (i > 0) console.log();
         const w = ordered[i];

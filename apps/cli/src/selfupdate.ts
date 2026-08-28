@@ -170,15 +170,20 @@ export function selfUpdate(porcelain: boolean): SelfUpdateInfo {
   // stale registry view — as an update and trigger a pointless reinstall that
   // reports a confusing downgrade ("Updated to v2.3.0 (was v2.5.0)").
   if (info.latestInMajor && compareVersions(info.latestInMajor, current) > 0) {
-    const r = spawnSync('npm', ['i', '-g', `${PKG}@^${curMajor}`], {
+    // Install the EXACT advertised version, not a `@^<major>` range. With a
+    // range, a lagging mirror that advertises a version it can't serve resolves
+    // the range down to the newest tarball it *can* serve — silently DOWNGRADING
+    // the user (and, with `status 0`, looking like success). Pinning the exact
+    // version makes npm error (E404 / notarget) when the tarball isn't available,
+    // which we surface as a failure with a direct-registry hint instead.
+    const r = spawnSync('npm', ['i', '-g', `${PKG}@${info.latestInMajor}`], {
       stdio: porcelain ? ['ignore', 'pipe', 'pipe'] : 'inherit',
     });
     if (r.status === 0) {
-      // npm exited 0, but that alone doesn't prove the target landed — re-read
-      // the version actually installed. Only a genuinely newer version counts as
-      // an update; if the same (or older) version came back despite a newer one
-      // being advertised, the registry served something it couldn't fully deliver
-      // (a lagging mirror), which we flag separately instead of claiming success.
+      // Even on exit 0, re-read the version actually on disk rather than assume
+      // the pin landed. Only a genuinely newer version counts as an update; a
+      // same/older result despite a newer advertised version means the registry
+      // couldn't fully deliver (a lagging mirror), flagged separately.
       info.installedVersion = installedGlobalVersion();
       if (info.installedVersion && compareVersions(info.installedVersion, current) > 0) {
         info.updated = true;
