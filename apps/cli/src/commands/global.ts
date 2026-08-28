@@ -148,8 +148,18 @@ function renderSelfUpdate(info: SelfUpdateInfo): void {
   } else if (info.installFailed) {
     console.log(`${warn()} self-update failed — try: ${bold(manual)}`);
   } else if (info.updated) {
+    // Report the version that actually landed on disk, not the requested target.
+    const to = info.installedVersion ?? info.latestInMajor;
+    console.log(`${check()} Updated mx to ${bold(`v${to}`)} ${dim(`(was v${info.current})`)}`);
+  } else if (info.staleRegistry) {
+    // A newer version was advertised but the install couldn't fetch it — almost
+    // always a lagging registry mirror. Say so and point at a direct install.
+    const got = info.installedVersion ?? info.current;
     console.log(
-      `${check()} Updated mx to ${bold(`v${info.latestInMajor}`)} ${dim(`(was v${info.current})`)}`,
+      `${warn()} Registry advertises ${bold(`v${info.latestInMajor}`)} but installed ${bold(`v${got}`)} — your npm registry may be lagging.`,
+    );
+    console.log(
+      `  ${dim('Install it directly:')} ${bold(`npm i -g ${info.package}@${info.latestInMajor} --registry https://registry.npmjs.org`)}`,
     );
   } else {
     console.log(`${check()} mx is up to date ${dim(`(v${info.current}, latest in v${curMajor}.x)`)}`);
