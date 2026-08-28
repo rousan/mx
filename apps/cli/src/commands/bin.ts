@@ -53,13 +53,28 @@ export function dispatchBin(positionals: string[], flags: Flags): void {
           if (bins.length === 0) {
             console.log(dim(`no bins yet — drop executables in ${tildify(dir)}`));
           } else {
+            // Split into the mx-shipped bins and the user's own, and print each
+            // as its own labelled group rather than tagging every line.
+            const builtin = bins.filter((b) => shipped.has(b.name));
+            const user = bins.filter((b) => !shipped.has(b.name));
             const nameW = Math.max(...bins.map((b) => b.name.length));
-            for (const b of bins) {
-              // Tag every bin so it's clear which mx ships vs which you added.
-              const origin = shipped.has(b.name) ? dim('built-in') : dim('user');
-              const flag = b.executable ? '' : `  ${warn()} ${dim('not executable (chmod +x)')}`;
-              console.log(`  ${bold(b.name.padEnd(nameW))}  ${origin}${flag}`);
-            }
+            /**
+             * Render one labelled group of bins (skipped entirely when empty).
+             *
+             * @param label - The group heading (e.g. `built-in`, `user`).
+             * @param group - The bins belonging to this group.
+             */
+            const printGroup = (label: string, group: typeof bins): void => {
+              if (group.length === 0) return;
+              console.log(`  ${dim(label)}`);
+              for (const b of group) {
+                const flag = b.executable ? '' : `  ${warn()} ${dim('not executable (chmod +x)')}`;
+                console.log(`    ${bold(b.name.padEnd(nameW))}${flag}`);
+              }
+            };
+            printGroup('built-in', builtin);
+            if (builtin.length && user.length) console.log();
+            printGroup('user', user);
           }
           // Always close with PATH guidance — confirm when it's wired up, or
           // spell out exactly how to wire it (mx can't edit your shell config).

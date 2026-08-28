@@ -413,7 +413,7 @@ clarity; dropping it works while you're inside the work.
   `.code-workspace` is still written, so you can open the work in VS Code too if you prefer. (mx no longer
   drives editors/terminals via osascript.)
 - **Disposable sessions:** mx sessions are rebuildable at any time (`mx work attach` recreates the layout), so
-  they don't need to persist across reboots — after a reboot just recreate what you want with `mx-open-all` /
+  they don't need to persist across reboots — after a reboot just recreate what you want with
   `mx work attach`. `mx work gc` prunes any stray orphaned `mx/<feature>` session (archived/destroyed work; only
   this runtime's, warns on live panes, confirm or `--yes`).
 - **Check the toolchain:** `mx doctor` verifies the tmux workflow's dependencies (tmux, neovim, claude) plus
