@@ -1,6 +1,6 @@
 {
   "name": "@rousan/mx",
-  "version": "4.7.0",
+  "version": "4.7.1",
   "description": "mx — run several features in parallel across shared repos using git worktrees",
   "type": "module",
   "bin": {

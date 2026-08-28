@@ -71,6 +71,34 @@ function latestOverall(): string | null {
 }
 
 /**
+ * The version of `@rousan/mx` **actually installed** in the global prefix right
+ * now, read from `npm ls -g` (not the registry). This is the ground truth after
+ * an install: `npm i` and `npm view` can disagree when a registry advertises a
+ * version whose tarball it can't yet serve (a lagging mirror / proxy), so we must
+ * re-read what really landed rather than trust the requested target.
+ *
+ * `npm ls -g` can exit non-zero for unrelated reasons (peer warnings, extraneous
+ * packages) while still printing valid JSON, so we parse stdout regardless of
+ * status.
+ *
+ * @returns The installed version string, or null if it can't be determined.
+ */
+function installedGlobalVersion(): string | null {
+  const r = spawnSync('npm', ['ls', '-g', PKG, '--json', '--depth=0'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  if (!r.stdout) return null;
+  try {
+    const parsed = JSON.parse(r.stdout) as { dependencies?: Record<string, { version?: unknown }> };
+    const v = parsed.dependencies?.[PKG]?.version;
+    return typeof v === 'string' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Outcome of a self-update attempt, surfaced to the CLI renderer / porcelain.
  */
 export interface SelfUpdateInfo {
@@ -82,10 +110,23 @@ export interface SelfUpdateInfo {
   npmAvailable: boolean;
   /** Newest version within the current major, or null if unknown. */
   latestInMajor: string | null;
-  /** True when an install ran and succeeded. */
+  /**
+   * The version actually installed in the global prefix after the install ran
+   * (read from `npm ls -g`, not the requested target), or null if no install ran
+   * or it couldn't be determined.
+   */
+  installedVersion: string | null;
+  /** True when an install ran and a genuinely newer version actually landed. */
   updated: boolean;
   /** True when an install was attempted but failed. */
   installFailed: boolean;
+  /**
+   * True when a newer in-major version was advertised and the install exited 0,
+   * but no newer version actually landed — the registry advertised a version it
+   * couldn't serve (typically a lagging mirror / virtual-repo proxy). Distinct
+   * from `updated` (real upgrade) and `installFailed` (npm errored).
+   */
+  staleRegistry: boolean;
   /** A newer major version number available beyond the current one, or null. */
   newMajor: number | null;
 }
@@ -110,8 +151,10 @@ export function selfUpdate(porcelain: boolean): SelfUpdateInfo {
     current,
     npmAvailable: false,
     latestInMajor: null,
+    installedVersion: null,
     updated: false,
     installFailed: false,
+    staleRegistry: false,
     newMajor: null,
   };
 
@@ -130,8 +173,21 @@ export function selfUpdate(porcelain: boolean): SelfUpdateInfo {
     const r = spawnSync('npm', ['i', '-g', `${PKG}@^${curMajor}`], {
       stdio: porcelain ? ['ignore', 'pipe', 'pipe'] : 'inherit',
     });
-    if (r.status === 0) info.updated = true;
-    else info.installFailed = true;
+    if (r.status === 0) {
+      // npm exited 0, but that alone doesn't prove the target landed — re-read
+      // the version actually installed. Only a genuinely newer version counts as
+      // an update; if the same (or older) version came back despite a newer one
+      // being advertised, the registry served something it couldn't fully deliver
+      // (a lagging mirror), which we flag separately instead of claiming success.
+      info.installedVersion = installedGlobalVersion();
+      if (info.installedVersion && compareVersions(info.installedVersion, current) > 0) {
+        info.updated = true;
+      } else {
+        info.staleRegistry = true;
+      }
+    } else {
+      info.installFailed = true;
+    }
   }
   return info;
 }
