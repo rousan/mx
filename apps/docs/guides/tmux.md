@@ -149,7 +149,7 @@ The Claude Code session is keyed to the **work name**, so you always continue th
 This is why detaching and re-attaching feels seamless: it's the same session, resumed by name.
 
 ::: tip mx sessions are disposable
-mx sessions are rebuildable at any time (`mx work attach` recreates a work's layout on demand), so they don't need to be persisted across reboots. After a reboot just recreate what you want with [`mx-open-all`](#open-and-close-your-whole-fleet-macos) or `mx work attach` — there's nothing to restore.
+mx sessions are rebuildable at any time (`mx work attach` recreates a work's layout on demand), so they don't need to be persisted across reboots. After a reboot just recreate what you want with `mx work attach` — there's nothing to restore.
 :::
 
 ## Housekeeping: `switch` and `gc`
@@ -171,64 +171,22 @@ mx work gc                # review and confirm what gets pruned
 
 Active works with a live session are healthy and never touched, and neither are sessions belonging to a different runtime that happens to share your tmux server.
 
-## Open (and close) your whole fleet (macOS)
+## Close your whole fleet at once
 
-On macOS you don't have to attach works one at a time. mx ships a bin, `mx-open-all`, that opens **one fullscreen Terminal.app window with a tab per work**, each tab running `mx work attach`:
-
-```bash
-mx-open-all                       # every active work (or follow a config, below)
-mx-open-all feature-a feature-b   # just the named works
-mx-open-all 'valkyrie-*'          # works matching a glob (quote it)
-mx-open-all -x 'sk-*'             # every active work EXCEPT those matching a glob
-mx-open-all --dry-run             # print the tabs it would open, without opening
-```
-
-Positional args select works by exact name or glob; `-x`/`--except <glob>` removes matching works (repeatable). Only active works are ever opened — an archived, destroyed, or unknown *name* is ignored (never opened), so every tab is a live work.
-
-### A layout config
-
-For a fixed fleet layout — a set order, with **divider tabs** grouping your works — drop a config at `<runtime>/files/mx-open-all.conf` (override with `--config <path>` or `$MX_OPEN_ALL_CONFIG`). Run `mx-open-all --example` to print a starter. Each line is a tab, in order:
-
-```
-exclude: sk-*
-
-divider: MAIN
-sidekick
-dojo
-playground
-
-divider: IN PROGRESS
-valkyrie-*
-
-divider: IN REVIEW
-*
-
-divider: DEV
-dev-mx
-```
-
-- `divider: TEXT` opens a tab running `mx divider "TEXT"` (a block-letter banner that holds the tab — a visual separator between groups). Double-quote the text to keep leading/trailing padding, e.g. `divider: "   MAIN   "`.
-- `*` expands to every active work **not named/matched elsewhere** in the layout (so `dev-mx`, listed last, isn't swept in).
-- `exclude: <glob>` drops works everywhere; a plain line is a work name or glob.
-
-The config is used when you run `mx-open-all` with **no positional args**; passing works or `-x` on the command line bypasses it (`--no-config` forces plain "all active"). Preview any of this with `--dry-run`.
-
-The counterpart closes everything at once:
+When you're done for the day, `mx-kill-sessions` (a bin mx ships) tears down every live `mx/*` tmux session in one go:
 
 ```bash
 mx-kill-sessions        # confirm, then kill every mx/* tmux session
 mx-kill-sessions -y     # skip the confirmation
 ```
 
-`mx-kill-sessions` only closes the tmux sessions — the works stay active, and `mx work attach` rebuilds a session on demand (it does end whatever was running in them, so it prompts first).
+It only closes the tmux sessions — the works stay active, and `mx work attach` rebuilds a session on demand (it does end whatever was running in them, so it prompts first).
 
-Both bins need the runtime `bin/` on your `PATH`:
+The bin needs the runtime `bin/` on your `PATH`:
 
 ```bash
 export PATH="$(mx bin path):$PATH"    # add to your shell rc
 ```
-
-`mx-open-all` is Terminal.app-only; `mx-kill-sessions` works anywhere tmux does. Closing the fleet window detaches every tab (the sessions keep running); reopen any time.
 
 ## Related
 

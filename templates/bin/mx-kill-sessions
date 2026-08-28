@@ -5,7 +5,7 @@
 #   mx-kill-sessions          # confirm, then kill every mx/* session
 #   mx-kill-sessions -y        # skip the confirmation
 #
-# The counterpart to mx-open-all: closes every work's tmux session in one go.
+# Closes every work's tmux session in one go.
 # This does NOT archive or destroy any work — the works stay active, and
 # `mx work attach` rebuilds a session on demand. It DOES terminate whatever is
 # running in those sessions (dev servers, a running claude), so it prompts first

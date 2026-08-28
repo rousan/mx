@@ -452,10 +452,9 @@ Start a local, **read-only live web dashboard** for the runtime and block until 
 Manage the runtime-wide `bin/` directory — utility executables shared across every work, meant to be on your `PATH`. mx ships some and you can drop your own in; any executable file is picked up. Shipped bins:
 
 - **`dcs` / `lcs`** — delete / list Claude Code sessions by name.
-- **`mx-open-all`** (macOS, Node) — open active works in one fullscreen Terminal.app window, a tab per work each running `mx work attach`. Positional args select by exact name or glob (`mx-open-all 'valkyrie-*'`); `-x`/`--except <glob>` excludes (e.g. `mx-open-all -x 'sk-*'`); `--dry-run` previews the tabs. With no positional args it follows a **layout config** at `<runtime>/files/mx-open-all.conf` if present (override with `--config`/`$MX_OPEN_ALL_CONFIG`, disable with `--no-config`) — an ordered, one-tab-per-line file supporting work names/globs, `divider: TEXT` tabs, `*` (all works not named elsewhere), and `exclude: <glob>`. `mx-open-all --example` prints a starter config.
-- **`mx-kill-sessions`** — kill every live `mx/*` tmux session at once (the counterpart to `mx-open-all`). Prompts first unless `-y`/`--yes`. This only closes the tmux sessions; the works stay active and `mx work attach` rebuilds a session on demand.
+- **`mx-kill-sessions`** — kill every live `mx/*` tmux session at once. Prompts first unless `-y`/`--yes`. This only closes the tmux sessions; the works stay active and `mx work attach` rebuilds a session on demand.
 
-- **`mx bin ls`** (or bare `mx bin`) — list the bins, each tagged `built-in` (shipped) or `user` (yours), with a warning on any that aren't executable. It ends with PATH guidance: a ✓ when `bin/` is already on your `PATH`, otherwise a step-by-step instruction to add `export PATH="$(mx bin path):$PATH"` to your shell startup file (`~/.zshrc`, `~/.bashrc`, …). Porcelain returns `{ "dir", "onPath", "bins": [{ "name", "path", "executable", "shipped" }] }`.
+- **`mx bin ls`** (or bare `mx bin`) — list the bins in two labelled groups, **built-in** (shipped) and **user** (yours), with a warning on any that aren't executable. It ends with PATH guidance: a ✓ when `bin/` is already on your `PATH`, otherwise a step-by-step instruction to add `export PATH="$(mx bin path):$PATH"` to your shell startup file (`~/.zshrc`, `~/.bashrc`, …). Porcelain returns `{ "dir", "onPath", "bins": [{ "name", "path", "executable", "shipped" }] }`.
 - **`mx bin path`** — print the absolute `bin/` directory, for wiring it onto `PATH`:
 
   ```
