@@ -21,7 +21,8 @@
  *
  *   <work-name>      open that work
  *   <glob>           open matching active works (e.g. valkyrie-*)
- *   divider: TEXT    a divider tab (runs `mx divider "TEXT"`)
+ *   divider: TEXT    a divider tab (runs `mx divider "TEXT"`); double-quote it to
+ *                    keep padding, e.g. divider: "   MAIN   "
  *   *                all active works not named/matched elsewhere in the layout
  *   exclude: <glob>  never open matching works (repeatable)
  *   # comment        ignored; blank lines ignored
@@ -184,7 +185,11 @@ function parseConfig(text) {
       const g = line.slice(line.indexOf(':') + 1).trim();
       if (g) excludes.push(g);
     } else if (line.toLowerCase().startsWith('divider:')) {
-      items.push({ divider: line.slice(line.indexOf(':') + 1).trim() });
+      let d = line.slice(line.indexOf(':') + 1).trim();
+      // A double-quoted value keeps its exact content, including leading/trailing
+      // spaces, so a divider can be padded — e.g. `divider: "   MAIN   "`.
+      if (d.length >= 2 && d.startsWith('"') && d.endsWith('"')) d = d.slice(1, -1);
+      items.push({ divider: d });
     } else if (line === '*') {
       items.push({ rest: true });
     } else {
