@@ -90,7 +90,10 @@ A newer major is available: @rousan/mx@3.
 
 Crossing a major is always a deliberate user action — `mx update` never does it automatically (a new major implies a runtime migration). `mx update` is **not** subject to the version gate: you may need it precisely because your runtime is a newer major than the CLI on `$PATH`. If `npm` is missing or the install fails, it prints the manual command for you to run instead.
 
-**It reports the version that actually installed** — read back from `npm ls -g`, not the target it requested. This matters behind a lagging registry mirror or virtual-repo proxy, which can *advertise* a version (via `npm view`) whose tarball it can't yet serve: `npm i` then reinstalls the same version while still exiting 0. In that case `mx update` says the registry advertises a newer version but a newer one didn't install, and points you at a direct install (`npm i -g @rousan/mx@<v> --registry https://registry.npmjs.org`) — it does **not** falsely claim the upgrade, and the auto-sync only runs when a genuinely newer version landed.
+**It installs the exact advertised version and reports what actually landed.** Two safeguards, both learned from a lagging registry mirror / virtual-repo proxy that *advertises* a version (via `npm view`) whose tarball it can't yet serve:
+
+- **Exact pin, not a range.** `mx update` runs `npm i -g @rousan/mx@<exact-version>`, not `@^<major>`. With a range, a mirror that can't serve the advertised version resolves the range *down* to the newest tarball it can serve — silently **downgrading** you while `npm` still exits 0. Pinning the exact version makes `npm` error instead; `mx update` then reports the failure and points you at a direct install: `npm i -g @rousan/mx@<v> --registry https://registry.npmjs.org`.
+- **Report what installed, not what was requested.** The reported version is read back from `npm ls -g` after the install, never assumed from the target. If `npm` somehow exits 0 without a newer version landing, `mx update` says the registry advertises a newer version but a newer one didn't install (and again points at the direct install) rather than falsely claiming the upgrade. The auto-sync only runs when a genuinely newer version actually landed.
 
 **Auto-sync after update.** When an in-major update actually installs a newer version, `mx update` then runs **`mx sync`** automatically so the runtime picks up the new version's templates and scaffolding (the runtime `CLAUDE.md`, shipped `bin/` utilities, per-work/per-repo files). It does this by shelling out to the freshly-installed global `mx` — the running process is still the pre-update code, so an in-process sync would stamp the *old* templates. Since the update stays in-major, the runtime version still matches and sync isn't gated. It's best-effort: if the sync can't run (e.g. no runtime at the resolved path) `mx update` prints a hint rather than failing. In `--porcelain` mode the sync runs silently so the update's JSON stays the only object on stdout. (Nothing happens when you're already on the latest in-major version.)
 
@@ -167,9 +170,11 @@ mx repo new exp --quick -o     # repo "exp", work "dev-exp", worktree on "develo
 
 Note on the branch: the pristine clone holds `main`, and git won't check the same branch out twice, so the worktree forks `main` onto `develop` rather than `main` itself. The pristine stays on `main`, so `mx repo health` stays clean.
 
-### `mx repo ls [--porcelain]`
+### `mx repo ls [--lite] [--porcelain]`
 
 List all pristine clones in the same clean shape as `mx work ls`: bold name, dim container path, dim `branch  remote`, a blank line between entries. Human output collapses `$HOME` to `~`; porcelain adds an absolute `path` field per repo.
+
+`--lite` prints a compact **two-column table** instead — the repo name on the left, its path on the right, one row per repo, nothing else. Handy for a quick name↔path glance or feeding into a script. (`--porcelain` is unaffected by `--lite`; it always returns the full objects.)
 
 ```
 • analytics
@@ -253,7 +258,7 @@ An empty branch segment (`app::develop`) means "use the default branch". Repos a
 
 **`--open` / `-o`**: after creating the work, builds its tmux session and opens it in a **new terminal window** — see [`mx work open`](#mx-work--n-name-open-or-mx-work--n-name--o). Best-effort: if a terminal can't be launched (or the platform lacks one), it warns and points at `mx work -n <name> attach`, which always works in-place — the work is still created either way.
 
-### `mx work ls [--all|--archived] [--porcelain]`
+### `mx work ls [--all|--archived] [--lite] [--porcelain]`
 
 Detailed listing of works. Default: **active only**. `--all` includes archived. `--archived` filters to archived only.
 
@@ -271,6 +276,16 @@ Per-work block: bullet + work name (dim when archived), optional `[archived YYYY
 ```
 
 Active works first, archived after. Blank line between works.
+
+`--lite` collapses each work to a single row — a compact **two-column table** of name (left) and path (right), nothing else — combinable with `--all` / `--archived`:
+
+```
+a-longer-feature-name  ~/mx/works/a-longer-feature-name
+checkout-revamp        ~/mx/works/checkout-revamp
+feature-one            ~/mx/works/feature-one
+```
+
+Active works still sort first (and archived names stay dimmed). `--porcelain` is unaffected by `--lite` — it always returns the full work objects.
 
 ### `mx work -n <name> info [--porcelain]`
 

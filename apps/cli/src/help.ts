@@ -15,7 +15,7 @@ Global:
 Repos (pristine clones):
   mx repo add <git-url> [--name <n>]     clone a repo into the runtime
   mx repo new <name> [--quick] [-o]      create a fresh local repo (no remote); --quick also makes a dev-<name> work + develop worktree
-  mx repo ls [--porcelain]
+  mx repo ls [--lite] [--porcelain]                    --lite: a compact name + path table, one row per repo
   mx repo -n <name> path                 print the repo container path (cd "$(mx repo -n <name> path)")
   mx repo -n <name> fetch                git fetch (+ ff the checked-out and base branches)
   mx repo fetch --all                    fetch every repo, one by one
@@ -27,7 +27,7 @@ Repos (pristine clones):
 Works (features):
   mx work new <name> [<repo>[:<branch>[:<base>]]]... [--description <t>] [--branch <b>] [--base <ref>] [-o|--open]
                                                        creates the work; extra args are repos to make initial worktrees for (per repo: branch = :<branch> else --branch else work name; base = :<base> else --base else pristine HEAD); -o builds the work's tmux session and opens it in a new terminal
-  mx work ls [--all|--archived] [--porcelain]           default: active only; --all includes archived; --archived shows archived only
+  mx work ls [--all|--archived] [--lite] [--porcelain]  default: active only; --all includes archived; --archived shows archived only; --lite: a compact name + path table, one row per work
   mx work -n <name> info [--porcelain]
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
   mx work -n <name> attach [--prompt <text>]            build the work's tmux session (mx/<name>) if needed, then attach THIS terminal to it (switch-client when already inside tmux); the primary way to enter a work

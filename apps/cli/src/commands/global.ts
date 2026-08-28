@@ -143,10 +143,16 @@ export function runGlobal(positionals: string[], flags: Flags): void {
 function renderSelfUpdate(info: SelfUpdateInfo): void {
   const curMajor = Number.parseInt(info.current.split('.')[0], 10) || 0;
   const manual = `npm i -g ${info.package}@^${curMajor}`;
+  // When we know the exact target, a failure is most often a lagging mirror that
+  // can't serve that tarball — so suggest installing it straight from npmjs.
+  const direct = info.latestInMajor
+    ? `npm i -g ${info.package}@${info.latestInMajor} --registry https://registry.npmjs.org`
+    : manual;
   if (!info.npmAvailable) {
     console.log(`${warn()} npm not found — update manually: ${bold(manual)}`);
   } else if (info.installFailed) {
-    console.log(`${warn()} self-update failed — try: ${bold(manual)}`);
+    console.log(`${warn()} self-update failed — your npm registry may not have this version yet.`);
+    console.log(`  ${dim('Install it directly:')} ${bold(direct)}`);
   } else if (info.updated) {
     // Report the version that actually landed on disk, not the requested target.
     const to = info.installedVersion ?? info.latestInMajor;

@@ -27,6 +27,8 @@ export interface Flags {
   quick: boolean;
   /** Run the install step rather than just reporting (currently: `mx doctor --install`). */
   install: boolean;
+  /** Minimal listing — just name + path per entry (currently: `mx work ls --lite`, `mx repo ls --lite`). */
+  lite: boolean;
   /** Explicit runtime path from `--runtime`. */
   runtime?: string;
   /** Target name from `-n`/`--name`. */
@@ -90,6 +92,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     dryRun: false,
     quick: false,
     install: false,
+    lite: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -115,6 +118,8 @@ export function parseArgs(argv: string[]): ParsedArgs {
       flags.quick = true;
     } else if (a === '--install') {
       flags.install = true;
+    } else if (a === '--lite') {
+      flags.lite = true;
     } else if (a === '--port' || a.startsWith('--port=')) {
       const v = a.startsWith('--port=') ? a.slice('--port='.length) : argv[++i];
       const n = Number(v);
