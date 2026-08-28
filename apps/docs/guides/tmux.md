@@ -148,23 +148,9 @@ The Claude Code session is keyed to the **work name**, so you always continue th
 
 This is why detaching and re-attaching feels seamless: it's the same session, resumed by name.
 
-## tmux-resurrect
-
-If you use [tmux-resurrect](https://github.com/tmux-plugins/tmux-resurrect) to persist and restore sessions across reboots, **keep mx sessions out of it**. mx sessions are disposable — `mx work attach` rebuilds a work's session on demand — so there's no reason for resurrect to persist them, and restoring stale ones after a reboot is just noise. After a reboot you simply recreate what you want with [`mx-open-all`](#open-and-close-your-whole-fleet-macos) or `mx work attach`.
-
-mx ships a filter, `mx-tmux-resurrect-filter`, that strips `mx/*` sessions from each resurrect save. Wire it in with **one line** in `~/.tmux.conf`, after the plugin is loaded:
-
-```bash
-set -g @resurrect-hook-post-save-all 'mx-tmux-resurrect-filter'
-```
-
-It needs the runtime `bin/` on your `PATH`:
-
-```bash
-export PATH="$(mx bin path):$PATH"    # add to your shell rc
-```
-
-Your **other** sessions still save and restore normally; only `mx/*` sessions are dropped. (If you ever do end up with a stray mx session for a work you've since archived or destroyed, [`mx work gc`](#housekeeping-switch-and-gc) prunes it.)
+::: tip mx sessions are disposable
+mx sessions are rebuildable at any time (`mx work attach` recreates a work's layout on demand), so they don't need to be persisted across reboots. After a reboot just recreate what you want with [`mx-open-all`](#open-and-close-your-whole-fleet-macos) or `mx work attach` — there's nothing to restore.
+:::
 
 ## Housekeeping: `switch` and `gc`
 
@@ -177,7 +163,7 @@ mx work switch            # pick from a list
 mx work switch feature-b  # jump straight to feature-b
 ```
 
-**`mx work gc`** — prune **orphaned** sessions: live `mx/<work>` sessions whose work is archived or no longer exists (the reboot-restore case above, or a session left behind if something went sideways). It kills only sessions that belong to **this** runtime, warns if a pane holds a live process, and asks before killing (`--yes` to skip):
+**`mx work gc`** — prune **orphaned** sessions: live `mx/<work>` sessions whose work is archived or no longer exists (e.g. a session left behind if something went sideways). It kills only sessions that belong to **this** runtime, warns if a pane holds a live process, and asks before killing (`--yes` to skip):
 
 ```bash
 mx work gc                # review and confirm what gets pruned

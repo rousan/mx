@@ -44,7 +44,7 @@ Every mx command, grouped by area. Reads accept `--porcelain` for stable JSON; m
 | `attach [--prompt <t>]` | Enter the work: build its tmux session (`mx/<name>`) if missing, then attach this terminal. `--porcelain` ensures it without attaching. See **[The tmux workflow](/guides/tmux)**. |
 | `open` (alias `-o`) | Same as `attach`, but opens the session in a new terminal window (macOS Terminal, or a Linux emulator). |
 | `switch [<name>]` | Jump between works' sessions: with `<name>` it's `attach`; without, an fzf picker over this runtime's live `mx/*` sessions. |
-| `gc [--yes]` | Prune orphaned tmux sessions — live `mx/<work>` sessions whose work is archived or gone (e.g. restored by tmux-resurrect after a reboot). Warns on live panes; confirm or `--yes`. |
+| `gc [--yes]` | Prune orphaned tmux sessions — live `mx/<work>` sessions whose work is archived or gone. Warns on live panes; confirm or `--yes`. |
 | `worktree add <repo> [<name>] [--branch <b>] [--base <ref>]` | Add a worktree (distinct `<name>` for a second worktree of the same repo). |
 | `worktree ls` / `worktree rm <worktree>` | List / remove a worktree. |
 | `worktree set-branch <worktree> [<branch>]` | Re-record a worktree's live branch after you `git checkout` yourself. |
