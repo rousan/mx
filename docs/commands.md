@@ -313,7 +313,9 @@ The default session mx builds:
 
 After building, the [`work-session` hook](#hooks) fires (cwd = the work folder) so you can rearrange or extend the layout.
 
-Building is **lazy and self-healing**: nothing is created until the first `attach`/`open`, and after a reboot or a manual `tmux kill-session` the next `attach` simply rebuilds it. `--porcelain` ensures the session **without** attaching (prints `{work, session, created, attach:false}`) — useful for scripts.
+Building is **lazy and self-healing**: nothing is created until the first `attach`/`open`/`ensure`, and after a reboot or a manual `tmux kill-session` the next call simply rebuilds it.
+
+`attach` is **interactive-only** — handing over the terminal is the whole point — so it has **no `--porcelain` form**. Passing `--porcelain` errors with `INTERACTIVE_ONLY` and points you at [`ensure`](#mx-work--n-name-ensure---prompt-text), which builds the session **without** attaching and has a porcelain form. (This keeps `--porcelain` a pure output-format flag: it never changes what a command *does*.)
 
 **The Claude session — resume-or-create, keyed to the work name.** One name per work: mx decides the pane's `claude` command by whether a session **named after the work** already exists.
 
@@ -323,6 +325,17 @@ Building is **lazy and self-healing**: nothing is created until the first `attac
 mx uses `findSessionsByName` only to tell whether a session exists (so `--resume` isn't run with nothing to resume, and so a prompt is seeded only on a genuine first create). (mx deliberately does **not** use Claude Code's own `--tmux`/`--worktree` flags — mx owns worktrees and the session.)
 
 **Initial prompt (new session only).** Resolved as: an explicit `--prompt <text>` wins (pass `--prompt ''` for none); otherwise the [`session-prompt` hook](#hooks) is fired (cwd = the work folder) and its stdout is used. If neither yields text, the session opens clean. The resolved prompt is passed to Claude as the first message (routed through a throwaway file under the work's `tmp/` so multi-line prompts need no shell escaping).
+
+### `mx work -n <name> ensure [--prompt <text>]`
+
+Build the work's tmux session **without attaching**. It runs exactly the same lazy, self-healing build as `attach` — the `main` + `run` windows, the session env, the resume-or-create Claude pane, the `work-session` hook — but then returns instead of handing over your terminal. Idempotent: if the session already exists it's a no-op that just reports it.
+
+This is the non-interactive counterpart to `attach`, split into its own command so `--porcelain` stays a pure output-format flag. Call it with or without `--porcelain`:
+
+- **human**: `✓ session mx/<name> ready (built session, resumed claude | built session, new claude | already running)`
+- **`--porcelain`**: `{ "work", "session", "created", "claudeAction", "attached": false }` (`claudeAction` is `"resume"`/`"create"` when freshly built, `null` when it already existed)
+
+Use it to pre-warm sessions (e.g. a loop over several works at login), or from a script that will attach later by another route. Attach afterward with `mx work -n <name> attach`, `mx work -n <name> open`, or `tmux attach -t mx/<name>`. `--prompt` seeds the initial Claude prompt on a first build, same as `attach`.
 
 ### `mx work -n <name> open` (or `mx work -n <name> -o`)
 
@@ -469,7 +482,8 @@ Start a local, **read-only live web dashboard** for the runtime and block until 
 Manage the runtime-wide `bin/` directory — utility executables shared across every work, meant to be on your `PATH`. mx ships some and you can drop your own in; any executable file is picked up. Shipped bins:
 
 - **`dcs` / `lcs`** — delete / list Claude Code sessions by name.
-- **`mx-kill-sessions`** — kill every live `mx/*` tmux session at once. Prompts first unless `-y`/`--yes`. This only closes the tmux sessions; the works stay active and `mx work attach` rebuilds a session on demand.
+- **`mx-ensure-sessions`** (Node) — build the tmux session for active works **without attaching**, in a chosen order, so they line up predictably in tmux's session picker (`prefix + s`, sorted by creation time). Each session is built via `mx work -n <work> ensure`. Positional args select + order by exact name or glob (`mx-ensure-sessions sidekick dojo`); `-x`/`--except <glob>` excludes; `--dry-run` prints the order it would build. With no positional args it follows an **order config** at `<runtime>/files/mx-ensure-sessions.conf` if present (override with `--config`/`$MX_ENSURE_SESSIONS_CONFIG`, disable with `--no-config`) — an ordered, one-work-per-line file supporting work names/globs, `*` (all works not named elsewhere), and `exclude: <glob>`. `mx-ensure-sessions --example` prints a starter. Idempotent (an already-running session is left as is), so to *re-order* after sessions were made ad hoc, `mx-kill-sessions` first, then re-run.
+- **`mx-kill-sessions`** — kill every live `mx/*` tmux session at once. Prompts first unless `-y`/`--yes`. This only closes the tmux sessions; the works stay active and `mx work attach` rebuilds a session on demand. Pairs with `mx-ensure-sessions` (kill all, then rebuild in order).
 
 - **`mx bin ls`** (or bare `mx bin`) — list the bins in two labelled groups, **built-in** (shipped) and **user** (yours), with a warning on any that aren't executable. It ends with PATH guidance: a ✓ when `bin/` is already on your `PATH`, otherwise a step-by-step instruction to add `export PATH="$(mx bin path):$PATH"` to your shell startup file (`~/.zshrc`, `~/.bashrc`, …). Porcelain returns `{ "dir", "onPath", "bins": [{ "name", "path", "executable", "shipped" }] }`.
 - **`mx bin path`** — print the absolute `bin/` directory, for wiring it onto `PATH`:

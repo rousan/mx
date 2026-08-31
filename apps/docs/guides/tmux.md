@@ -171,6 +171,31 @@ mx work gc                # review and confirm what gets pruned
 
 Active works with a live session are healthy and never touched, and neither are sessions belonging to a different runtime that happens to share your tmux server.
 
+## Bring your whole fleet up (in order)
+
+`mx-ensure-sessions` (a bin mx ships) builds the tmux session for every active work **without attaching** — the non-interactive `mx work ensure` under the hood — in a **chosen order**, so they line up predictably in tmux's session picker (`prefix + s`, sorted by creation time). After a reboot, one command rebuilds the fleet:
+
+```bash
+mx-ensure-sessions                  # every active work (or follow a config, below)
+mx-ensure-sessions sidekick dojo    # just these, in this order
+mx-ensure-sessions -x 'sk-*'        # every active work except a glob
+mx-ensure-sessions --dry-run        # print the order it would build, do nothing
+```
+
+For a fixed order, drop a config at `<runtime>/files/mx-ensure-sessions.conf` (override with `--config` or `$MX_ENSURE_SESSIONS_CONFIG`; `mx-ensure-sessions --example` prints a starter). One work per line, in order — plus `*` for "everything not named elsewhere" and `exclude:` globs:
+
+```
+exclude: sk-*
+
+sidekick
+playground
+dojo
+*
+dev-mx
+```
+
+It's **idempotent** — an already-running session is left as is. So to *re-order* sessions that were created ad hoc, kill them first (below) and re-run. Then jump between them with `mx work switch` or tmux's own `prefix + s`.
+
 ## Close your whole fleet at once
 
 When you're done for the day, `mx-kill-sessions` (a bin mx ships) tears down every live `mx/*` tmux session in one go:

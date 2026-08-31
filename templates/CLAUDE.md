@@ -406,8 +406,11 @@ clarity; dropping it works while you're inside the work.
   pane: `nvim wt`, the work's worktrees folder — overridable in the `work-session` hook) and a `run` window (a 2×2
   grid of shells for dev servers) — then attaches **this** terminal to it (or `switch-client`s when you're
   already inside tmux). `mx work -n <feature> open` (and `mx work new -o`) does the same but in a **new**
-  terminal window. Building is lazy and self-healing: after a reboot or a manual `tmux kill-session`, the next
-  `attach` just rebuilds it. Customize the layout via the `<runtime>/hooks/work-session` hook. Need extra
+  terminal window. To build the session **without** attaching — pre-warming it, or from a script — use
+  `mx work -n <feature> ensure` (the non-interactive counterpart to `attach`; add `--porcelain` for JSON).
+  `attach` is interactive-only and has no `--porcelain` form. Building is lazy and self-healing: after a reboot
+  or a manual `tmux kill-session`, the next `attach`/`ensure` just rebuilds it. Customize the layout via the
+  `<runtime>/hooks/work-session` hook. Need extra
   terminals? Make new tmux windows/panes yourself — they belong to the session. Jump between works with
   `mx work switch` (an fzf picker over live `mx/*` sessions, or `mx work switch <feature>`). The
   `.code-workspace` is still written, so you can open the work in VS Code too if you prefer. (mx no longer

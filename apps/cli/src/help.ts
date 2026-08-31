@@ -30,8 +30,9 @@ Works (features):
   mx work ls [--all|--archived] [--lite] [--porcelain]  default: active only; --all includes archived; --archived shows archived only; --lite: a compact name + path table, one row per work
   mx work -n <name> info [--porcelain]
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
-  mx work -n <name> attach [--prompt <text>]            build the work's tmux session (mx/<name>) if needed, then attach THIS terminal to it (switch-client when already inside tmux); the primary way to enter a work
-  mx work -n <name> open  (or -o) [--prompt <text>]     same, but opens a NEW terminal window (fullscreen on macOS; $MX_TERMINAL or a known emulator on Linux) and attaches there
+  mx work -n <name> attach [--prompt <text>]            build the work's tmux session (mx/<name>) if needed, then attach THIS terminal to it (switch-client when already inside tmux); the primary way to enter a work (interactive — no --porcelain)
+  mx work -n <name> ensure [--prompt <text>] [--porcelain]  build the work's tmux session if needed but DON'T attach — the non-interactive counterpart to attach; --porcelain prints {work,session,created,claudeAction,attached:false}
+  mx work -n <name> open  (or -o) [--prompt <text>]     same as attach, but opens a NEW terminal window (fullscreen on macOS; $MX_TERMINAL or a known emulator on Linux) and attaches there
   mx work switch [<name>]                               jump between works' sessions: with <name> it's attach; without, an fzf picker over this runtime's live mx/* sessions
   mx work gc [--yes|-y]                                 prune orphaned tmux sessions — live mx/<work> sessions whose work is archived or gone
   mx work -n <name> describe <text>
