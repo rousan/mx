@@ -1,0 +1,370 @@
+#!/usr/bin/env node
+'use strict';
+
+/**
+ * mx-ensure-sessions — build the tmux session for every active mx work WITHOUT
+ * attaching, in a chosen order, so they line up predictably in tmux's session
+ * picker (prefix + s / choose-tree, sorted by creation time).
+ *
+ *   mx-ensure-sessions                  ensure every active work (or follow a config)
+ *   mx-ensure-sessions sidekick dojo    only the named works, in that order
+ *   mx-ensure-sessions 'valkyrie-*'     works matching a glob (quote it)
+ *   mx-ensure-sessions -x 'sk-*'        every active work EXCEPT those matching a glob
+ *   mx-ensure-sessions --config <path>  use a specific order config
+ *   mx-ensure-sessions --no-config      ignore any config; ensure all active
+ *   mx-ensure-sessions --dry-run        print the order it would build, do nothing
+ *   mx-ensure-sessions --example        print a starter config to stdout
+ *
+ * ORDER CONFIG (optional). When you run it with no positional args and a config
+ * file exists, that file is followed instead of "all active". Default path:
+ * <runtime>/files/mx-ensure-sessions.conf (override with --config or
+ * $MX_ENSURE_SESSIONS_CONFIG). One work per line, in order:
+ *
+ *   <work-name>      ensure that work's session
+ *   <glob>           ensure matching active works (e.g. valkyrie-*)
+ *   *                all active works not named/matched elsewhere in the order
+ *   exclude: <glob>  never ensure matching works (repeatable)
+ *   # comment        ignored; blank lines ignored
+ *
+ * Sessions are created in this order, so a picker sorted by creation time shows
+ * them in the same order. Idempotent: an already-running session is left as is —
+ * so to RE-order after works were created ad hoc, run `mx-kill-sessions` first,
+ * then re-run this. Each session is built via `mx work -n <work> ensure` (the
+ * non-attaching builder), which never touches your current terminal.
+ *
+ * Runs anywhere tmux does. Node bin, shipped by mx (re-stamped on init/sync).
+ */
+
+const { execFileSync, spawnSync } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+/**
+ * A starter order config printed by `mx-ensure-sessions --example`.
+ */
+const EXAMPLE_CONFIG = `# mx-ensure-sessions order — one work per line, in order.
+#   <work-name>      ensure that work's tmux session
+#   <glob>           ensure matching active works (e.g. valkyrie-*)
+#   *                all active works not named/matched elsewhere
+#   exclude: <glob>  never ensure matching works (repeatable)
+
+exclude: sk-*
+
+sidekick
+playground
+dojo
+*
+dev-mx
+`;
+
+/**
+ * Print the JSDoc header block of this file as help text and exit.
+ */
+function printHelp() {
+  const src = fs.readFileSync(__filename, 'utf8').split('\n');
+  const start = src.findIndex((l) => l.trim() === '/**');
+  const out = [];
+  for (let i = start + 1; i < src.length; i++) {
+    if (src[i].trim() === '*/') break;
+    out.push(src[i].replace(/^\s*\* ?/, ''));
+  }
+  process.stdout.write(out.join('\n').trim() + '\n');
+}
+
+/**
+ * Whether a selector string is a glob (contains `*`, `?`, or `[`).
+ *
+ * @param {string} s - The selector.
+ * @returns {boolean} True when it should be glob-matched rather than compared exactly.
+ */
+function isGlob(s) {
+  return /[*?[]/.test(s);
+}
+
+/**
+ * Compile a shell-style glob into an anchored RegExp (`*` = any run, `?` = one
+ * char, `[...]` = char class; every other regex metacharacter is escaped).
+ *
+ * @param {string} glob - The glob pattern.
+ * @returns {RegExp} The anchored matcher.
+ */
+function globToRegExp(glob) {
+  let re = '^';
+  for (const c of glob) {
+    if (c === '*') re += '.*';
+    else if (c === '?') re += '.';
+    else if (c === '[' || c === ']') re += c;
+    else if ('+.^$(){}|\\/'.includes(c)) re += '\\' + c;
+    else re += c;
+  }
+  return new RegExp(re + '$');
+}
+
+/**
+ * Whether a work name matches a selector (exact string or glob).
+ *
+ * @param {string} name - The work name.
+ * @param {string} sel - The selector (exact or glob).
+ * @returns {boolean} True on a match.
+ */
+function matches(name, sel) {
+  return isGlob(sel) ? globToRegExp(sel).test(name) : name === sel;
+}
+
+/**
+ * The active (non-archived) work names in a runtime, via `mx work ls --porcelain`.
+ *
+ * @param {string} runtime - The runtime path to target (as MX_RUNTIME).
+ * @returns {string[]} Active work names in mx's listing order.
+ */
+function activeWorks(runtime) {
+  let out;
+  try {
+    out = execFileSync('mx', ['work', 'ls', '--porcelain'], {
+      encoding: 'utf8',
+      env: { ...process.env, MX_RUNTIME: runtime },
+    });
+  } catch (e) {
+    process.stderr.write(`mx-ensure-sessions: could not list works: ${e.message}\n`);
+    process.exit(1);
+  }
+  let works;
+  try {
+    works = JSON.parse(out);
+  } catch {
+    process.stderr.write('mx-ensure-sessions: could not parse `mx work ls --porcelain` output\n');
+    process.exit(1);
+  }
+  return works.filter((w) => w && w.isArchived !== true).map((w) => w.name);
+}
+
+/**
+ * Parse an order config file's text into ordered items plus global excludes.
+ *
+ * @param {string} text - The config file contents.
+ * @returns {{items: object[], excludes: string[]}} Ordered items (`{rest:true}`
+ *   or `{sel}`) and the exclude globs.
+ */
+function parseConfig(text) {
+  const items = [];
+  const excludes = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    if (line.toLowerCase().startsWith('exclude:')) {
+      const g = line.slice(line.indexOf(':') + 1).trim();
+      if (g) excludes.push(g);
+    } else if (line === '*') {
+      items.push({ rest: true });
+    } else {
+      items.push({ sel: line });
+    }
+  }
+  return { items, excludes };
+}
+
+/**
+ * Resolve an order config against the active works into an ordered work list.
+ * `*` expands to active works matched by no explicit selector anywhere in the
+ * order; excluded works never appear.
+ *
+ * @param {string[]} active - Active work names in listing order.
+ * @param {{items: object[], excludes: string[]}} cfg - Parsed config.
+ * @param {string[]} cliExcludes - Extra exclude globs from the command line.
+ * @returns {string[]} Ordered work names.
+ */
+function resolveConfig(active, cfg, cliExcludes) {
+  const excludes = cfg.excludes.concat(cliExcludes);
+  const activeSet = active.filter((w) => !excludes.some((g) => matches(w, g)));
+  const selectors = cfg.items.filter((i) => i.sel).map((i) => i.sel);
+  const claimed = new Set(activeSet.filter((w) => selectors.some((s) => matches(w, s))));
+  const emitted = new Set();
+  const order = [];
+  for (const item of cfg.items) {
+    if (item.rest) {
+      // `*` — every active work not explicitly named/matched elsewhere.
+      for (const w of activeSet) {
+        if (!claimed.has(w) && !emitted.has(w)) {
+          order.push(w);
+          emitted.add(w);
+        }
+      }
+    } else {
+      const sel = item.sel;
+      if (isGlob(sel)) {
+        const found = activeSet.filter((w) => matches(w, sel));
+        if (!found.length) process.stderr.write(`mx-ensure-sessions: no active work matches "${sel}"\n`);
+        for (const w of found) {
+          if (!emitted.has(w)) {
+            order.push(w);
+            emitted.add(w);
+          }
+        }
+      } else if (activeSet.includes(sel)) {
+        if (!emitted.has(sel)) {
+          order.push(sel);
+          emitted.add(sel);
+        }
+      } else if (!active.includes(sel)) {
+        process.stderr.write(`mx-ensure-sessions: ignoring "${sel}" (not an active work)\n`);
+      }
+      // else: active but excluded — silently skip.
+    }
+  }
+  return order;
+}
+
+/**
+ * Resolve a plain selector list (CLI positionals, or all active) into an ordered
+ * work list, applying excludes and de-duplicating.
+ *
+ * @param {string[]} active - Active work names.
+ * @param {string[]} includes - Selectors (exact/glob); empty means all active.
+ * @param {string[]} excludes - Exclude globs.
+ * @returns {string[]} Ordered work names.
+ */
+function resolveSelectors(active, includes, excludes) {
+  const activeSet = active.filter((w) => !excludes.some((g) => matches(w, g)));
+  let cand;
+  if (!includes.length) {
+    cand = activeSet.slice();
+  } else {
+    cand = [];
+    for (const tok of includes) {
+      if (isGlob(tok)) {
+        const found = activeSet.filter((w) => matches(w, tok));
+        if (!found.length) process.stderr.write(`mx-ensure-sessions: no active work matches "${tok}"\n`);
+        cand.push(...found);
+      } else if (activeSet.includes(tok)) {
+        cand.push(tok);
+      } else {
+        process.stderr.write(`mx-ensure-sessions: ignoring "${tok}" (not an active work)\n`);
+      }
+    }
+  }
+  const emitted = new Set();
+  const order = [];
+  for (const w of cand) {
+    if (!emitted.has(w)) {
+      emitted.add(w);
+      order.push(w);
+    }
+  }
+  return order;
+}
+
+/**
+ * Build one work's tmux session via `mx work -n <work> ensure --porcelain`,
+ * without attaching. Parses the porcelain result to report whether it was freshly
+ * built or already running.
+ *
+ * @param {string} work - The work name.
+ * @param {string} runtime - Runtime path to target (as MX_RUNTIME).
+ * @returns {{work: string, ok: boolean, created?: boolean, session?: string}} Result.
+ */
+function ensureSession(work, runtime) {
+  const r = spawnSync('mx', ['work', '-n', work, 'ensure', '--porcelain'], {
+    encoding: 'utf8',
+    env: { ...process.env, MX_RUNTIME: runtime },
+  });
+  if (r.status !== 0) {
+    process.stderr.write(`mx-ensure-sessions: ensure ${work} failed: ${(r.stderr || '').trim()}\n`);
+    return { work, ok: false };
+  }
+  let info = {};
+  try {
+    info = JSON.parse(r.stdout);
+  } catch {
+    // A non-JSON stdout still means the command ran; treat as success, unknown state.
+  }
+  return { work, ok: true, created: info.created, session: info.session || `mx/${work}` };
+}
+
+/**
+ * Entry point: parse args, resolve the ordered work list (CLI selectors, order
+ * config, or all active), then ensure each work's session in that order.
+ */
+function main() {
+  const argv = process.argv.slice(2);
+  const includes = [];
+  const excludes = [];
+  let configPath = process.env.MX_ENSURE_SESSIONS_CONFIG || '';
+  let noConfig = false;
+  let dryRun = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '-h' || a === '--help') return printHelp();
+    if (a === '--example') return process.stdout.write(EXAMPLE_CONFIG);
+    if (a === '--dry-run') dryRun = true;
+    else if (a === '--no-config') noConfig = true;
+    else if (a === '--config') {
+      configPath = argv[++i];
+      if (!configPath) {
+        process.stderr.write('mx-ensure-sessions: --config needs a path\n');
+        process.exit(2);
+      }
+    } else if (a === '-x' || a === '--except') {
+      const g = argv[++i];
+      if (!g) {
+        process.stderr.write('mx-ensure-sessions: -x/--except needs a pattern\n');
+        process.exit(2);
+      }
+      excludes.push(g);
+    } else if (a.startsWith('-')) {
+      process.stderr.write(`mx-ensure-sessions: unknown flag: ${a}\n`);
+      process.exit(2);
+    } else {
+      includes.push(a);
+    }
+  }
+
+  const runtime = process.env.MX_RUNTIME || path.join(os.homedir(), 'mx');
+  const active = activeWorks(runtime);
+  if (!active.length) {
+    process.stderr.write('mx-ensure-sessions: no active mx works\n');
+    return;
+  }
+
+  // The order config drives things only when no positional selectors were given.
+  if (!configPath) configPath = path.join(runtime, 'files', 'mx-ensure-sessions.conf');
+  const useConfig = !noConfig && includes.length === 0 && fs.existsSync(configPath);
+
+  const order = useConfig
+    ? resolveConfig(active, parseConfig(fs.readFileSync(configPath, 'utf8')), excludes)
+    : resolveSelectors(active, includes, excludes);
+
+  if (!order.length) {
+    process.stderr.write('mx-ensure-sessions: nothing to ensure\n');
+    return;
+  }
+
+  if (dryRun) {
+    // Preview: the exact order sessions would be built in, one per line.
+    for (const w of order) process.stdout.write(`${w}\n`);
+    return;
+  }
+
+  process.stderr.write(`mx-ensure-sessions: ensuring ${order.length} session(s), in order...\n`);
+  let built = 0;
+  let existing = 0;
+  let failed = 0;
+  for (const w of order) {
+    const res = ensureSession(w, runtime);
+    if (!res.ok) {
+      failed++;
+      process.stdout.write(`  ! ${w} (failed)\n`);
+    } else if (res.created) {
+      built++;
+      process.stdout.write(`  + ${res.session}\n`);
+    } else {
+      existing++;
+      process.stdout.write(`  = ${res.session} (already running)\n`);
+    }
+  }
+  process.stderr.write(
+    `mx-ensure-sessions: ${built} built, ${existing} already running${failed ? `, ${failed} failed` : ''}\n`,
+  );
+}
+
+main();

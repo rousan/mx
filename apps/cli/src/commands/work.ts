@@ -646,18 +646,48 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       emit(() => console.log(res.path), res);
       return;
     }
-    case 'attach': {
-      // Ensure the work's tmux session (build it if missing — self-healing after
-      // a reboot / manual kill), then hand THIS terminal to it: switch-client
-      // when already inside tmux, otherwise a blocking attach.
+    case 'ensure': {
+      // Build the work's tmux session if it's missing (self-healing after a
+      // reboot / manual kill), but do NOT attach — leave the current terminal
+      // alone. This is the non-attaching counterpart to `attach`, split into its
+      // own command so that `--porcelain` stays a pure output-format flag and
+      // never changes behaviour. Attach later with `mx work -n <name> attach`,
+      // `open`, or `tmux attach -t mx/<name>`.
       const res = workPath(root, name); // throws NO_WORK if it doesn't exist
       const ensured = ensureWorkSession(root, name, res.path, flags);
-      // In porcelain mode we can't hand the terminal to an interactive tmux, so
-      // just report what would happen and leave attaching to the caller.
+      emit(
+        () => {
+          const how = ensured.created
+            ? ensured.claudeAction === 'resume'
+              ? 'built session, resumed claude'
+              : 'built session, new claude'
+            : 'already running';
+          console.log(`${check()} session ${bold(ensured.session)} ready ${dim(`(${how})`)}`);
+        },
+        {
+          work: name,
+          session: ensured.session,
+          created: ensured.created,
+          claudeAction: ensured.claudeAction ?? null,
+          attached: false,
+        },
+      );
+      return;
+    }
+    case 'attach': {
+      // Always interactive: build the work's tmux session if missing, then hand
+      // THIS terminal to it — switch-client when already inside tmux, otherwise a
+      // blocking attach. There is no non-interactive attach, so `--porcelain` has
+      // no meaning here; point the user at `ensure`, which builds the session
+      // without attaching and has a porcelain form.
       if (flags.porcelain) {
-        emit(() => {}, { work: name, session: ensured.session, created: ensured.created, attach: false });
-        return;
+        throw new MxError(
+          `\`attach\` is interactive and has no --porcelain form — use \`mx work -n ${name} ensure --porcelain\` to build the session without attaching`,
+          'INTERACTIVE_ONLY',
+        );
       }
+      const res = workPath(root, name); // throws NO_WORK if it doesn't exist
+      const ensured = ensureWorkSession(root, name, res.path, flags);
       attachOrSwitch(ensured.session);
       return;
     }
