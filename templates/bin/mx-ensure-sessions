@@ -24,7 +24,15 @@
  *   <glob>           ensure matching active works (e.g. valkyrie-*)
  *   *                all active works not named/matched elsewhere in the order
  *   exclude: <glob>  never ensure matching works (repeatable)
+ *   include-agent    also build sessions for agent-created works (see below)
  *   # comment        ignored; blank lines ignored
+ *
+ * AGENT WORKS. Works created by an AI agent (`mx work new --agent-managed`, marked
+ * `isAgentManaged` in work.json) are IGNORED by default — an agent manages its own
+ * work's lifecycle, so you don't want a tmux session opened for it. To include them,
+ * put an `include-agent` line in your config; that opts every agent work back into
+ * `*` and glob expansion. (Naming an agent work by its EXACT name — in the config or
+ * as a CLI arg — always includes just that one, regardless of the directive.)
  *
  * Sessions are created in this order, so a picker sorted by creation time shows
  * them in the same order. Idempotent: an already-running session is left as is —
@@ -48,6 +56,7 @@ const EXAMPLE_CONFIG = `# mx-ensure-sessions order — one work per line, in ord
 #   <glob>           ensure matching active works (e.g. valkyrie-*)
 #   *                all active works not named/matched elsewhere
 #   exclude: <glob>  never ensure matching works (repeatable)
+#   include-agent    also build sessions for agent-created works (off by default)
 
 exclude: sk-*
 
@@ -113,10 +122,13 @@ function matches(name, sel) {
 }
 
 /**
- * The active (non-archived) work names in a runtime, via `mx work ls --porcelain`.
+ * The active (non-archived) works in a runtime, via `mx work ls --porcelain`.
+ * Returns every active work plus the set of agent-created ones, so the caller can
+ * apply the default "skip agent works" rule (and its overrides) itself.
  *
  * @param {string} runtime - The runtime path to target (as MX_RUNTIME).
- * @returns {string[]} Active work names in mx's listing order.
+ * @returns {{names: string[], agent: Set<string>}} Active work names in mx's
+ *   listing order, and the subset that is agent-managed.
  */
 function activeWorks(runtime) {
   let out;
@@ -136,23 +148,33 @@ function activeWorks(runtime) {
     process.stderr.write('mx-ensure-sessions: could not parse `mx work ls --porcelain` output\n');
     process.exit(1);
   }
-  return works.filter((w) => w && w.isArchived !== true).map((w) => w.name);
+  const active = works.filter((w) => w && w.isArchived !== true);
+  return {
+    names: active.map((w) => w.name),
+    agent: new Set(active.filter((w) => w.isAgentManaged === true).map((w) => w.name)),
+  };
 }
 
 /**
- * Parse an order config file's text into ordered items plus global excludes.
+ * Parse an order config file's text into ordered items, global excludes, and the
+ * `include-agent` directive.
  *
  * @param {string} text - The config file contents.
- * @returns {{items: object[], excludes: string[]}} Ordered items (`{rest:true}`
- *   or `{sel}`) and the exclude globs.
+ * @returns {{items: object[], excludes: string[], includeAgent: boolean}} Ordered
+ *   items (`{rest:true}` or `{sel}`), the exclude globs, and whether agent works
+ *   are opted back in.
  */
 function parseConfig(text) {
   const items = [];
   const excludes = [];
+  let includeAgent = false;
   for (const raw of text.split('\n')) {
     const line = raw.trim();
     if (!line || line.startsWith('#')) continue;
-    if (line.toLowerCase().startsWith('exclude:')) {
+    const lower = line.toLowerCase();
+    if (lower === 'include-agent') {
+      includeAgent = true;
+    } else if (lower.startsWith('exclude:')) {
       const g = line.slice(line.indexOf(':') + 1).trim();
       if (g) excludes.push(g);
     } else if (line === '*') {
@@ -161,31 +183,35 @@ function parseConfig(text) {
       items.push({ sel: line });
     }
   }
-  return { items, excludes };
+  return { items, excludes, includeAgent };
 }
 
 /**
  * Resolve an order config against the active works into an ordered work list.
- * `*` expands to active works matched by no explicit selector anywhere in the
- * order; excluded works never appear.
+ * `*` and glob selectors expand to matching active works, EXCLUDING agent-created
+ * ones unless the config opted them in with `include-agent`. An exact-name
+ * selector always includes its work (naming it is itself the opt-in). Excluded
+ * works never appear.
  *
- * @param {string[]} active - Active work names in listing order.
- * @param {{items: object[], excludes: string[]}} cfg - Parsed config.
+ * @param {{names: string[], agent: Set<string>}} active - Active works + agent set.
+ * @param {{items: object[], excludes: string[], includeAgent: boolean}} cfg - Parsed config.
  * @param {string[]} cliExcludes - Extra exclude globs from the command line.
  * @returns {string[]} Ordered work names.
  */
 function resolveConfig(active, cfg, cliExcludes) {
   const excludes = cfg.excludes.concat(cliExcludes);
-  const activeSet = active.filter((w) => !excludes.some((g) => matches(w, g)));
+  const activeSet = active.names.filter((w) => !excludes.some((g) => matches(w, g)));
+  // An agent work is eligible for automatic (`*` / glob) expansion only when the
+  // config opts it in. Exact-name selection ignores this — see below.
+  const autoOk = (w) => cfg.includeAgent || !active.agent.has(w);
   const selectors = cfg.items.filter((i) => i.sel).map((i) => i.sel);
   const claimed = new Set(activeSet.filter((w) => selectors.some((s) => matches(w, s))));
   const emitted = new Set();
   const order = [];
   for (const item of cfg.items) {
     if (item.rest) {
-      // `*` — every active work not explicitly named/matched elsewhere.
       for (const w of activeSet) {
-        if (!claimed.has(w) && !emitted.has(w)) {
+        if (!claimed.has(w) && !emitted.has(w) && autoOk(w)) {
           order.push(w);
           emitted.add(w);
         }
@@ -193,7 +219,7 @@ function resolveConfig(active, cfg, cliExcludes) {
     } else {
       const sel = item.sel;
       if (isGlob(sel)) {
-        const found = activeSet.filter((w) => matches(w, sel));
+        const found = activeSet.filter((w) => matches(w, sel) && autoOk(w));
         if (!found.length) process.stderr.write(`mx-ensure-sessions: no active work matches "${sel}"\n`);
         for (const w of found) {
           if (!emitted.has(w)) {
@@ -202,11 +228,12 @@ function resolveConfig(active, cfg, cliExcludes) {
           }
         }
       } else if (activeSet.includes(sel)) {
+        // Exact name — always included, even an agent work (naming it opts it in).
         if (!emitted.has(sel)) {
           order.push(sel);
           emitted.add(sel);
         }
-      } else if (!active.includes(sel)) {
+      } else if (!active.names.includes(sel)) {
         process.stderr.write(`mx-ensure-sessions: ignoring "${sel}" (not an active work)\n`);
       }
       // else: active but excluded — silently skip.
@@ -217,26 +244,31 @@ function resolveConfig(active, cfg, cliExcludes) {
 
 /**
  * Resolve a plain selector list (CLI positionals, or all active) into an ordered
- * work list, applying excludes and de-duplicating.
+ * work list, applying excludes and de-duplicating. Agent-created works are skipped
+ * by the catch-all "all active" default and by globs, but an exact-name positional
+ * always includes its work. (The `include-agent` override lives only in the config,
+ * so this path never opts agent works into `*`/globs.)
  *
- * @param {string[]} active - Active work names.
+ * @param {{names: string[], agent: Set<string>}} active - Active works + agent set.
  * @param {string[]} includes - Selectors (exact/glob); empty means all active.
  * @param {string[]} excludes - Exclude globs.
  * @returns {string[]} Ordered work names.
  */
 function resolveSelectors(active, includes, excludes) {
-  const activeSet = active.filter((w) => !excludes.some((g) => matches(w, g)));
+  const activeSet = active.names.filter((w) => !excludes.some((g) => matches(w, g)));
   let cand;
   if (!includes.length) {
-    cand = activeSet.slice();
+    // "All active" default — skip agent works (they manage their own sessions).
+    cand = activeSet.filter((w) => !active.agent.has(w));
   } else {
     cand = [];
     for (const tok of includes) {
       if (isGlob(tok)) {
-        const found = activeSet.filter((w) => matches(w, tok));
+        const found = activeSet.filter((w) => matches(w, tok) && !active.agent.has(w));
         if (!found.length) process.stderr.write(`mx-ensure-sessions: no active work matches "${tok}"\n`);
         cand.push(...found);
       } else if (activeSet.includes(tok)) {
+        // Exact name — always included, even an agent work.
         cand.push(tok);
       } else {
         process.stderr.write(`mx-ensure-sessions: ignoring "${tok}" (not an active work)\n`);
@@ -321,7 +353,7 @@ function main() {
 
   const runtime = process.env.MX_RUNTIME || path.join(os.homedir(), 'mx');
   const active = activeWorks(runtime);
-  if (!active.length) {
+  if (!active.names.length) {
     process.stderr.write('mx-ensure-sessions: no active mx works\n');
     return;
   }

@@ -233,11 +233,13 @@ Remove the repo container (clone + `repo.json`). Refuses with `IN_USE` if any wo
 
 ## Works (features)
 
-### `mx work new <name> [<repo>[:<branch>[:<base>]]]... [--description <text>] [--branch <b>] [--base <ref>] [--open|-o]`
+### `mx work new <name> [<repo>[:<branch>[:<base>]]]... [--description <text>] [--branch <b>] [--base <ref>] [--agent-managed] [--open|-o]`
 
 Create a new work: folder under `works/<name>/`, empty `work.json`, empty `.code-workspace`, the per-work directories `wt/` (where worktrees go), `scripts/`, `files/`, `tmp/`, and `sessions/`, and the work `CLAUDE.md` (stamped once with an explanatory comment, then yours to edit — see [The work folder](runtime-model.md#the-work-folder)). Prints the absolute path. All of these are **stamp-if-missing**. (Lifecycle hooks are central, not per-work — see [Hooks](#hooks).)
 
 The name is immutable.
+
+**`--agent-managed`** (alias `--agent-generated`; also accepts an explicit `=true`/`=false`) stamps **`isAgentManaged: true`** in `work.json`, marking the work as created by an **AI agent** for a scoped sub-task rather than by you. It's advisory metadata with two effects: `mx work ls` puts agent-created works in a separate **`agent`** group (so they don't blur into your own works), and `mx-ensure-sessions` skips them (an agent runs its own work's session). An AI agent delegating a sub-task into its own work should pass this; a person creating a work should not. The flag is only written when true, so user works keep a clean manifest.
 
 **Initial worktrees.** Any positional args after `<name>` are pristine repos to create worktrees for right away — the same operation as [`worktree add`](#mx-work--n-name-worktree-add-repo-worktree-name---branch-b---base-ref) (it fires `pre/post-worktree-create` per worktree), done as part of `new`. Each token is `<repo>[:<branch>[:<base>]]` (git refs can't contain `:`, so the split is unambiguous):
 
@@ -286,6 +288,19 @@ feature-one            ~/mx/works/feature-one
 ```
 
 Active works still sort first (and archived names stay dimmed). `--porcelain` is unaffected by `--lite` — it always returns the full work objects.
+
+**Grouping by origin.** When any **agent-created** works (`isAgentManaged`, see [`mx work new --agent-managed`](#mx-work-new-name-repobranchbase-description-text-branch-b-base-ref-agent-managed-open-o)) are present, both the detailed and `--lite` views split into two labelled sections — **`user`** (your works) then **`agent`** (agent-created) — so the two don't blur together:
+
+```
+user
+sidekick   ~/mx/works/sidekick
+dev-mx     ~/mx/works/dev-mx
+
+agent
+sk-fix-bug ~/mx/works/sk-fix-bug
+```
+
+When there are no agent works (the common case), the list stays flat with no headers. Porcelain always carries `isAgentManaged` per work for programmatic filtering regardless.
 
 ### `mx work -n <name> info [--porcelain]`
 
@@ -354,6 +369,12 @@ A session is judged against **this** runtime only, matched by its seeded `MX_RUN
 ### `mx work -n <name> describe <text>`
 
 Update the work's description.
+
+### `mx work -n <name> set-agent-managed [true|false]`
+
+Set (or clear) a work's `isAgentManaged` flag **after** creation — the fix for when an AI agent forgot `mx work new --agent-managed`, or to reclassify a work either way. The value defaults to `true` (so a bare `mx work -n <name> set-agent-managed` marks it); `false` clears the flag, turning it back into a plain user work.
+
+Mirrors the creation-time semantics: the flag is stored only when true, so clearing it removes the key entirely (a clean user-work manifest). Echoes the updated work (porcelain returns the full manifest). Errors `NO_WORK` if the work doesn't exist. See [`mx work new --agent-managed`](#mx-work-new-name-repobranchbase-description-text-branch-b-base-ref-agent-managed-open-o) for what the flag means and does.
 
 ### `mx work -n <name> worktree add <repo> [<worktree-name>] [--branch <b>] [--base <ref>]`
 
@@ -482,7 +503,7 @@ Start a local, **read-only live web dashboard** for the runtime and block until 
 Manage the runtime-wide `bin/` directory — utility executables shared across every work, meant to be on your `PATH`. mx ships some and you can drop your own in; any executable file is picked up. Shipped bins:
 
 - **`dcs` / `lcs`** — delete / list Claude Code sessions by name.
-- **`mx-ensure-sessions`** (Node) — build the tmux session for active works **without attaching**, in a chosen order, so they line up predictably in tmux's session picker (`prefix + s`, sorted by creation time). Each session is built via `mx work -n <work> ensure`. Positional args select + order by exact name or glob (`mx-ensure-sessions sidekick dojo`); `-x`/`--except <glob>` excludes; `--dry-run` prints the order it would build. With no positional args it follows an **order config** at `<runtime>/files/mx-ensure-sessions.conf` if present (override with `--config`/`$MX_ENSURE_SESSIONS_CONFIG`, disable with `--no-config`) — an ordered, one-work-per-line file supporting work names/globs, `*` (all works not named elsewhere), and `exclude: <glob>`. `mx-ensure-sessions --example` prints a starter. Idempotent (an already-running session is left as is), so to *re-order* after sessions were made ad hoc, `mx-kill-sessions` first, then re-run.
+- **`mx-ensure-sessions`** (Node) — build the tmux session for active works **without attaching**, in a chosen order, so they line up predictably in tmux's session picker (`prefix + s`, sorted by creation time). Each session is built via `mx work -n <work> ensure`. **Agent-created works (`isAgentManaged`) are skipped by default** — an agent runs its own work's session — pass `--include-agent` to build those too. Positional args select + order by exact name or glob (`mx-ensure-sessions sidekick dojo`); `-x`/`--except <glob>` excludes; `--dry-run` prints the order it would build. With no positional args it follows an **order config** at `<runtime>/files/mx-ensure-sessions.conf` if present (override with `--config`/`$MX_ENSURE_SESSIONS_CONFIG`, disable with `--no-config`) — an ordered, one-work-per-line file supporting work names/globs, `*` (all works not named elsewhere), and `exclude: <glob>`. `mx-ensure-sessions --example` prints a starter. Idempotent (an already-running session is left as is), so to *re-order* after sessions were made ad hoc, `mx-kill-sessions` first, then re-run.
 - **`mx-kill-sessions`** — kill every live `mx/*` tmux session at once. Prompts first unless `-y`/`--yes`. This only closes the tmux sessions; the works stay active and `mx work attach` rebuilds a session on demand. Pairs with `mx-ensure-sessions` (kill all, then rebuild in order).
 
 - **`mx bin ls`** (or bare `mx bin`) — list the bins in two labelled groups, **built-in** (shipped) and **user** (yours), with a warning on any that aren't executable. It ends with PATH guidance: a ✓ when `bin/` is already on your `PATH`, otherwise a step-by-step instruction to add `export PATH="$(mx bin path):$PATH"` to your shell startup file (`~/.zshrc`, `~/.bashrc`, …). Porcelain returns `{ "dir", "onPath", "bins": [{ "name", "path", "executable", "shipped" }] }`.

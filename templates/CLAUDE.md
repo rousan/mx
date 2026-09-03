@@ -219,6 +219,41 @@ user/agent files — notes, downloads, temp outputs — not necessary tooling fi
 - Each worktree has a **`name`** — its `wt/<name>` directory and the selector for `worktree rm` / `port`. It defaults to the repo name, so a work can hold **several worktrees of the same repo** by giving the extras distinct names (above, `repo-a` and `repo-a-pr2`). `ports` is a `service -> port` map local to that worktree.
 - The work's `name` is immutable. There is no port-block concept — each port is allocated
   individually and is unique across **all** works.
+- Optional flags may also appear: **`isArchived`** (+ `archived_at`) on an archived work, and
+  **`isAgentManaged: true`** on a work an **AI agent** created for a scoped sub-task (set via
+  `mx work new <name> --agent-managed`). Both are only present when true. `isAgentManaged` is advisory
+  metadata: `mx work ls` shows agent-created works in a separate **`agent`** group from your own, and
+  `mx-ensure-sessions` skips them (an agent runs its own work's session, so you don't want one opened for
+  it). **If you are an agent creating a work to delegate a sub-task, pass `--agent-managed`** so it's
+  grouped and skipped correctly.
+
+## Spawning sub-agents to parallelize (agents)
+
+If a task would finish faster split across parallel workers, you (an AI agent) **may
+spin up sub-agents** and give each its own **mx work** to operate in — an isolated
+worktree set, branch, and tmux session per sub-task. Do this when it genuinely helps;
+keep the number of sub-agents proportional to the work, and clean up when done.
+
+**Hard rule — any work you create for a sub-agent MUST be marked agent-managed:**
+
+```
+mx work new <name> --agent-managed
+```
+
+This stamps `isAgentManaged: true` in `work.json`. It keeps agent-created works out
+of the user's own group in `mx work ls` and out of `mx-ensure-sessions` (the user
+does not want a tmux session opened for a work an agent is driving). A work you create
+for a sub-agent **without** this flag pollutes the user's fleet — don't.
+
+**If you forget the flag, do NOT recreate the work — flip it in place:**
+
+```
+mx work -n <name> set-agent-managed true      # mark an existing work agent-managed
+mx work -n <name> set-agent-managed false     # clear it (reclassify as a user work)
+```
+
+The value defaults to `true`, so `mx work -n <name> set-agent-managed` marks it. This
+is the fix whenever a work's `isAgentManaged` is wrong either way.
 
 ## Orient yourself at the start of every session
 

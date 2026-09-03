@@ -90,6 +90,7 @@ export {
   listWorksInfo,
   workInfo,
   workDescribe,
+  workSetAgentManaged,
   workPath,
   worktreeAdd,
   worktreeList,

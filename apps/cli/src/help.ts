@@ -25,9 +25,9 @@ Repos (pristine clones):
   mx repo -n <name> rm                   refuses if any work uses it
 
 Works (features):
-  mx work new <name> [<repo>[:<branch>[:<base>]]]... [--description <t>] [--branch <b>] [--base <ref>] [-o|--open]
-                                                       creates the work; extra args are repos to make initial worktrees for (per repo: branch = :<branch> else --branch else work name; base = :<base> else --base else pristine HEAD); -o builds the work's tmux session and opens it in a new terminal
-  mx work ls [--all|--archived] [--lite] [--porcelain]  default: active only; --all includes archived; --archived shows archived only; --lite: a compact name + path table, one row per work
+  mx work new <name> [<repo>[:<branch>[:<base>]]]... [--description <t>] [--branch <b>] [--base <ref>] [--agent-managed] [-o|--open]
+                                                       creates the work; extra args are repos to make initial worktrees for (per repo: branch = :<branch> else --branch else work name; base = :<base> else --base else pristine HEAD); -o builds the work's tmux session and opens it in a new terminal; --agent-managed marks it as agent-created (an AI creating a work for a sub-task passes this)
+  mx work ls [--all|--archived] [--lite] [--porcelain]  default: active only; --all includes archived; --archived shows archived only; --lite: a compact name + path table; groups into user/agent when agent-created works are present
   mx work -n <name> info [--porcelain]
   mx work -n <name> path                                print the work folder path (cd "$(mx work -n <name> path)")
   mx work -n <name> attach [--prompt <text>]            build the work's tmux session (mx/<name>) if needed, then attach THIS terminal to it (switch-client when already inside tmux); the primary way to enter a work (interactive — no --porcelain)
@@ -36,6 +36,7 @@ Works (features):
   mx work switch [<name>]                               jump between works' sessions: with <name> it's attach; without, an fzf picker over this runtime's live mx/* sessions
   mx work gc [--yes|-y]                                 prune orphaned tmux sessions — live mx/<work> sessions whose work is archived or gone
   mx work -n <name> describe <text>
+  mx work -n <name> set-agent-managed [true|false]     mark/clear isAgentManaged on an existing work (fix a forgotten "mx work new --agent-managed"); defaults to true
   mx work -n <name> worktree add <repo> [<name>] [--branch <b>] [--base <ref>]   fires pre/post-worktree-create hooks; <name> (default repo) lets one work hold multiple worktrees of a repo
   mx work -n <name> worktree ls [--porcelain]
   mx work -n <name> worktree rm <worktree>              refuses on uncommitted changes; keeps branch
