@@ -29,6 +29,8 @@ export interface Flags {
   install: boolean;
   /** Minimal listing — just name + path per entry (currently: `mx work ls --lite`, `mx repo ls --lite`). */
   lite: boolean;
+  /** Mark a new work as agent-created (currently: `mx work new --agent-managed`). */
+  agentManaged: boolean;
   /** Explicit runtime path from `--runtime`. */
   runtime?: string;
   /** Target name from `-n`/`--name`. */
@@ -93,6 +95,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
     quick: false,
     install: false,
     lite: false,
+    agentManaged: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -120,6 +123,16 @@ export function parseArgs(argv: string[]): ParsedArgs {
       flags.install = true;
     } else if (a === '--lite') {
       flags.lite = true;
+    } else if (
+      a === '--agent-managed' ||
+      a === '--agent-generated' ||
+      a.startsWith('--agent-managed=') ||
+      a.startsWith('--agent-generated=')
+    ) {
+      // Bare flag means true; an explicit `=true`/`=false` value is honored so an
+      // agent can pass `--agent-managed=true` verbatim. Anything but `false` is true.
+      const eq = a.indexOf('=');
+      flags.agentManaged = eq === -1 ? true : a.slice(eq + 1).toLowerCase() !== 'false';
     } else if (a === '--port' || a.startsWith('--port=')) {
       const v = a.startsWith('--port=') ? a.slice('--port='.length) : argv[++i];
       const n = Number(v);

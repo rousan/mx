@@ -40,6 +40,15 @@ export interface Work {
   isArchived?: boolean;
   /** ISO-8601 timestamp set when `isArchived` flips to true; cleared on unarchive. */
   archived_at?: string;
+  /**
+   * True when the work was created by an AI agent (e.g. a sub-agent spun up to
+   * do a scoped task) rather than by a person. Set at creation via
+   * `mx work new --agent-managed`. Purely advisory metadata: it lets `mx work ls`
+   * separate agent-managed works from your own, and lets tooling like
+   * `mx-ensure-sessions` skip them (an agent manages its own work's lifecycle, so
+   * you don't want a tmux session opened for it). Unset / false for user works.
+   */
+  isAgentManaged?: boolean;
 }
 
 /**

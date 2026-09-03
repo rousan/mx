@@ -31,6 +31,7 @@ import {
   findWorktreeByName,
   worktreeName,
   workNew,
+  workSetAgentManaged,
   worktreeAdd,
   worktreeRemove,
   worktreeSetBranch,
@@ -454,6 +455,36 @@ describe('archive / unarchive / destroy lifecycle', () => {
     expect(fs.existsSync(sessions)).toBe(true);
     expect(fs.statSync(sessions).isDirectory()).toBe(true);
     expect(fs.readdirSync(sessions)).toEqual([]);
+  });
+
+  it('workNew stamps isAgentManaged only when agentManaged is true', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    workNew(root, 'user-work');
+    workNew(root, 'agent-work', '', true);
+    // Surfaced in listings for grouping / filtering.
+    const works = listWorksInfo(root);
+    expect(works.find((w) => w.name === 'user-work')?.isAgentManaged).toBeUndefined();
+    expect(works.find((w) => w.name === 'agent-work')?.isAgentManaged).toBe(true);
+    // Persisted to work.json, and absent (not false) for user works.
+    const userJson = JSON.parse(fs.readFileSync(path.join(root, 'works', 'user-work', 'work.json'), 'utf8'));
+    const agentJson = JSON.parse(fs.readFileSync(path.join(root, 'works', 'agent-work', 'work.json'), 'utf8'));
+    expect('isAgentManaged' in userJson).toBe(false);
+    expect(agentJson.isAgentManaged).toBe(true);
+  });
+
+  it('workSetAgentManaged flips isAgentManaged after creation (clearing removes the key)', () => {
+    const root = path.join(tmp(), 'rt');
+    initRuntime(root, TEMPLATES_DIR);
+    workNew(root, 'oops'); // agent forgot --agent-managed
+    const jsonPath = path.join(root, 'works', 'oops', 'work.json');
+    expect('isAgentManaged' in JSON.parse(fs.readFileSync(jsonPath, 'utf8'))).toBe(false);
+    // Mark it.
+    expect(workSetAgentManaged(root, 'oops', true).isAgentManaged).toBe(true);
+    expect(JSON.parse(fs.readFileSync(jsonPath, 'utf8')).isAgentManaged).toBe(true);
+    // Clear it — the key is removed, not set to false.
+    expect(workSetAgentManaged(root, 'oops', false).isAgentManaged).toBeUndefined();
+    expect('isAgentManaged' in JSON.parse(fs.readFileSync(jsonPath, 'utf8'))).toBe(false);
   });
 
   it('archive removes worktrees, empties .code-workspace folders, sets isArchived + archived_at', () => {

@@ -94,13 +94,23 @@ export interface WorkNewResult extends Work {
  * @param root - Runtime root.
  * @param name - New work name.
  * @param description - Optional free-text description.
+ * @param agentManaged - When true, mark the work as agent-created (sets
+ *   `isAgentManaged: true` in `work.json`). Left unset for user works, mirroring
+ *   how `isArchived` is only present when true.
  * @returns The new work and its absolute folder path.
  */
-export function workNew(root: string, name: string, description = ''): WorkNewResult {
+export function workNew(
+  root: string,
+  name: string,
+  description = '',
+  agentManaged = false,
+): WorkNewResult {
   const dir = workDir(root, name);
   if (exists(dir)) throw new MxError(`work already exists: ${name}`, 'EXISTS');
   fs.mkdirSync(dir, { recursive: true });
   const work: Work = { name, description, worktrees: [] };
+  // Only stamp the flag when true, so user works keep a clean manifest.
+  if (agentManaged) work.isAgentManaged = true;
   writeWork(root, work);
   writeJson(workspaceFile(root, name), { folders: [], settings: {} });
   ensureWorkScaffolding(root, name);
@@ -180,6 +190,25 @@ export function workInfo(root: string, name: string): Work {
 export function workDescribe(root: string, name: string, text: string): Work {
   const work = readWork(root, name);
   work.description = text;
+  writeWork(root, work);
+  return work;
+}
+
+/**
+ * Set (or clear) a work's `isAgentManaged` flag after creation — the fix for when
+ * an agent forgot `mx work new --agent-managed`, or to reclassify a work either
+ * way. Mirrors the creation-time semantics: the flag is stored only when true, so
+ * clearing it removes the key entirely (a clean user-work manifest).
+ *
+ * @param root - Runtime root.
+ * @param name - Work name.
+ * @param value - True to mark as agent-created, false to clear the flag.
+ * @returns The updated work.
+ */
+export function workSetAgentManaged(root: string, name: string, value: boolean): Work {
+  const work = readWork(root, name);
+  if (value) work.isAgentManaged = true;
+  else delete work.isAgentManaged;
   writeWork(root, work);
   return work;
 }

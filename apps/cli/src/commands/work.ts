@@ -8,6 +8,7 @@ import {
   listWorkNames,
   workInfo,
   workDescribe,
+  workSetAgentManaged,
   workPath,
   worktreeAdd,
   worktreeList,
@@ -367,7 +368,7 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         seen.add(s.repo);
       }
     }
-    const res = workNew(root, name, flags.description ?? '');
+    const res = workNew(root, name, flags.description ?? '', flags.agentManaged);
     // Create each requested worktree, firing the create hooks per worktree.
     const created: WorktreeAddResult[] = [];
     for (const s of specs) {
@@ -419,41 +420,41 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
         console.log(dim('no works yet — `mx work new <name>`'));
         return;
       }
-      // --lite: a compact two-column table — name on the left, path on the
-      // right, one row per work. No worktrees, descriptions, chips, or ports.
-      if (flags.lite) {
-        const nameW = Math.max(...ordered.map((w) => w.name.length));
-        for (const w of ordered) {
-          // Pad the plain name to the column width, then style — active bold,
-          // archived dim — so the eye still lands on active works first.
-          const padded = w.name.padEnd(nameW);
-          const styledName = w.isArchived === true ? dim(padded) : bold(padded);
-          console.log(`${styledName}  ${dim(tildify(w.path))}`);
-        }
-        return;
-      }
-      // Human mode: detailed per-work view — header line with name + chip +
-      // counts; then optional description; then indented worktree rows with
-      // branches and ports.
-      for (let i = 0; i < ordered.length; i++) {
-        if (i > 0) console.log();
-        const w = ordered[i];
-        const wts = w.worktrees ?? [];
+      // Column width computed across ALL works so --lite columns line up even
+      // across the user/agent group boundary.
+      const nameW = Math.max(...ordered.map((w) => w.name.length));
 
+      /**
+       * Render one work as a `--lite` two-column row (name left, path right).
+       *
+       * @param w - The work to render.
+       */
+      const liteRow = (w: (typeof ordered)[number]): void => {
+        // Pad the plain name to the column width, then style — active bold,
+        // archived dim — so the eye still lands on active works first.
+        const padded = w.name.padEnd(nameW);
+        const styledName = w.isArchived === true ? dim(padded) : bold(padded);
+        console.log(`${styledName}  ${dim(tildify(w.path))}`);
+      };
+
+      /**
+       * Render one work as a detailed block: name + archived chip, path,
+       * optional description, then indented worktree rows with branches + ports.
+       *
+       * @param w - The work to render.
+       */
+      const detailBlock = (w: (typeof ordered)[number]): void => {
+        const wts = w.worktrees ?? [];
         const chip = w.isArchived === true
           ? `  ${dim(`[archived ${(w.archived_at ?? '').slice(0, 10)}]`)}`
           : '';
-        // Active work names anchor with bold; archived ones recede with dim
-        // so the eye lands on active works first. The bullet is the list
-        // marker.
+        // Active work names anchor with bold; archived ones recede with dim.
         const styledName = w.isArchived === true ? dim(w.name) : bold(w.name);
         console.log(`• ${styledName}${chip}`);
         console.log(`  ${dim(tildify(w.path))}`);
-
         if (w.description) {
           console.log(`  ${dim(`— ${w.description}`)}`);
         }
-
         if (wts.length === 0) {
           console.log(`  ${dim('(no worktrees)')}`);
         } else {
@@ -464,8 +465,6 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
           };
           const labelW = Math.max(...wts.map((t) => wlabel(t).length));
           for (const t of wts) {
-            // All worktree row content sits at the dim tier so the bold work
-            // name above is the only "loud" element in the block.
             const label = dim(wlabel(t).padEnd(labelW));
             const branch = dim(`[${t.branch}]`);
             const ports = Object.entries(t.ports ?? {})
@@ -475,6 +474,39 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
             console.log(`  ${label}  ${branch}${portsCol}`);
           }
         }
+      };
+
+      /**
+       * Render a run of works — plain `--lite` rows, or detailed blocks with a
+       * blank line between them.
+       *
+       * @param group - The works to render, in order.
+       */
+      const renderRun = (group: typeof ordered): void => {
+        if (flags.lite) {
+          for (const w of group) liteRow(w);
+        } else {
+          group.forEach((w, i) => {
+            if (i > 0) console.log();
+            detailBlock(w);
+          });
+        }
+      };
+
+      // Separate agent-created works from the user's own. Group with labelled
+      // headers ONLY when both kinds are present — the distinction is what makes
+      // grouping useful; a list that is all-user (the common case) or all-agent
+      // stays flat, exactly as before.
+      const userWorks = ordered.filter((w) => w.isAgentManaged !== true);
+      const agentWorks = ordered.filter((w) => w.isAgentManaged === true);
+      if (userWorks.length > 0 && agentWorks.length > 0) {
+        console.log(dim('user'));
+        renderRun(userWorks);
+        console.log();
+        console.log(dim('agent'));
+        renderRun(agentWorks);
+      } else {
+        renderRun(ordered);
       }
     }, works);
     return;
@@ -721,6 +753,24 @@ export function dispatchWork(positionals: string[], flags: Flags): void {
       const text = need(positionals[2], 'usage: mx work -n <name> describe <text>');
       const work = workDescribe(root, name, text);
       emit(() => console.log(`${check()} updated description of ${bold(name)}`), work);
+      return;
+    }
+    case 'set-agent-managed': {
+      // Fix a forgotten `--agent-managed` (or reclassify): flip isAgentManaged on
+      // an existing work. Optional value defaults to true; `false` clears it.
+      const arg = (positionals[2] ?? 'true').toLowerCase();
+      if (arg !== 'true' && arg !== 'false') {
+        throw new MxError('usage: mx work -n <name> set-agent-managed [true|false]', 'BAD_ARGS');
+      }
+      const value = arg === 'true';
+      const work = workSetAgentManaged(root, name, value);
+      emit(
+        () =>
+          console.log(
+            `${check()} ${bold(name)} ${dim(value ? 'marked agent-managed' : 'cleared agent-managed (now a user work)')}`,
+          ),
+        work,
+      );
       return;
     }
     case 'worktree':
