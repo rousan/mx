@@ -217,8 +217,25 @@ export interface BuildSessionOpts {
 export function buildSession(session: string, opts: BuildSessionOpts): void {
   const { root, work, workPath, claudeCmd, claudeSessionId: sid, ports } = opts;
   // Detached + generously sized so `split-window` never hits "pane too small";
-  // window-size:latest reflows it to the attaching terminal.
-  tmux(['new-session', '-d', '-s', session, '-c', workPath, '-x', '250', '-y', '60']);
+  // window-size:latest reflows it to the attaching terminal. Capture the initial
+  // pane's id (`%n`) — pane ids are stable and independent of the user's
+  // `pane-base-index`, so mx never assumes the first pane is `.0` (it's `.1` when
+  // pane-base-index is 1, which silently broke send-keys — see issue #49).
+  const claudePane = tmux([
+    'new-session',
+    '-d',
+    '-s',
+    session,
+    '-c',
+    workPath,
+    '-x',
+    '250',
+    '-y',
+    '60',
+    '-P',
+    '-F',
+    '#{pane_id}',
+  ]);
   tmux(['set-option', '-t', session, 'window-size', 'latest']);
   // Machine-readable marker + shared environment for every pane in the session.
   tmux(['set-option', '-t', session, '@mx_work', work]);
@@ -242,10 +259,12 @@ export function buildSession(session: string, opts: BuildSessionOpts): void {
   // Rename the first (active) window by session target, not `:0`, so it works
   // regardless of the user's global base-index.
   tmux(['rename-window', '-t', session, 'main']);
-  tmux(['send-keys', '-t', `${session}:main.0`, claudeCmd, 'Enter']);
-  tmux(['split-window', '-h', '-t', `${session}:main.0`, '-c', workPath]);
-  tmux(['send-keys', '-t', `${session}:main.1`, 'nvim wt', 'Enter']);
-  tmux(['select-pane', '-t', `${session}:main.0`]);
+  tmux(['send-keys', '-t', claudePane, claudeCmd, 'Enter']);
+  // Split off the nvim pane and capture its id too, so neither send-keys assumes
+  // a pane index base.
+  const nvimPane = tmux(['split-window', '-h', '-t', claudePane, '-c', workPath, '-P', '-F', '#{pane_id}']);
+  tmux(['send-keys', '-t', nvimPane, 'nvim wt', 'Enter']);
+  tmux(['select-pane', '-t', claudePane]);
   // Run window: 2x2 grid of shells for servers / ad-hoc commands. Three splits
   // off the active pane then a tiled layout give an even 2x2.
   tmux(['new-window', '-t', session, '-n', 'run', '-c', workPath]);
@@ -255,7 +274,8 @@ export function buildSession(session: string, opts: BuildSessionOpts): void {
   tmux(['select-layout', '-t', `${session}:run`, 'tiled']);
   // Number windows from 1 (main=1, run=2) — a common tmux preference. Set on the
   // session only (never the user's other sessions), then renumber the existing
-  // windows to close the gap. Panes stay 0-indexed (mx targets them as .0/.1).
+  // windows to close the gap. (Panes are targeted by captured id, so any
+  // pane-base-index works.)
   tmux(['set-option', '-t', session, 'base-index', '1']);
   tmux(['move-window', '-r', '-t', session]);
   // Land the user on the main window.
