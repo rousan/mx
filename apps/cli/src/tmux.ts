@@ -200,9 +200,9 @@ export interface BuildSessionOpts {
  * - session named `mx/<work>`, marked with the `@mx_work` option and seeded with
  *   `MX_*` environment (work, paths, runtime, ports) so every pane knows its
  *   context;
- * - window `main`: left pane runs the resolved `claude` command, right pane runs
- *   `nvim wt` (the work's worktrees folder — overridable in the work-session
- *   hook), focus on claude;
+ * - window `main`: left pane runs the resolved `claude` command; right side is
+ *   `nvim wt` (top; the work's worktrees folder — overridable in the work-session
+ *   hook) over a short accessory shell (bottom) for ad-hoc commands; focus on claude;
  * - window `run`: a 2x2 tiled grid of shells for dev servers and ad-hoc work.
  *
  * The session is created detached and generously sized so the splits compute
@@ -264,6 +264,9 @@ export function buildSession(session: string, opts: BuildSessionOpts): void {
   // a pane index base.
   const nvimPane = tmux(['split-window', '-h', '-t', claudePane, '-c', workPath, '-P', '-F', '#{pane_id}']);
   tmux(['send-keys', '-t', nvimPane, 'nvim wt', 'Enter']);
+  // A short accessory shell under nvim for ad-hoc commands (git, quick runs)
+  // without leaving the main window. Kept small so nvim keeps most of the height.
+  tmux(['split-window', '-v', '-l', '20%', '-t', nvimPane, '-c', workPath]);
   tmux(['select-pane', '-t', claudePane]);
   // Run window: 2x2 grid of shells for servers / ad-hoc commands. Three splits
   // off the active pane then a tiled layout give an even 2x2.
